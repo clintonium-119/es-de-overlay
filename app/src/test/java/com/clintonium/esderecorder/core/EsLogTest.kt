@@ -61,6 +61,22 @@ class EsLogTest {
     }
 
     @Test
+    fun `SAF document uri works unencoded too`() {
+        // ES-DE builds it as "content://com.android.externalstorage.documents/tree/" + tree + "/document/" + docId.
+        val launch = parse(
+            listOf(
+                """Oct 28 16:00:00 Info:   Launching game "Tekken 6" from system "Sony PlayStation Portable (psp)"...""",
+                "Oct 28 16:00:00 Info:   Package: org.ppsspp.ppsspp",
+                "Oct 28 16:00:00 Info:   Data: %ROMSAF%",
+                "Oct 28 16:00:00 Info:   %ROMSAF% expanded: content://com.android.externalstorage.documents/tree/" +
+                    "7BEF-E760:ROMs/document/7BEF-E760:ROMs/psp/Tekken 6.iso",
+            ),
+        )
+        assertEquals("org.ppsspp.ppsspp", launch.pkg)
+        assertEquals("Tekken 6.iso", romPathHint(launch, roots))
+    }
+
+    @Test
     fun `raw absolute path is not percent-decoded`() {
         val launch = parse(
             listOf(
