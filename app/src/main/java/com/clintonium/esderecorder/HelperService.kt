@@ -183,18 +183,18 @@ class HelperService : Service() {
             notify(this, RESULT_ID, "No ES-DE game detected. Last launch: ${launch?.lines?.firstOrNull() ?: "none"}; in front: $foreground")
             return
         }
-        overlay.invisible(true)
+        overlay.setAlpha(0f)
         main.postDelayed({
             try {
-                capture = Capture(windowContext, p, prefs.clipSeconds) { png, mp4 ->
+                capture = Capture(windowContext, p, prefs.clipSeconds, { overlay.setAlpha(0.01f) }) { png, mp4 ->
                     capture = null
-                    overlay.invisible(false)
+                    overlay.setAlpha(1f)
                     io.execute { save(g, png, mp4) }
                 }.also { it.start() }
                 Log.i(TAG, "capturing $g")
             } catch (e: Exception) {
                 Log.e(TAG, "capture failed to start", e)
-                overlay.invisible(false)
+                overlay.setAlpha(1f)
                 overlay.flash("✗")
                 notify(this, RESULT_ID, "Capture failed: ${e.message}")
             }

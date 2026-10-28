@@ -25,10 +25,7 @@ class Prefs(context: Context) {
     var bootStart: Boolean
         get() = sp.getBoolean("bootStart", false)
         set(v) = sp.edit().putBoolean("bootStart", v).apply()
-    var overlayX: Int
-        get() = sp.getInt("overlayX", 0)
-        set(v) = sp.edit().putInt("overlayX", v).apply()
-    var overlayY: Int
-        get() = sp.getInt("overlayY", 200)
-        set(v) = sp.edit().putInt("overlayY", v).apply()
+    var corner: Corner
+        get() = Corner.valueOf(sp.getString("corner", Corner.TOP_LEFT.name)!!)
+        set(v) = sp.edit().putString("corner", v.name).apply()
 }

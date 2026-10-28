@@ -1,6 +1,5 @@
 package com.clintonium.esderecorder
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
 import android.graphics.PixelFormat
@@ -8,17 +7,20 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
-import android.view.MotionEvent
-import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.TextView
-import kotlin.math.abs
 
 private const val IDLE = "●"
 
-/** Small draggable floating button; a tap (not a drag) calls [onTap]. */
-@SuppressLint("ClickableViewAccessibility")
-class TriggerOverlay(context: Context, private val prefs: Prefs, private val onTap: () -> Unit) {
+enum class Corner(val gravity: Int, val label: String) {
+    TOP_LEFT(Gravity.TOP or Gravity.START, "Top left"),
+    TOP_RIGHT(Gravity.TOP or Gravity.END, "Top right"),
+    BOTTOM_LEFT(Gravity.BOTTOM or Gravity.START, "Bottom left"),
+    BOTTOM_RIGHT(Gravity.BOTTOM or Gravity.END, "Bottom right"),
+}
+
+/** Small floating button in the corner chosen in settings, the same distance from both edges. */
+class TriggerOverlay(context: Context, private val prefs: Prefs, onTap: () -> Unit) {
     private val wm = context.getSystemService(WindowManager::class.java)
     private val main = Handler(Looper.getMainLooper())
     private val density = context.resources.displayMetrics.density
@@ -33,6 +35,7 @@ class TriggerOverlay(context: Context, private val prefs: Prefs, private val onT
             setColor(0x88000000.toInt())
             setStroke((2 * density).toInt(), 0x88FFFFFF.toInt())
         }
+        setOnClickListener { onTap() }
     }
     private val params = WindowManager.LayoutParams(
         (44 * density).toInt(),
@@ -41,52 +44,28 @@ class TriggerOverlay(context: Context, private val prefs: Prefs, private val onT
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
         PixelFormat.TRANSLUCENT,
     ).apply {
-        gravity = Gravity.TOP or Gravity.START
-        x = prefs.overlayX
-        y = prefs.overlayY
+        x = (12 * density).toInt()
+        y = x
     }
     private var shown = false
 
-    init {
-        val slop = ViewConfiguration.get(context).scaledTouchSlop
-        var downX = 0f
-        var downY = 0f
-        var dragging = false
-        view.setOnTouchListener { _, e ->
-            when (e.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    downX = e.rawX - params.x
-                    downY = e.rawY - params.y
-                    dragging = false
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    if (dragging || abs(e.rawX - downX - params.x) + abs(e.rawY - downY - params.y) > slop) {
-                        dragging = true
-                        params.x = (e.rawX - downX).toInt()
-                        params.y = (e.rawY - downY).toInt()
-                        wm.updateViewLayout(view, params)
-                    }
-                }
-                MotionEvent.ACTION_UP -> if (dragging) {
-                    prefs.overlayX = params.x
-                    prefs.overlayY = params.y
-                } else {
-                    onTap()
-                }
-            }
-            true
-        }
-    }
-
     fun show(visible: Boolean) {
         if (visible == shown) return
-        if (visible) wm.addView(view, params) else wm.removeView(view)
+        if (visible) {
+            params.gravity = prefs.corner.gravity
+            wm.addView(view, params)
+        } else {
+            wm.removeView(view)
+        }
         shown = visible
     }
 
-    /** Fully transparent but still tappable, so it never appears in a capture yet can stop one early. */
-    fun invisible(on: Boolean) {
-        params.alpha = if (on) 0f else 1f
+    /**
+     * [alpha] 0 keeps the button out of the screenshot, but a fully transparent window gets no touches,
+     * so while recording use a barely visible 0.01 to keep a second tap working.
+     */
+    fun setAlpha(alpha: Float) {
+        params.alpha = alpha
         if (shown) wm.updateViewLayout(view, params)
     }
 
