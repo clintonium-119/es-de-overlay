@@ -33,6 +33,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -98,8 +99,11 @@ class SettingsActivity : ComponentActivity() {
             consent.launch(getSystemService(MediaProjectionManager::class.java).createScreenCaptureIntent())
         }
         if (autoGrant) {
-            autoGrant = false
-            requestConsent()
+            // After composition: launchers can't be used until they're registered.
+            LaunchedEffect(Unit) {
+                autoGrant = false
+                requestConsent()
+            }
         }
 
         Column(
