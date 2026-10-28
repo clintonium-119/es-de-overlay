@@ -25,6 +25,9 @@ import java.util.concurrent.Future
  * One press: a screen mirror whose first frames become the PNG screenshot and whose following frames
  * are recorded at half size as a silent H.264 MP4 until [seconds] pass or [stop] is called.
  * [onRecording] fires once the screenshot frame is chosen; [onDone] gets whichever files are usable.
+ * [nudge] must force a window layout pass: Android only starts mirroring into a new capture display
+ * during one, and a game that never changes its windows (Unity menus, RetroArch mid-game) never
+ * triggers it, so the display would stay empty.
  *
  * RetroArch's 120 Hz shader sub-frames alternate every real frame with a near-black one, which
  * flickers in a recording. So the screenshot is the brighter of the first two frames, and the clip
@@ -34,6 +37,7 @@ class Capture(
     context: Context,
     private val projection: MediaProjection,
     private val seconds: Int,
+    private val nudge: () -> Unit,
     private val onRecording: () -> Unit,
     private val onDone: (png: File?, mp4: File?) -> Unit,
 ) {
@@ -76,6 +80,14 @@ class Capture(
     private var stopped = false
     private var frames = 0
     private var kept = 0
+    private var lastFrameAt = 0L
+    private val watchdog = object : Runnable {
+        override fun run() {
+            if (stopped) return
+            if (SystemClock.elapsedRealtime() - lastFrameAt > 300) main.post(nudge)
+            worker.postDelayed(this, 300)
+        }
+    }
 
     fun start() {
         worker.post {
@@ -86,6 +98,9 @@ class Capture(
             )
             // Timed from the press, not the first frame: a stalled mirror must not hang the capture.
             worker.postDelayed(::finish, seconds * 1_000L)
+            lastFrameAt = SystemClock.elapsedRealtime()
+            main.post(nudge)
+            worker.postDelayed(watchdog, 300)
         }
     }
 
@@ -98,6 +113,7 @@ class Capture(
         if (stopped) return
         val image = reader.acquireNextImage() ?: return
         frames++
+        lastFrameAt = SystemClock.elapsedRealtime()
         val level = brightness(image)
         val dark = level < lastLevel * 6 / 10
         lastLevel = level

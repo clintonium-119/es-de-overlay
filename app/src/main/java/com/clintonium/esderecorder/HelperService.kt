@@ -186,7 +186,7 @@ class HelperService : Service() {
         overlay.setAlpha(0f)
         main.postDelayed({
             try {
-                capture = Capture(windowContext, p, prefs.clipSeconds, { overlay.setAlpha(0.01f) }) { png, mp4 ->
+                capture = Capture(windowContext, p, prefs.clipSeconds, overlay::nudge, { overlay.setAlpha(0.01f) }) { png, mp4 ->
                     capture = null
                     overlay.setAlpha(1f)
                     io.execute { save(g, png, mp4) }

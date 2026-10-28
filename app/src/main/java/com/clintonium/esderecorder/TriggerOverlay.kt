@@ -6,6 +6,7 @@ import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.Gravity
 import android.view.WindowManager
 import android.widget.TextView
@@ -67,6 +68,13 @@ class TriggerOverlay(context: Context, private val prefs: Prefs, onTap: () -> Un
     fun setAlpha(alpha: Float) {
         params.alpha = alpha
         if (shown) wm.updateViewLayout(view, params)
+    }
+
+    /** Forces a window layout pass without any visible change (only the window title differs). */
+    fun nudge() {
+        if (!shown) return
+        params.title = "capture ${SystemClock.uptimeMillis()}"
+        wm.updateViewLayout(view, params)
     }
 
     /** Shows [label] (e.g. ✓, ✗, ?) for two seconds. */
