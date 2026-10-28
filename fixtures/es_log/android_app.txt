@@ -1,0 +1,4 @@
+Oct 28 14:18:43 Info:   Launching game "Dead Cells" from system "Android Games (androidgames)"...
+Oct 28 14:18:43 Info:   Game entry is an Android app: com.netflix.NGP.DeadCellsReturnToCastlevania
+Oct 28 14:18:43 Info:   Expanded emulator launch arguments:
+Oct 28 14:18:43 Info:   Package: com.netflix.NGP.DeadCellsReturnToCastlevania

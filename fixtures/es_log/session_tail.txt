@@ -1,0 +1,55 @@
+Oct 28 14:12:35 Info:   Parsing systems sorting file "/data/user/0/org.es_de.frontend/files/files/resources/sorting/manufacturer_hwtype_year/es_systems_sorting.xml"...
+Oct 28 14:12:35 Info:   Parsed configuration for 221 systems, loaded 37 systems (collections not included)
+Oct 28 14:12:35 Info:   Total game count: 7600
+Oct 28 14:13:32 Info:   Launching game "Solid Explorer" from system "Android Apps (androidapps)"...
+Oct 28 14:13:32 Info:   Game entry is an Android app: pl.solidexplorer2
+Oct 28 14:13:32 Info:   Expanded emulator launch arguments:
+Oct 28 14:13:32 Info:   Package: pl.solidexplorer2
+Oct 28 14:14:40 Info:   Launching game "Solid Explorer" from system "Android Apps (androidapps)"...
+Oct 28 14:14:40 Info:   Game entry is an Android app: pl.solidexplorer2
+Oct 28 14:14:40 Info:   Expanded emulator launch arguments:
+Oct 28 14:14:40 Info:   Package: pl.solidexplorer2
+Oct 28 14:17:57 Info:   Launching game "Settings" from system "Android Apps (androidapps)"...
+Oct 28 14:17:57 Info:   Game entry is an Android app: com.android.settings
+Oct 28 14:17:57 Info:   Expanded emulator launch arguments:
+Oct 28 14:17:57 Info:   Package: com.android.settings
+Oct 28 14:18:43 Info:   Launching game "Dead Cells" from system "Android Games (androidgames)"...
+Oct 28 14:18:43 Info:   Game entry is an Android app: com.netflix.NGP.DeadCellsReturnToCastlevania
+Oct 28 14:18:43 Info:   Expanded emulator launch arguments:
+Oct 28 14:18:43 Info:   Package: com.netflix.NGP.DeadCellsReturnToCastlevania
+Oct 28 14:19:12 Info:   Launching game "Dead Cells" from system "Android Games (androidgames)"...
+Oct 28 14:19:12 Info:   Game entry is an Android app: com.netflix.NGP.DeadCellsReturnToCastlevania
+Oct 28 14:19:12 Info:   Expanded emulator launch arguments:
+Oct 28 14:19:12 Info:   Package: com.netflix.NGP.DeadCellsReturnToCastlevania
+Oct 28 14:23:11 Info:   Launching game "Slay the Spire" from system "Android Games (androidgames)"...
+Oct 28 14:23:11 Info:   Game entry is an Android app: com.humble.SlayTheSpire
+Oct 28 14:23:11 Info:   Expanded emulator launch arguments:
+Oct 28 14:23:11 Info:   Package: com.humble.SlayTheSpire
+Oct 28 14:24:49 Info:   Launching game "Slay the Spire" from system "Android Games (androidgames)"...
+Oct 28 14:24:49 Info:   Game entry is an Android app: com.humble.SlayTheSpire
+Oct 28 14:24:49 Info:   Expanded emulator launch arguments:
+Oct 28 14:24:49 Info:   Package: com.humble.SlayTheSpire
+Oct 28 14:25:39 Info:   Launching game "TMNT Shredder's Revenge" from system "Android Games (androidgames)"...
+Oct 28 14:25:39 Info:   Game entry is an Android app: com.netflix.NGP.TMNTShreddersRevenge
+Oct 28 14:25:39 Info:   Expanded emulator launch arguments:
+Oct 28 14:25:39 Info:   Package: com.netflix.NGP.TMNTShreddersRevenge
+Oct 28 14:27:30 Info:   Launching game "TMNT Shredder's Revenge" from system "Android Games (androidgames)"...
+Oct 28 14:27:30 Info:   Game entry is an Android app: com.netflix.NGP.TMNTShreddersRevenge
+Oct 28 14:27:30 Info:   Expanded emulator launch arguments:
+Oct 28 14:27:30 Info:   Package: com.netflix.NGP.TMNTShreddersRevenge
+Oct 28 14:29:04 Info:   Launching game "Stuffy Frights" from system "Android Games (androidgames)"...
+Oct 28 14:29:04 Info:   Game entry is an Android app: com.UnityTechnologies.com.unity.template.urpblank.phone
+Oct 28 14:29:04 Info:   Expanded emulator launch arguments:
+Oct 28 14:29:04 Info:   Package: com.UnityTechnologies.com.unity.template.urpblank.phone
+Oct 28 14:29:27 Info:   Launching game "Stuffy Frights" from system "Android Games (androidgames)"...
+Oct 28 14:29:27 Info:   Game entry is an Android app: com.UnityTechnologies.com.unity.template.urpblank.phone
+Oct 28 14:29:27 Info:   Expanded emulator launch arguments:
+Oct 28 14:29:27 Info:   Package: com.UnityTechnologies.com.unity.template.urpblank.phone
+Oct 28 15:06:57 Info:   Launching game "Stuffy Frights" from system "Android Games (androidgames)"...
+Oct 28 15:06:57 Info:   Game entry is an Android app: com.UnityTechnologies.com.unity.template.urpblank.phone
+Oct 28 15:06:57 Info:   Expanded emulator launch arguments:
+Oct 28 15:06:57 Info:   Package: com.UnityTechnologies.com.unity.template.urpblank.phone
+Oct 28 15:09:17 Info:   Launching game "Stuffy Frights" from system "Android Games (androidgames)"...
+Oct 28 15:09:17 Info:   Game entry is an Android app: com.UnityTechnologies.com.unity.template.urpblank.phone
+Oct 28 15:09:17 Info:   Expanded emulator launch arguments:
+Oct 28 15:09:17 Info:   Package: com.UnityTechnologies.com.unity.template.urpblank.phone

@@ -1,0 +1,7 @@
+Oct 27 07:56:56 Info:   Launching game "Mario Kart 8 Deluxe" from system "Nintendo Switch (switch)"...
+Oct 27 07:56:56 Info:   Expanded emulator launch arguments:
+Oct 27 07:56:56 Info:   Package: dev.eden.eden_emulator
+Oct 27 07:56:56 Info:   Activity: org.yuzu.yuzu_emu.activities.EmulationActivity
+Oct 27 07:56:56 Info:   Action: android.nfc.action.TECH_DISCOVERED
+Oct 27 07:56:56 Info:   Data: %ROMPROVIDER%
+Oct 27 07:56:56 Info:   %ROMPROVIDER% expanded: content://org.es_de.frontend.files/root/storage/7BEF-E760/ROMs/switch/Mario%20Kart%208%20Deluxe.nsp
