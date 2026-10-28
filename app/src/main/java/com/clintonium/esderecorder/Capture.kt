@@ -74,6 +74,8 @@ class Capture(
     private var shot: Future<Boolean>? = null
     private var startedAt = 0L
     private var stopped = false
+    private var frames = 0
+    private var kept = 0
 
     fun start() {
         worker.post {
@@ -82,6 +84,8 @@ class Capture(
                 "esde-recorder", width, height, dpi,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, reader.surface, null, worker,
             )
+            // Timed from the press, not the first frame: a stalled mirror must not hang the capture.
+            worker.postDelayed(::finish, seconds * 1_000L)
         }
     }
 
@@ -93,30 +97,45 @@ class Capture(
     private fun onFrame() {
         if (stopped) return
         val image = reader.acquireNextImage() ?: return
+        frames++
         val level = brightness(image)
         val dark = level < lastLevel * 6 / 10
         lastLevel = level
         if (startedAt != 0L) {
-            if (!dark) draw(image)
+            if (!dark) {
+                draw(image)
+                kept++
+            }
             image.close()
             return
         }
         val prev = first ?: run {
             first = image
             firstLevel = level
+            // A static screen (or one RetroArch is still setting up) may not send a second frame soon.
+            worker.postDelayed(::recordFirstAlone, 200)
             return
         }
         first = null
         if (level > firstLevel) {
-            screenshot(image)
             prev.close()
+            record(image)
         } else {
-            screenshot(prev)
             image.close()
+            record(prev)
         }
+    }
+
+    private fun recordFirstAlone() {
+        val image = first ?: return
+        first = null
+        record(image)
+    }
+
+    private fun record(shotFrame: Image) {
+        screenshot(shotFrame)
         recorder.start()
         startedAt = SystemClock.elapsedRealtime()
-        worker.postDelayed(::finish, seconds * 1_000L)
         main.post(onRecording)
     }
 
@@ -170,6 +189,6 @@ class Capture(
             encoder.shutdown()
             main.post { onDone(png.takeIf { shotOk }, mp4.takeIf { clipOk }) }
         }
-        Log.i(TAG, "capture stopped after ${elapsed}ms (clean=$clean)")
+        Log.i(TAG, "capture stopped after ${elapsed}ms (clean=$clean, frames=$frames, kept=$kept)")
     }
 }
