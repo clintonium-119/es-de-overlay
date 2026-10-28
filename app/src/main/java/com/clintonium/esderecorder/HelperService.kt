@@ -10,20 +10,26 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.hardware.display.DisplayManager
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.DocumentsContract
+import android.provider.Settings
 import android.util.Log
+import android.view.Display
+import android.view.WindowManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.clintonium.esderecorder.core.GameRef
 import com.clintonium.esderecorder.core.Launch
+import com.clintonium.esderecorder.core.mediaPath
 import com.clintonium.esderecorder.core.nextLaunch
 import com.clintonium.esderecorder.core.resolveGame
+import java.io.File
 import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.util.concurrent.Executors
@@ -33,6 +39,7 @@ const val TAG = "ESDEShot"
 const val ESDE_PACKAGE = "org.es_de.frontend"
 private const val CHANNEL = "status"
 private const val ONGOING_ID = 1
+private const val RESULT_ID = 2
 
 /** Posts (or replaces) notification [id]; tapping it opens the settings screen, with [grant] asking for capture consent. */
 fun notify(context: Context, id: Int, text: String, grant: Boolean = false, ongoing: Boolean = false): Notification {
@@ -69,7 +76,10 @@ class HelperService : Service() {
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadScheduledExecutor()
     private lateinit var prefs: Prefs
+    private lateinit var overlay: TriggerOverlay
+    private lateinit var windowContext: Context
     private var projection: MediaProjection? = null
+    private var capture: Capture? = null
 
     // Written on the io thread, read on main.
     @Volatile private var launch: Launch? = null
@@ -86,6 +96,12 @@ class HelperService : Service() {
     override fun onCreate() {
         super.onCreate()
         prefs = Prefs(this)
+        windowContext = createWindowContext(
+            getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY),
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            null,
+        )
+        overlay = TriggerOverlay(windowContext, prefs, ::onTap)
         io.scheduleWithFixedDelay({
             try {
                 poll()
@@ -115,6 +131,8 @@ class HelperService : Service() {
 
     override fun onDestroy() {
         running = false
+        capture?.stop()
+        overlay.show(false)
         io.shutdownNow()
         projection?.stop()
         super.onDestroy()
@@ -130,6 +148,80 @@ class HelperService : Service() {
             foreground = fg
             Log.i(TAG, "foreground: $fg (current game: ${currentGame()})")
         }
+        main.post { onForeground(fg) }
+    }
+
+    /** Main thread: hide the button in ES-DE and in this app; end a recording when the game is left. */
+    private fun onForeground(fg: String?) {
+        overlay.show(fg != null && fg != ESDE_PACKAGE && fg != packageName && Settings.canDrawOverlays(this))
+        if (capture != null && fg != launch?.pkg) capture?.stop()
+    }
+
+    private fun onTap() {
+        capture?.let {
+            it.stop()
+            return
+        }
+        val p = projection ?: run {
+            startActivity(
+                Intent(this, SettingsActivity::class.java)
+                    .putExtra(SettingsActivity.EXTRA_GRANT, true)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+            return
+        }
+        val g = currentGame() ?: run {
+            overlay.flash("?")
+            notify(this, RESULT_ID, "No ES-DE game detected. Last launch: ${launch?.lines?.firstOrNull() ?: "none"}; in front: $foreground")
+            return
+        }
+        overlay.invisible(true)
+        main.postDelayed({
+            try {
+                capture = Capture(windowContext, p, prefs.clipSeconds) { png, mp4 ->
+                    capture = null
+                    overlay.invisible(false)
+                    io.execute { save(g, png, mp4) }
+                }.also { it.start() }
+                Log.i(TAG, "capturing $g")
+            } catch (e: Exception) {
+                Log.e(TAG, "capture failed to start", e)
+                overlay.invisible(false)
+                overlay.flash("✗")
+                notify(this, RESULT_ID, "Capture failed: ${e.message}")
+            }
+        }, 100)
+    }
+
+    /** io thread: file the capture under the game's ES-DE media folders. */
+    private fun save(g: GameRef, png: File?, mp4: File?) {
+        val written = mutableListOf<String>()
+        val result = runCatching {
+            val writer = MediaWriter(this, prefs.esdeTree!!)
+            val dir = isDirectory(this, prefs.romsTree!!, "${g.system}/${g.romRelativePath}")
+            fun put(file: File?, type: String, ext: String, mime: String) {
+                if (file == null) return
+                writer.write(listOf("downloaded_media") + mediaPath(g, type, ext, dir), mime, prefs.overwrite) { out ->
+                    file.inputStream().use { it.copyTo(out) }
+                }?.let { written += it.removePrefix("downloaded_media/") }
+                file.delete()
+            }
+            put(png, prefs.mediaType, "png", "image/png")
+            put(mp4, "videos", "mp4", "video/mp4")
+        }
+        result.exceptionOrNull()?.let { Log.e(TAG, "save failed", it) }
+        val ok = result.isSuccess && written.isNotEmpty()
+        main.post { overlay.flash(if (ok) "✓" else "✗") }
+        notify(
+            this, RESULT_ID,
+            when {
+                result.isFailure -> "Couldn't save: ${result.exceptionOrNull()?.message}"
+                ok -> "Saved: ${written.joinToString()}"
+                png == null && mp4 == null -> "Nothing captured"
+                else -> "Skipped: files already exist"
+            },
+        )
+        Log.i(TAG, "saved $written for $g")
     }
 
     /** Reads bytes appended to es_log.txt since the last poll; starts over when ES-DE rotates the log. */
