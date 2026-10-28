@@ -29,8 +29,8 @@ Open **ES-DE Recorder** (ES-DE also lists it under Android Apps) and:
    folder, *Use this folder*, *Allow*.
 2. **ROMs folder → Pick**: the same for `ROMs`. Android doesn't allow picking the card's root, so
    these are two separate picks.
-3. Grant the permission rows: notifications, read screenshots, display over other apps,
-   usage access, and ignore battery optimization.
+3. Grant the permission rows: notifications, game sound, read screenshots, display over other
+   apps, usage access, and ignore battery optimization.
 4. Optional: screenshot media type folder (default `screenshots`), clip length (default 15 s),
    what to do when the file exists (Replace / Skip / Keep both), button corner, and the boot
    notification.
@@ -57,8 +57,11 @@ identified with certainty (the notification shows the raw launch line instead).
 
 ## Known limitations
 
-- Clips are silent and recorded at half resolution (640x480 on the Nova); the screenshot is full
-  resolution. The Nova's encoder ignores bitrate settings, so size is controlled by resolution.
+- Clips are recorded at half resolution (640x480 on the Nova); the screenshot is full resolution.
+  The Nova's encoder ignores bitrate settings, so size is controlled by resolution.
+- Clips include the game's sound when **Game sound in clips** is granted (Android labels it audio
+  recording; only game playback is captured, never the microphone). Apps can opt out of playback
+  capture; every game and emulator on this Nova allows it. Without the permission clips are silent.
 - RetroArch's 120 Hz shader sub-frames (`video_shader_subframes`) put a dark frame between real
   ones. The app skips those, so clips play at 60 fps without flicker, and media keep the shader look.
 - Capture consent can't be granted at boot without a person. With "Offer to start after boot" on,
