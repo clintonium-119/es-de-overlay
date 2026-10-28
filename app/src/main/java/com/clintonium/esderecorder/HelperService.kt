@@ -119,10 +119,12 @@ class HelperService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // The microphone type lets playback capture record game audio while the game is in front.
         startForeground(
             ONGOING_ID,
             notify(this, ONGOING_ID, "Ready", ongoing = true),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or
+                (if (audioGranted()) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0),
         )
         val data = intent?.getParcelableExtra(EXTRA_DATA, Intent::class.java)
         if (data != null) {
@@ -145,6 +147,8 @@ class HelperService : Service() {
         projection?.stop()
         super.onDestroy()
     }
+
+    private fun audioGranted() = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
     /** The game to file media under: the last ES-DE launch, only while its package is the app in front. */
     private fun currentGame(): GameRef? = launch?.takeIf { it.pkg != null && it.pkg == foreground }?.let { game }
@@ -186,7 +190,7 @@ class HelperService : Service() {
         overlay.setAlpha(0f)
         main.postDelayed({
             try {
-                capture = Capture(windowContext, p, prefs.clipSeconds, overlay::nudge, { overlay.setAlpha(0.01f) }) { png, mp4 ->
+                capture = Capture(windowContext, p, prefs.clipSeconds, audioGranted(), overlay::nudge, { overlay.setAlpha(0.01f) }) { png, mp4 ->
                     capture = null
                     overlay.setAlpha(1f)
                     io.execute { save(g, png, mp4) }

@@ -9,7 +9,6 @@ import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.Image
 import android.media.ImageReader
-import android.media.MediaRecorder
 import android.media.projection.MediaProjection
 import android.os.Handler
 import android.os.HandlerThread
@@ -23,7 +22,8 @@ import java.util.concurrent.Future
 
 /**
  * One press: a screen mirror whose first frames become the PNG screenshot and whose following frames
- * are recorded at half size as a silent H.264 MP4 until [seconds] pass or [stop] is called.
+ * are recorded at half size as an MP4 (with the game's sound when [withAudio]) until [seconds] pass or
+ * [stop] is called.
  * [onRecording] fires once the screenshot frame is chosen; [onDone] gets whichever files are usable.
  * [nudge] must force a window layout pass: Android only starts mirroring into a new capture display
  * during one, and a game that never changes its windows (Unity menus, RetroArch mid-game) never
@@ -37,6 +37,7 @@ class Capture(
     context: Context,
     private val projection: MediaProjection,
     private val seconds: Int,
+    withAudio: Boolean,
     private val nudge: () -> Unit,
     private val onRecording: () -> Unit,
     private val onDone: (png: File?, mp4: File?) -> Unit,
@@ -55,19 +56,9 @@ class Capture(
         width, height, PixelFormat.RGBA_8888, 4,
         HardwareBuffer.USAGE_CPU_READ_OFTEN or HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE,
     )
-    private val recorder = MediaRecorder(context).apply {
-        setVideoSource(MediaRecorder.VideoSource.SURFACE)
-        setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-        setVideoEncoder(MediaRecorder.VideoEncoder.H264)
-        // ponytail: fixed knobs. The Nova's encoder ignores the bitrate hint, so size is controlled by
-        // recording at half resolution; raise these if clips look soft.
-        setVideoSize(width / 2, height / 2)
-        setVideoFrameRate(60)
-        setVideoEncodingBitRate(4_000_000)
-        setOutputFile(mp4)
-        prepare()
-    }
-    private val input = recorder.surface
+    // ponytail: half resolution is the size knob; the Nova's encoder ignored bitrate requests.
+    private val clip = ClipWriter(projection, mp4, width / 2, height / 2, withAudio)
+    private val input = clip.surface
     private val clipRect = Rect(0, 0, width / 2, height / 2)
 
     // Worker thread only.
@@ -150,7 +141,7 @@ class Capture(
 
     private fun record(shotFrame: Image) {
         screenshot(shotFrame)
-        recorder.start()
+        clip.start()
         startedAt = SystemClock.elapsedRealtime()
         main.post(onRecording)
     }
@@ -194,8 +185,7 @@ class Capture(
         first?.let(::screenshot) // a static screen produced only one frame
         first = null
         val elapsed = if (startedAt == 0L) 0 else SystemClock.elapsedRealtime() - startedAt
-        val clean = startedAt != 0L && runCatching { recorder.stop() }.onFailure { Log.w(TAG, "recorder.stop", it) }.isSuccess
-        recorder.release()
+        val clean = clip.stop() && startedAt != 0L
         display?.release()
         reader.close()
         thread.quitSafely()

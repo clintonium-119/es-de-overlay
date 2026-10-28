@@ -187,6 +187,9 @@ class SettingsActivity : ComponentActivity() {
             Setting("Notifications", granted(Manifest.permission.POST_NOTIFICATIONS).label, "Grant") {
                 askPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
+            Setting("Game sound in clips (Android calls it audio recording; only game audio is captured)", granted(Manifest.permission.RECORD_AUDIO).label, "Grant") {
+                askPermission.launch(Manifest.permission.RECORD_AUDIO)
+            }
             Setting("Read screenshots (system screenshot pickup)", granted(Manifest.permission.READ_MEDIA_IMAGES).label, "Grant") {
                 askPermission.launch(Manifest.permission.READ_MEDIA_IMAGES)
             }
