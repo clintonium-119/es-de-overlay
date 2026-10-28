@@ -2,8 +2,11 @@ package com.clintonium.esderecorder
 
 import android.Manifest
 import android.app.AppOpsManager
+import android.app.StatusBarManager
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.drawable.Icon
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Bundle
@@ -49,9 +52,13 @@ class SettingsActivity : ComponentActivity() {
     private var refresh by mutableIntStateOf(0)
     private var autoGrant = false
 
+    // Opened just to grant consent (tile, boot notification, re-grant tap): go back to the game afterwards.
+    private var grantOnly = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         autoGrant = intent.getBooleanExtra(EXTRA_GRANT, false)
+        grantOnly = autoGrant
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 Surface(Modifier.fillMaxSize()) { Screen() }
@@ -62,6 +69,7 @@ class SettingsActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         autoGrant = intent.getBooleanExtra(EXTRA_GRANT, false)
+        grantOnly = autoGrant
         refresh++
     }
 
@@ -94,6 +102,7 @@ class SettingsActivity : ComponentActivity() {
                 )
             }
             this.refresh++
+            if (grantOnly) finish()
         }
         val requestConsent = {
             consent.launch(getSystemService(MediaProjectionManager::class.java).createScreenCaptureIntent())
@@ -163,6 +172,15 @@ class SettingsActivity : ComponentActivity() {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Offer to start after boot", Modifier.weight(1f))
                 Switch(checked = bootStart, onCheckedChange = { bootStart = it; prefs.bootStart = it })
+            }
+
+            Setting("Quick settings tile", "Turn the recorder on or off from the notification shade", "Add") {
+                getSystemService(StatusBarManager::class.java).requestAddTileService(
+                    ComponentName(this@SettingsActivity, CaptureTile::class.java),
+                    "ES-DE Recorder",
+                    Icon.createWithResource(this@SettingsActivity, android.R.drawable.ic_menu_camera),
+                    mainExecutor,
+                ) {}
             }
 
             Section("Permissions")
