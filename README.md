@@ -35,6 +35,8 @@ Open **ES-DE Recorder** (ES-DE also lists it under Android Apps) and:
    what to do when the file exists (Replace / Skip / Keep both), button corner, and the boot
    notification.
 5. **Start service → Start now.** One consent covers every capture until the service stops.
+6. Optional: **Quick settings tile → Add** puts an *ES-DE Recorder* on/off tile in the swipe-down
+   shade. Turning it on shows the consent dialog and then returns to whatever you were doing.
 
 ## Use
 
@@ -61,7 +63,7 @@ identified with certainty (the notification shows the raw launch line instead).
   ones. The app skips those, so clips play at 60 fps without flicker, and media keep the shader look.
 - Capture consent can't be granted at boot without a person. With "Offer to start after boot" on,
   a notification after boot opens the consent dialog in one tap.
-- Reinstalling or stopping the service needs a new consent.
+- Reinstalling or stopping the service (including from the tile) needs a new consent.
 - Emulators that hand off to a different app package after launch would block captures (not seen
   so far).
 - Device findings and how each was checked: [`docs/VERIFIED.md`](docs/VERIFIED.md). Plan:
