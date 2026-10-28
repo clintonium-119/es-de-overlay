@@ -1,0 +1,11 @@
+Oct 28 15:57:40 Info:   Launching game "Easyland" from system "Nintendo SNES (Super Nintendo) (snes)"...
+Oct 28 15:57:40 Info:   Expanded emulator launch arguments:
+Oct 28 15:57:40 Info:   Package: com.retroarch.aarch64
+Oct 28 15:57:40 Info:   Activity: com.retroarch.browser.retroactivity.RetroActivityFuture
+Oct 28 15:57:40 Info:   Extra name: CONFIGFILE
+Oct 28 15:57:40 Info:   Extra value: /storage/emulated/0/Android/data/com.retroarch.aarch64/files/retroarch.cfg
+Oct 28 15:57:40 Info:   Extra name: LIBRETRO
+Oct 28 15:57:40 Info:   Extra value: /data/user/0/com.retroarch.aarch64/cores/snes9x_libretro_android.so
+Oct 28 15:57:40 Info:   Extra name: ROM
+Oct 28 15:57:40 Info:   Extra value: %ROM%
+Oct 28 15:57:40 Info:   %ROM% expanded: /storage/7BEF-E760/ROMs/snes/02) Hacks/Easyland.zip

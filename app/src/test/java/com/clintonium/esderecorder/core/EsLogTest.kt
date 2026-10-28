@@ -21,6 +21,15 @@ class EsLogTest {
     }
 
     @Test
+    fun `retroarch launch yields the raw ROM path in its subfolder`() {
+        val launch = fixture("retroarch_rom.txt")
+        assertEquals("Easyland", launch.name)
+        assertEquals("snes", launch.system)
+        assertEquals("com.retroarch.aarch64", launch.pkg)
+        assertEquals("02) Hacks/Easyland.zip", romPathHint(launch, roots))
+    }
+
+    @Test
     fun `android app launch has a package but no path`() {
         val launch = fixture("android_app.txt")
         assertEquals("Dead Cells", launch.name)
