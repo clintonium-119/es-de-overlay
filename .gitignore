@@ -10,3 +10,11 @@
 !**/.apo/04_Templates/
 !**/.apo/04_Templates/**
 !**/.apo/gating.json
+
+# Gradle / Android
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.kotlin/
