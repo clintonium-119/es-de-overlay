@@ -8,7 +8,11 @@ import android.app.Service
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.content.pm.ServiceInfo
 import android.hardware.display.DisplayManager
 import android.media.projection.MediaProjection
@@ -77,6 +81,7 @@ class HelperService : Service() {
     private val io = Executors.newSingleThreadScheduledExecutor()
     private lateinit var prefs: Prefs
     private lateinit var overlay: TriggerOverlay
+    private lateinit var screenshots: ScreenshotObserver
     private lateinit var windowContext: Context
     private var projection: MediaProjection? = null
     private var capture: Capture? = null
@@ -102,6 +107,8 @@ class HelperService : Service() {
             null,
         )
         overlay = TriggerOverlay(windowContext, prefs, ::onTap)
+        screenshots = ScreenshotObserver(this, main, ::onScreenshot)
+        if (checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED) screenshots.register()
         io.scheduleWithFixedDelay({
             try {
                 poll()
@@ -133,6 +140,7 @@ class HelperService : Service() {
         running = false
         capture?.stop()
         overlay.show(false)
+        screenshots.unregister()
         io.shutdownNow()
         projection?.stop()
         super.onDestroy()
@@ -191,6 +199,28 @@ class HelperService : Service() {
                 notify(this, RESULT_ID, "Capture failed: ${e.message}")
             }
         }, 100)
+    }
+
+    /** A system screenshot: file it like a captured frame, or leave it where it is when no game is in front. */
+    private fun onScreenshot(uri: Uri, mime: String) {
+        val g = currentGame() ?: run {
+            notify(this, RESULT_ID, "Screenshot left in Screenshots: no ES-DE game detected")
+            return
+        }
+        io.execute {
+            val png = File(cacheDir, "system.png")
+            runCatching {
+                contentResolver.openInputStream(uri)!!.use { input ->
+                    png.outputStream().use { out ->
+                        if (mime == "image/png") input.copyTo(out)
+                        else BitmapFactory.decodeStream(input).compress(Bitmap.CompressFormat.PNG, 100, out)
+                    }
+                }
+            }.onSuccess { save(g, png, null) }.onFailure {
+                Log.e(TAG, "reading screenshot failed", it)
+                notify(this, RESULT_ID, "Couldn't read screenshot: ${it.message}")
+            }
+        }
     }
 
     /** io thread: file the capture under the game's ES-DE media folders. */
