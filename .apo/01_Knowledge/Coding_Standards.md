@@ -27,14 +27,12 @@ No token system detected (`apo mine theme-sources --json` → `sources: []`, rea
 
 ## Build / run commands
 
-> **(verify)** — no Gradle build exists yet
->
-> Expected answers when this section is filled:
-> - [ ] `./gradlew assembleDebug` / `installDebug` usage
-> - [ ] Unit test command (`./gradlew testDebugUnitTest`)
-> - [ ] adb install target for the Nova
->
-> Look at: Gradle wrapper + `app/build.gradle.kts` after Phase 1 scaffold.
+- Build + unit tests: `JAVA_HOME=/usr/lib/jvm/java-17-openjdk ./gradlew testDebugUnitTest assembleDebug` (JDK 17; the system default JDK 27 is too new for AGP 9.0).
+- Install on the Nova: `adb install -r app/build/outputs/apk/debug/app-debug.apk`; reinstalling stops the service, so capture consent must be granted again.
+- Device log: `adb logcat -G 16M && adb logcat -s ESDEShot` (games flood logcat with SELinux lines).
+- Toolchain: Gradle 9.1.0 wrapper (checksum pinned), AGP 9.0.0 built-in Kotlin, Compose BOM 2026.01.01 (newer BOMs need compileSdk 37 / AGP 9.1), compileSdk 36, min/target SDK 33.
+
+**Sources:** `README.md`, `app/build.gradle.kts`, `gradle/wrapper/gradle-wrapper.properties` (read 2026-10-28)
 
 ## Naming Conventions (Observed) — es-de-recorder
 
