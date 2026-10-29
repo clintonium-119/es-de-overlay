@@ -18,14 +18,16 @@ class ButtonService : AccessibilityService() {
     private var homeAt = 0L
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        event.packageName?.let { foreground = it.toString() }
+        // Our own windows (the capture button, toasts) aren't the app in front.
+        event.packageName?.toString()?.takeIf { it != packageName }?.let { foreground = it }
     }
 
     override fun onInterrupt() {}
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
         Log.i(TAG, "key ${KeyEvent.keyCodeToString(event.keyCode)} action=${event.action} repeat=${event.repeatCount} device=${event.device?.name} in front: $foreground")
-        if (event.keyCode != KeyEvent.KEYCODE_HOME || foreground == ESDE_PACKAGE) return false
+        // The Nova's controller sends its Home button as MOVE_HOME, not HOME.
+        if (event.keyCode != KeyEvent.KEYCODE_MOVE_HOME || foreground == ESDE_PACKAGE) return false
         if (event.action == KeyEvent.ACTION_UP) {
             val now = SystemClock.uptimeMillis()
             if (now - homeAt < 5_000) {
