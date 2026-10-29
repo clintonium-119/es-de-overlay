@@ -87,7 +87,6 @@ class SettingsActivity : ComponentActivity() {
         var clip by remember { mutableStateOf(prefs.clipSeconds.toString()) }
         var overwrite by remember { mutableStateOf(prefs.overwrite) }
         var bootStart by remember { mutableStateOf(prefs.bootStart) }
-        var corner by remember { mutableStateOf(prefs.corner) }
 
         val pickEsde = treePicker { prefs.esdeTree = it }
         val pickRoms = treePicker { prefs.romsTree = it }
@@ -163,12 +162,6 @@ class SettingsActivity : ComponentActivity() {
                 "ES-DE only shows the file named exactly like the ROM; \"Keep both\" saves extras as name-1, name-2… for you to pick from later.",
                 style = MaterialTheme.typography.bodySmall,
             )
-            Text("Capture button corner")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (c in Corner.entries) {
-                    FilterChip(selected = corner == c, onClick = { corner = c; prefs.corner = c }, label = { Text(c.label) })
-                }
-            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Offer to start after boot", Modifier.weight(1f))
                 Switch(checked = bootStart, onCheckedChange = { bootStart = it; prefs.bootStart = it })

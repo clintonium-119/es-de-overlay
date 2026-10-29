@@ -5,12 +5,15 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapRegionDecoder
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
@@ -22,6 +25,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.ScrollView
 import android.widget.TextView
+import java.util.concurrent.Executors
 import java.util.zip.ZipInputStream
 
 /**
@@ -32,9 +36,10 @@ import java.util.zip.ZipInputStream
 class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
     private val wm = context.getSystemService(WindowManager::class.java)
     private val bounds = wm.maximumWindowMetrics.bounds
-    private val width = bounds.width()
-    private val height = bounds.height()
+    private val screenW = bounds.width()
+    private val screenH = bounds.height()
     private val resolver = context.contentResolver
+    private val main = Handler(Looper.getMainLooper())
     private var root: View? = null
     private var release: () -> Unit = {}
 
@@ -53,7 +58,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
 
     private fun build(uri: Uri, name: String, onClose: () -> Unit) {
         val font = themeFont(context, prefs)
-        val textPx = height * LIST_FONT
+        val textPx = screenH * LIST_FONT
         val title = chrome(font, textPx * 0.65f).apply { text = name }
         val scroll = ScrollView(context).apply { isVerticalScrollBarEnabled = false }
         val keys: (Int) -> Boolean
@@ -69,51 +74,95 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                     setTextColor(TEXT)
                     // 80 columns across the screen, so ASCII guides keep their layout.
                     setTextSize(TypedValue.COMPLEX_UNIT_PX, 100f)
-                    setTextSize(TypedValue.COMPLEX_UNIT_PX, 100f * width * 0.95f / paint.measureText("M".repeat(80)))
-                    setPadding(width / 40, (textPx * 2.5f).toInt(), width / 40, height / 2)
+                    setTextSize(TypedValue.COMPLEX_UNIT_PX, 100f * screenW * 0.95f / paint.measureText("M".repeat(80)))
+                    setPadding(screenW / 40, (textPx * 2.5f).toInt(), screenW / 40, screenH / 2)
                 })
                 content = scroll
                 help = arrayOf("L1/R1" to "Page", "B" to "Back")
                 keys = { code -> scrollKeys(scroll, code) }
             }
             "png", "jpg", "jpeg" -> {
-                val image = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
+                val image = ImageView(context).apply { scaleType = ImageView.ScaleType.MATRIX }
                 val decoder = resolver.openInputStream(uri)!!.use { BitmapRegionDecoder.newInstance(it)!! }
                 val iw = decoder.width
                 val ih = decoder.height
-                val fit = minOf(width.toFloat() / iw, height.toFloat() / ih)
+                val fit = minOf(screenW.toFloat() / iw, screenH.toFloat() / ih)
                 var scale = fit
                 var cx = iw / 2f
                 var cy = ih / 2f
+                // The decoded bitmap, the image area it covers and its subsample.
                 var bitmap: Bitmap? = null
-                // ponytail: decodes on the main thread; move to a worker if panning a big map stutters.
+                var shown = Rect()
+                var shownSample = 1
+                // A PNG region decode inflates every row above it (about a second on a big map), so moves
+                // shift the bitmap already shown at once while a sharper one decodes on the worker.
+                val worker = Executors.newSingleThreadExecutor()
+                var decoding = false
+                var again = false
+                var closed = false
+                fun place() {
+                    val k = scale * shownSample
+                    image.imageMatrix = Matrix().apply {
+                        setScale(k, k)
+                        postTranslate((shown.left - cx) * scale + screenW / 2f, (shown.top - cy) * scale + screenH / 2f)
+                    }
+                }
                 fun render() {
-                    val vw = width / scale
-                    val vh = height / scale
+                    val vw = screenW / scale
+                    val vh = screenH / scale
                     cx = if (vw >= iw) iw / 2f else cx.coerceIn(vw / 2, iw - vw / 2)
                     cy = if (vh >= ih) ih / 2f else cy.coerceIn(vh / 2, ih - vh / 2)
+                    place()
+                    if (decoding) {
+                        again = true
+                        return
+                    }
+                    decoding = true
+                    // The view plus a quarter screen on each side, so the next pan step is already sharp.
                     val rect = Rect(
-                        (cx - vw / 2).toInt().coerceAtLeast(0), (cy - vh / 2).toInt().coerceAtLeast(0),
-                        (cx + vw / 2).toInt().coerceAtMost(iw), (cy + vh / 2).toInt().coerceAtMost(ih),
+                        (cx - vw * 0.75f).toInt().coerceAtLeast(0), (cy - vh * 0.75f).toInt().coerceAtLeast(0),
+                        (cx + vw * 0.75f).toInt().coerceAtMost(iw), (cy + vh * 0.75f).toInt().coerceAtMost(ih),
                     )
                     // The largest power-of-two subsample that still has a pixel per screen pixel.
                     val sample = Integer.highestOneBit((1 / scale).toInt().coerceAtLeast(1))
-                    val next = decoder.decodeRegion(rect, BitmapFactory.Options().apply { inSampleSize = sample })
-                    image.setImageBitmap(next)
-                    bitmap?.recycle()
-                    bitmap = next
+                    worker.execute {
+                        val next = runCatching { decoder.decodeRegion(rect, BitmapFactory.Options().apply { inSampleSize = sample }) }
+                            .onFailure { Log.w(TAG, "viewer: $name", it) }.getOrNull()
+                        main.post {
+                            if (closed) {
+                                next?.recycle()
+                                return@post
+                            }
+                            if (next != null) {
+                                image.setImageBitmap(next)
+                                bitmap?.recycle()
+                                bitmap = next
+                                shown = rect
+                                shownSample = sample
+                                place()
+                            }
+                            decoding = false
+                            if (again) {
+                                again = false
+                                render()
+                            }
+                        }
+                    }
                 }
                 release = {
+                    closed = true
+                    worker.shutdown()
                     image.setImageDrawable(null)
                     bitmap?.recycle()
                     bitmap = null
+                    // Waits for a decode in flight; BitmapRegionDecoder serializes the two.
                     decoder.recycle()
                 }
                 render()
                 content = image
                 help = arrayOf("X/Y" to "Zoom", "B" to "Back")
                 keys = handler@{ code ->
-                    val step = width / scale / 4
+                    val step = screenW / scale / 4
                     when (code) {
                         KeyEvent.KEYCODE_DPAD_UP -> cy -= step
                         KeyEvent.KEYCODE_DPAD_DOWN -> cy += step
@@ -139,7 +188,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                     renderPage = { n ->
                         pdf.openPage(n).use { page ->
                             // Fit to width, but no taller than four screens so a long page can't exhaust memory.
-                            val h = (width.toLong() * page.height / page.width).toInt().coerceAtMost(height * 4)
+                            val h = (screenW.toLong() * page.height / page.width).toInt().coerceAtMost(screenH * 4)
                             val w = h * page.width / page.height
                             Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).apply {
                                 eraseColor(Color.WHITE)
@@ -161,7 +210,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                         val bytes = zip(uri) { z -> generateSequence { z.nextEntry }.first { it.name == entries[n] }; z.readBytes() }
                         val size = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, size)
-                        val sample = Integer.highestOneBit((size.outWidth / width).coerceAtLeast(1))
+                        val sample = Integer.highestOneBit((size.outWidth / screenW).coerceAtLeast(1))
                         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
                     }
                 }
@@ -188,7 +237,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 }
                 content = FrameLayout(context).apply {
                     addView(scroll)
-                    addView(counter, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END))
+                    addView(counter, corner(Gravity.TOP or Gravity.END))
                 }
                 help = arrayOf("L1/R1" to "Page", "B" to "Back")
                 keys = { code ->
@@ -204,11 +253,8 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         val view = FrameLayout(context).apply {
             setBackgroundColor(Color.BLACK)
             addView(content)
-            addView(title, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START))
-            addView(
-                helpPill(context, font, textPx, *help),
-                FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END).apply { setMargins(0, 0, width / 60, width / 60) },
-            )
+            addView(title, corner(Gravity.TOP or Gravity.START))
+            addView(helpPill(context, font, textPx, *help), corner(Gravity.BOTTOM or Gravity.END))
             descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
             isFocusable = true
             isFocusableInTouchMode = true
@@ -222,17 +268,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 runCatching { keys(code) }.onFailure { Log.w(TAG, "viewer: $name", it) }.getOrDefault(true)
             }
         }
-        wm.addView(
-            view,
-            WindowManager.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.OPAQUE,
-            ),
-        )
-        view.requestFocus()
+        wm.addFullScreen(view, PixelFormat.OPAQUE)
         root = view
     }
 
@@ -241,6 +277,11 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         release = {}
         root?.let(wm::removeView)
         root = null
+    }
+
+    private fun corner(gravity: Int) = FrameLayout.LayoutParams(-2, -2, gravity).apply {
+        val m = screenH / 60
+        setMargins(m, m, m, m)
     }
 
     /** Title and page counter, in a help-pill box so they stay readable over the page. */
@@ -256,8 +297,8 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
 
     private fun scrollKeys(scroll: ScrollView, code: Int): Boolean {
         when (code) {
-            KeyEvent.KEYCODE_DPAD_UP -> scroll.smoothScrollBy(0, -height / 4)
-            KeyEvent.KEYCODE_DPAD_DOWN -> scroll.smoothScrollBy(0, height / 4)
+            KeyEvent.KEYCODE_DPAD_UP -> scroll.smoothScrollBy(0, -screenH / 4)
+            KeyEvent.KEYCODE_DPAD_DOWN -> scroll.smoothScrollBy(0, screenH / 4)
             KeyEvent.KEYCODE_BUTTON_L1 -> scroll.pageScroll(View.FOCUS_UP)
             KeyEvent.KEYCODE_BUTTON_R1 -> scroll.pageScroll(View.FOCUS_DOWN)
             else -> return false

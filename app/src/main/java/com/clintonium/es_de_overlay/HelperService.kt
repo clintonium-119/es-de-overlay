@@ -20,16 +20,20 @@ import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.DocumentsContract
-import android.provider.Settings
 import android.util.Log
 import android.view.Display
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.clintonium.es_de_overlay.core.GameRef
 import com.clintonium.es_de_overlay.core.Launch
+import com.clintonium.es_de_overlay.core.guideEntries
+import com.clintonium.es_de_overlay.core.guidePath
+import com.clintonium.es_de_overlay.core.manualPath
 import com.clintonium.es_de_overlay.core.mediaPath
 import com.clintonium.es_de_overlay.core.nextLaunch
 import com.clintonium.es_de_overlay.core.resolveGame
@@ -80,11 +84,13 @@ class HelperService : Service() {
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadScheduledExecutor()
     private lateinit var prefs: Prefs
-    private lateinit var overlay: TriggerOverlay
+    private lateinit var menu: MenuOverlay
+    private lateinit var viewer: ViewerOverlay
     private lateinit var screenshots: ScreenshotObserver
     private lateinit var windowContext: Context
     private var projection: MediaProjection? = null
     private var capture: Capture? = null
+    private var guardAt = 0L
 
     // Written on the io thread, read on main.
     @Volatile private var launch: Launch? = null
@@ -106,7 +112,8 @@ class HelperService : Service() {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             null,
         )
-        overlay = TriggerOverlay(windowContext, prefs, ::onTap)
+        menu = MenuOverlay(windowContext, prefs)
+        viewer = ViewerOverlay(windowContext, prefs)
         screenshots = ScreenshotObserver(this, main, ::onScreenshot)
         if (checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED) screenshots.register()
         io.scheduleWithFixedDelay({
@@ -121,6 +128,7 @@ class HelperService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_HOME_GUARD) {
             Log.i(TAG, "home guard")
+            onHomeGuard()
             return START_NOT_STICKY
         }
         // The microphone type lets playback capture record game audio while the game is in front.
@@ -145,7 +153,9 @@ class HelperService : Service() {
     override fun onDestroy() {
         running = false
         capture?.stop()
-        overlay.show(false)
+        viewer.close()
+        menu.close()
+        menu.endCapture()
         screenshots.unregister()
         io.shutdownNow()
         projection?.stop()
@@ -167,17 +177,88 @@ class HelperService : Service() {
         main.post { onForeground(fg) }
     }
 
-    /** Main thread: hide the button in ES-DE and in this app; end a recording when the game is left. */
+    /** Main thread: when the game is left, close the menu and end a recording. */
     private fun onForeground(fg: String?) {
-        overlay.show(fg != null && fg != ESDE_PACKAGE && fg != packageName && Settings.canDrawOverlays(this))
-        if (capture != null && fg != launch?.pkg) capture?.stop()
+        if (fg == launch?.pkg) return
+        viewer.close()
+        menu.close()
+        capture?.stop()
     }
 
-    private fun onTap() {
+    /**
+     * Main thread: Retroid's first-Home toast. Stops a recording; with the menu or viewer open, goes home
+     * (Home pressed twice); otherwise opens the menu for the game in front, if ES-DE launched one.
+     */
+    private fun onHomeGuard() {
         capture?.let {
             it.stop()
             return
         }
+        if (menu.isOpen || viewer.isOpen) {
+            viewer.close()
+            menu.close()
+            startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            return
+        }
+        val g = currentGame() ?: return
+        guardAt = SystemClock.uptimeMillis()
+        io.execute {
+            val (manual, guides) = runCatching { documents(g) }
+                .onFailure { Log.w(TAG, "looking up manual and guides failed", it) }
+                .getOrDefault(null to emptyList())
+            main.post { openMenu(g, manual, guides) }
+        }
+    }
+
+    private fun openMenu(g: GameRef, manual: Doc?, guides: List<Doc>) {
+        val items = listOfNotNull("Capture", manual?.let { "Manual" }, guides.firstOrNull()?.let { "Guide" })
+        menu.show(items, { i ->
+            when (items[i]) {
+                "Capture" -> {
+                    menu.close()
+                    startCapture(g)
+                }
+                "Manual" -> view(manual!!)
+                // Several guides get their own list; B there returns to this menu.
+                else -> if (guides.size == 1) view(guides[0]) else menu.show(guides.map { it.name }, { view(guides[it]) }) {
+                    openMenu(g, manual, guides)
+                }
+            }
+        }) {}
+    }
+
+    /** Opens [doc] over the menu, which takes focus back when the viewer closes. */
+    private fun view(doc: Doc) {
+        runCatching { viewer.open(doc.uri, doc.name) {} }.onFailure {
+            Log.e(TAG, "opening ${doc.name} failed", it)
+            toast("Couldn't open ${doc.name}: ${it.message}")
+        }
+    }
+
+    private class Doc(val name: String, val uri: Uri)
+
+    /** io thread: the game's manual and guides that exist, found by listing their folders below downloaded_media. */
+    private fun documents(g: GameRef): Pair<Doc?, List<Doc>> {
+        val tree = prefs.esdeTree ?: return null to emptyList()
+        val dir = isDirectory(this, prefs.romsTree!!, "${g.system}/${g.romRelativePath}")
+        val media = DocumentsContract.getTreeDocumentId(tree) + "/downloaded_media/"
+        fun list(id: String) = runCatching { children(this, tree, id) }.getOrDefault(emptyMap())
+        fun doc(name: String, id: String) = Doc(name, DocumentsContract.buildDocumentUriUsingTree(tree, id))
+        val manual = manualPath(g, dir).let { path ->
+            list(media + path.dropLast(1).joinToString("/"))[path.last()]?.let { doc(path.last(), it) }
+        }
+        val path = guidePath(g, dir)
+        val base = path.last()
+        val folder = list(media + path.dropLast(1).joinToString("/"))
+        val inner = folder[base]?.let(::list).orEmpty()
+        val guides = guideEntries(base, folder.keys, inner.keys).map { entry ->
+            val name = entry.substringAfter("$base/")
+            doc(name, if (entry.startsWith("$base/")) inner.getValue(name) else folder.getValue(entry))
+        }
+        return manual to guides
+    }
+
+    private fun startCapture(g: GameRef) {
         val p = projection ?: run {
             startActivity(
                 Intent(this, SettingsActivity::class.java)
@@ -186,28 +267,27 @@ class HelperService : Service() {
             )
             return
         }
-        val g = currentGame() ?: run {
-            overlay.flash("?")
-            notify(this, RESULT_ID, "No ES-DE game detected. Last launch: ${launch?.lines?.firstOrNull() ?: "none"}; in front: $foreground")
-            return
-        }
-        overlay.setAlpha(0f)
+        menu.beginCapture()
+        // Let the closed menu leave the screen before the first frame, and Retroid's toast too: it stays
+        // up about 2.6 s after the Home press.
         main.postDelayed({
             try {
-                capture = Capture(windowContext, p, prefs.clipSeconds, audioGranted(), overlay::nudge, { overlay.setAlpha(0.01f) }) { png, mp4 ->
+                capture = Capture(windowContext, p, prefs.clipSeconds, audioGranted(), menu::nudge, {}) { png, mp4 ->
                     capture = null
-                    overlay.setAlpha(1f)
+                    menu.endCapture()
                     io.execute { save(g, png, mp4) }
                 }.also { it.start() }
                 Log.i(TAG, "capturing $g")
             } catch (e: Exception) {
                 Log.e(TAG, "capture failed to start", e)
-                overlay.setAlpha(1f)
-                overlay.flash("✗")
+                menu.endCapture()
+                toast("Capture failed: ${e.message}")
                 notify(this, RESULT_ID, "Capture failed: ${e.message}")
             }
-        }, 100)
+        }, (guardAt + 3_000 - SystemClock.uptimeMillis()).coerceAtLeast(100))
     }
+
+    private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
 
     /** A system screenshot: file it like a captured frame, or leave it where it is when no game is in front. */
     private fun onScreenshot(uri: Uri, mime: String) {
@@ -248,17 +328,14 @@ class HelperService : Service() {
             put(mp4, "videos", "mp4", "video/mp4")
         }
         result.exceptionOrNull()?.let { Log.e(TAG, "save failed", it) }
-        val ok = result.isSuccess && written.isNotEmpty()
-        main.post { overlay.flash(if (ok) "✓" else "✗") }
-        notify(
-            this, RESULT_ID,
-            when {
-                result.isFailure -> "Couldn't save: ${result.exceptionOrNull()?.message}"
-                ok -> "Saved: ${written.joinToString()}"
-                png == null && mp4 == null -> "Nothing captured"
-                else -> "Skipped: files already exist"
-            },
-        )
+        val text = when {
+            result.isFailure -> "Couldn't save: ${result.exceptionOrNull()?.message}"
+            written.isNotEmpty() -> "Saved: ${written.joinToString()}"
+            png == null && mp4 == null -> "Nothing captured"
+            else -> "Skipped: files already exist"
+        }
+        main.post { toast(text) }
+        notify(this, RESULT_ID, text)
         Log.i(TAG, "saved $written for $g")
     }
 

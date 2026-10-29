@@ -5,6 +5,7 @@ import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.InsetDrawable
 import android.os.SystemClock
 import android.text.SpannableStringBuilder
 import android.text.style.ForegroundColorSpan
@@ -13,6 +14,8 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -41,6 +44,29 @@ fun themeFont(context: Context, prefs: Prefs): Typeface = runCatching {
     }
 }.getOrDefault(Typeface.SANS_SERIF)
 
+/** Adds [view] as a focusable full-screen window over the game, with the system bars hidden, and focuses it. */
+fun WindowManager.addFullScreen(view: View, format: Int) {
+    addView(
+        view,
+        WindowManager.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            format,
+        ).apply {
+            // Cover the bars' area as well, instead of leaving the game showing there.
+            fitInsetsTypes = 0
+            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+        },
+    )
+    view.windowInsetsController?.run {
+        systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        hide(WindowInsets.Type.systemBars())
+    }
+    view.requestFocus()
+}
+
 /** A rounded help pill: `A OPEN  B BACK`, button letters in the icon color. */
 fun helpPill(context: Context, font: Typeface, textPx: Float, vararg entries: Pair<String, String>) = TextView(context).apply {
     text = SpannableStringBuilder().apply {
@@ -65,7 +91,8 @@ fun helpPill(context: Context, font: Typeface, textPx: Float, vararg entries: Pa
  */
 class MenuOverlay(private val context: Context, private val prefs: Prefs) {
     private val wm = context.getSystemService(WindowManager::class.java)
-    private val height = wm.maximumWindowMetrics.bounds.height()
+    private val screenW = wm.maximumWindowMetrics.bounds.width()
+    private val screenH = wm.maximumWindowMetrics.bounds.height()
     private var root: View? = null
     private var captureView: View? = null
     private val captureParams = WindowManager.LayoutParams(
@@ -80,9 +107,11 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
     fun show(items: List<String>, onPick: (Int) -> Unit, onClose: () -> Unit) {
         close()
         val font = themeFont(context, prefs)
-        val textPx = height * LIST_FONT
+        val textPx = screenH * LIST_FONT
         val rowPx = (textPx * LIST_SPACING).toInt()
-        val margin = (height * 0.04f).toInt()
+        // Measured from ES-DE's gamelist with this theme: the pill fills 6/7 of a row, text inset 0.7 em.
+        val pillInset = rowPx / 14
+        val textInset = (textPx * 0.7f).toInt()
         val rows = items.map { label ->
             TextView(context).apply {
                 text = label
@@ -90,7 +119,6 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
                 setTextSize(TypedValue.COMPLEX_UNIT_PX, textPx)
                 gravity = Gravity.CENTER_VERTICAL
                 maxLines = 1
-                setPadding(rowPx / 2, 0, rowPx / 2, 0)
                 layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, rowPx)
             }
         }
@@ -99,7 +127,13 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
             selected = i
             rows.forEachIndexed { n, row ->
                 row.setTextColor(if (n == i) PILL_TEXT else TEXT)
-                row.background = if (n == i) GradientDrawable().apply { setColor(PILL); cornerRadius = rowPx / 2f } else null
+                row.background = if (n == i) {
+                    InsetDrawable(GradientDrawable().apply { setColor(PILL); cornerRadius = rowPx / 2f }, 0, pillInset, 0, pillInset)
+                } else {
+                    null
+                }
+                // A background with padding replaces the view's own, so set it back.
+                row.setPadding(textInset, 0, textInset, 0)
             }
             rows.getOrNull(i)?.let { it.requestRectangleOnScreen(Rect(0, 0, it.width, it.height)) }
         }
@@ -110,7 +144,8 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
         }
         val view = FrameLayout(context).apply {
             setBackgroundColor(SCRIM)
-            setPadding(margin, margin, margin, margin)
+            // ES-DE's gamelist margins: 5% of the width at the sides, 7% of the height above, 6% below.
+            setPadding((screenW * 0.05f).toInt(), (screenH * 0.07f).toInt(), (screenW * 0.05f).toInt(), (screenH * 0.06f).toInt())
             addView(ScrollView(context).apply { isVerticalScrollBarEnabled = false; addView(list) })
             addView(
                 helpPill(context, font, textPx, "A" to "Open", "B" to "Back"),
@@ -133,17 +168,7 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
                 true
             }
         }
-        wm.addView(
-            view,
-            WindowManager.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT,
-            ),
-        )
-        view.requestFocus()
+        wm.addFullScreen(view, PixelFormat.TRANSLUCENT)
         root = view
     }
 

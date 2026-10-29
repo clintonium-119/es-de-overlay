@@ -25,7 +25,4 @@ class Prefs(context: Context) {
     var bootStart: Boolean
         get() = sp.getBoolean("bootStart", false)
         set(v) = sp.edit().putBoolean("bootStart", v).apply()
-    var corner: Corner
-        get() = Corner.valueOf(sp.getString("corner", Corner.TOP_LEFT.name)!!)
-        set(v) = sp.edit().putString("corner", v.name).apply()
 }
