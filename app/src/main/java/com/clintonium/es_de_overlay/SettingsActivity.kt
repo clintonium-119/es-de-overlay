@@ -186,7 +186,14 @@ class SettingsActivity : ComponentActivity() {
             Setting("Read screenshots (system screenshot pickup)", granted(Manifest.permission.READ_MEDIA_IMAGES).label, "Grant") {
                 askPermission.launch(Manifest.permission.READ_MEDIA_IMAGES)
             }
-            Setting("Display over other apps (capture button)", Settings.canDrawOverlays(this@SettingsActivity).label, "Open") {
+            Setting("Home menu (accessibility service)", if (homeMenuEnabled()) "Enabled" else "Not enabled", "Open") {
+                openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS, withPackage = false)
+            }
+            Text(
+                "The menu opens on the toast from Retroid's \"Prevent pressing Home accidentally\", so keep that setting on.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Setting("Display over other apps (menu and viewer)", Settings.canDrawOverlays(this@SettingsActivity).label, "Open") {
                 openSettings(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, withPackage = true)
             }
             Setting("Usage access (which app is in front)", usageAccess().label, "Open") {
@@ -238,6 +245,9 @@ class SettingsActivity : ComponentActivity() {
 
     private fun usageAccess() = getSystemService(AppOpsManager::class.java)
         .unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, applicationInfo.uid, packageName) == AppOpsManager.MODE_ALLOWED
+
+    private fun homeMenuEnabled() =
+        Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)?.contains("$packageName/") == true
 
     private fun openSettings(action: String, withPackage: Boolean) {
         startActivity(Intent(action).apply { if (withPackage) data = Uri.parse("package:$packageName") })
