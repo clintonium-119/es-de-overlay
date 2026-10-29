@@ -1,4 +1,4 @@
-package com.clintonium.esderecorder
+package com.clintonium.es_de_overlay
 
 import android.content.Intent
 import android.service.quicksettings.Tile

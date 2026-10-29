@@ -1,4 +1,4 @@
-package com.clintonium.esderecorder.core
+package com.clintonium.es_de_overlay.core
 
 import org.junit.Assert.assertEquals
 import org.junit.Test

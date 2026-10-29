@@ -1,4 +1,4 @@
-package com.clintonium.esderecorder
+package com.clintonium.es_de_overlay
 
 import android.Manifest
 import android.app.AppOpsManager
@@ -46,7 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.clintonium.esderecorder.core.Overwrite
+import com.clintonium.es_de_overlay.core.Overwrite
 
 class SettingsActivity : ComponentActivity() {
     private var refresh by mutableIntStateOf(0)
@@ -119,7 +119,7 @@ class SettingsActivity : ComponentActivity() {
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("ES-DE Recorder", style = MaterialTheme.typography.headlineSmall)
+            Text("ES-DE Overlay", style = MaterialTheme.typography.headlineSmall)
 
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (HelperService.running) {
@@ -177,7 +177,7 @@ class SettingsActivity : ComponentActivity() {
             Setting("Quick settings tile", "Turn the recorder on or off from the notification shade", "Add") {
                 getSystemService(StatusBarManager::class.java).requestAddTileService(
                     ComponentName(this@SettingsActivity, CaptureTile::class.java),
-                    "ES-DE Recorder",
+                    "ES-DE Overlay",
                     Icon.createWithResource(this@SettingsActivity, android.R.drawable.ic_menu_camera),
                     mainExecutor,
                 ) {}

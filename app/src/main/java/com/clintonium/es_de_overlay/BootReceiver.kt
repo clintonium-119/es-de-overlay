@@ -1,4 +1,4 @@
-package com.clintonium.esderecorder
+package com.clintonium.es_de_overlay
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -8,7 +8,7 @@ import android.content.Intent
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED && Prefs(context).bootStart) {
-            notify(context, BOOT_ID, "Tap to start ES-DE Recorder", grant = true)
+            notify(context, BOOT_ID, "Tap to start ES-DE Overlay", grant = true)
         }
     }
 

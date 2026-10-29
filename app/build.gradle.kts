@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.clintonium.esderecorder"
+    namespace = "com.clintonium.es_de_overlay"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.clintonium.esderecorder"
+        applicationId = "com.clintonium.es_de_overlay"
         minSdk = 33
         // Pinned: Android 14 (34) requires a new MediaProjection consent per capture.
         targetSdk = 33

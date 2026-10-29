@@ -1,4 +1,4 @@
-package com.clintonium.esderecorder
+package com.clintonium.es_de_overlay
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -28,11 +28,11 @@ import android.view.WindowManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import com.clintonium.esderecorder.core.GameRef
-import com.clintonium.esderecorder.core.Launch
-import com.clintonium.esderecorder.core.mediaPath
-import com.clintonium.esderecorder.core.nextLaunch
-import com.clintonium.esderecorder.core.resolveGame
+import com.clintonium.es_de_overlay.core.GameRef
+import com.clintonium.es_de_overlay.core.Launch
+import com.clintonium.es_de_overlay.core.mediaPath
+import com.clintonium.es_de_overlay.core.nextLaunch
+import com.clintonium.es_de_overlay.core.resolveGame
 import java.io.File
 import java.io.FileInputStream
 import java.nio.ByteBuffer
@@ -54,7 +54,7 @@ fun notify(context: Context, id: Int, text: String, grant: Boolean = false, ongo
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
     val n = Notification.Builder(context, CHANNEL)
         .setSmallIcon(android.R.drawable.ic_menu_camera)
-        .setContentTitle("ES-DE Recorder")
+        .setContentTitle("ES-DE Overlay")
         .setContentText(text)
         .setStyle(Notification.BigTextStyle().bigText(text))
         .setOngoing(ongoing)

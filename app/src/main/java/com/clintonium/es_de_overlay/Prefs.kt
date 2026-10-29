@@ -1,8 +1,8 @@
-package com.clintonium.esderecorder
+package com.clintonium.es_de_overlay
 
 import android.content.Context
 import android.net.Uri
-import com.clintonium.esderecorder.core.Overwrite
+import com.clintonium.es_de_overlay.core.Overwrite
 
 class Prefs(context: Context) {
     private val sp = context.getSharedPreferences("prefs", Context.MODE_PRIVATE)

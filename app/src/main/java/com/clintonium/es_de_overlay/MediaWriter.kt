@@ -1,12 +1,12 @@
-package com.clintonium.esderecorder
+package com.clintonium.es_de_overlay
 
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
 import android.util.Log
-import com.clintonium.esderecorder.core.Overwrite
-import com.clintonium.esderecorder.core.targetName
+import com.clintonium.es_de_overlay.core.Overwrite
+import com.clintonium.es_de_overlay.core.targetName
 import java.io.OutputStream
 
 /** Writes files below a SAF tree (the ES-DE data folder), creating missing folders. */

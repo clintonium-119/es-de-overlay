@@ -1,4 +1,4 @@
-# ES-DE Recorder
+# ES-DE Overlay
 
 Android app for the Retroid Pocket Nova (Android 13) that runs next to [ES-DE](https://es-de.org).
 During a game launched from ES-DE, one tap on a small floating button saves a screenshot and a
@@ -23,7 +23,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ## Setup (once)
 
-Open **ES-DE Recorder** (ES-DE also lists it under Android Apps) and:
+Open **ES-DE Overlay** (ES-DE also lists it under Android Apps) and:
 
 1. **ES-DE data folder → Pick**: open the SD card (or internal storage), choose the `ES-DE`
    folder, *Use this folder*, *Allow*.
@@ -35,7 +35,7 @@ Open **ES-DE Recorder** (ES-DE also lists it under Android Apps) and:
    what to do when the file exists (Replace / Skip / Keep both), button corner, and the boot
    notification.
 5. **Start service → Start now.** One consent covers every capture until the service stops.
-6. Optional: **Quick settings tile → Add** puts an *ES-DE Recorder* on/off tile in the swipe-down
+6. Optional: **Quick settings tile → Add** puts an *ES-DE Overlay* on/off tile in the swipe-down
    shade. Turning it on shows the consent dialog and then returns to whatever you were doing.
 
 ## Use
