@@ -119,6 +119,10 @@ class HelperService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_HOME_GUARD) {
+            Log.i(TAG, "home guard")
+            return START_NOT_STICKY
+        }
         // The microphone type lets playback capture record game audio while the game is in front.
         startForeground(
             ONGOING_ID,
@@ -317,6 +321,7 @@ class HelperService : Service() {
     companion object {
         const val EXTRA_CODE = "code"
         const val EXTRA_DATA = "data"
+        const val ACTION_HOME_GUARD = "com.clintonium.es_de_overlay.HOME_GUARD"
         var running by mutableStateOf(false)
     }
 }
