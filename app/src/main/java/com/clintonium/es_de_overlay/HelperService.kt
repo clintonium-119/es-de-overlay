@@ -40,8 +40,11 @@ import com.clintonium.es_de_overlay.core.resolveGame
 import java.io.File
 import java.io.FileInputStream
 import java.nio.ByteBuffer
+import java.util.concurrent.CancellationException
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.concurrent.thread
 
 const val TAG = "ESDEShot"
 const val ESDE_PACKAGE = "org.es_de.frontend"
@@ -97,6 +100,8 @@ class HelperService : Service() {
     private var projection: MediaProjection? = null
     private var capture: Capture? = null
     private var guardAt = 0L
+    /** Main thread: the cancel flag of the running Find guides check or save, set when the menu goes away. */
+    private var finding: AtomicBoolean? = null
 
     // Written on the io thread, read on main.
     @Volatile private var launch: Launch? = null
@@ -181,6 +186,7 @@ class HelperService : Service() {
     /** Main thread: when the game is left, close the menu and end a recording. */
     private fun onForeground(fg: String?) {
         if (fg == launch?.pkg) return
+        finding?.set(true)
         closeViewer()
         menu.close()
         capture?.stop()
@@ -196,23 +202,29 @@ class HelperService : Service() {
             return
         }
         if (menu.isOpen) {
+            finding?.set(true)
             closeViewer()
             menu.close()
             startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             return
         }
         val g = currentGame() ?: return
+        // ES-DE's name for the game, which Find guides looks up.
+        val name = launch?.name ?: return
         guardAt = SystemClock.uptimeMillis()
         io.execute {
             val (manual, guides) = runCatching { documents(g) }
                 .onFailure { Log.w(TAG, "looking up manual and guides failed", it) }
                 .getOrDefault(null to emptyList())
-            main.post { openMenu(g, manual, guides) }
+            main.post { openMenu(g, name, manual, guides) }
         }
     }
 
-    private fun openMenu(g: GameRef, manual: Doc?, guides: List<Doc>) {
-        val items = listOfNotNull("Capture", manual?.let { "Manual" }, guides.firstOrNull()?.let { "Guide" })
+    private fun openMenu(g: GameRef, name: String, manual: Doc?, guides: List<Doc>) {
+        val back = { openMenu(g, name, manual, guides) }
+        val items = listOfNotNull(
+            "Capture", manual?.let { "Manual" }, guides.firstOrNull()?.let { "Guide" }, prefs.esdeTree?.let { "Find guides" },
+        )
         menu.show(items, { i ->
             when (items[i]) {
                 "Capture" -> {
@@ -220,12 +232,75 @@ class HelperService : Service() {
                     startCapture(g)
                 }
                 "Manual" -> view(manual!!)
+                "Find guides" -> findGuides(g, name, back)
                 // Several guides get their own list; B there returns to this menu.
-                else -> if (guides.size == 1) view(guides[0]) else menu.show(guides.map { it.name }, { view(guides[it]) }) {
-                    openMenu(g, manual, guides)
-                }
+                else -> if (guides.size == 1) view(guides[0]) else menu.show(guides.map { it.name }, { view(guides[it]) }, back)
             }
         }) {}
+    }
+
+    /**
+     * Main thread: checks VGMaps, then StrategyWiki, for the game and lists those that have it; picking one saves
+     * it and opens it. Requests run one at a time on their own thread, and only from here. B cancels and goes [back].
+     */
+    private fun findGuides(g: GameRef, name: String, back: () -> Unit) {
+        val cancelled = AtomicBoolean().also { finding = it }
+        val cancel = {
+            cancelled.set(true)
+            back()
+        }
+        menu.show(listOf("Checking sources…"), {}, cancel)
+        thread(name = "guides") {
+            val dir = isDirectory(this, prefs.romsTree!!, "${g.system}/${g.romRelativePath}")
+            val failures = mutableListOf<Throwable>()
+            fun <T> check(source: String, lookup: () -> T): T? =
+                runCatching(lookup).onFailure { Log.w(TAG, "$source check failed", it); failures += it }.getOrNull()
+            val maps = check("VGMaps") { vgmaps(g.system, name) }.orEmpty()
+            val wiki = check("StrategyWiki") { strategyWiki(name) }
+            val writer = MediaWriter(this, prefs.esdeTree!!)
+            val progress: (String) -> Unit = { label -> main.post { if (!cancelled.get()) menu.relabel(0, label) } }
+            val found = buildList<Pair<String, () -> String>> {
+                if (maps.isNotEmpty()) {
+                    add("VGMaps: ${maps.size} maps" to { saveVgmaps(writer, cacheDir, g, dir, name, maps, progress, cancelled::get) })
+                }
+                wiki?.let { (title, pages) ->
+                    add("StrategyWiki: $title (${pages.size} pages)" to {
+                        saveStrategyWiki(writer, cacheDir, g, dir, title, pages, progress, cancelled::get)
+                    })
+                }
+            }
+            main.post {
+                when {
+                    cancelled.get() -> {}
+                    found.isNotEmpty() -> menu.show(found.map { it.first }, { saveGuide(g, name, found[it].second, cancelled, back) }, cancel)
+                    // A row rather than a toast: toasts draw under the menu's window.
+                    failures.isNotEmpty() -> menu.show(listOf("Couldn't reach the guide sources"), {}, back)
+                    else -> menu.show(listOf("No guides found"), {}, back)
+                }
+            }
+        }
+    }
+
+    /** Main thread: runs [save] with progress in the menu, then reopens the menu with the new guide and opens it. */
+    private fun saveGuide(g: GameRef, name: String, save: () -> String, cancelled: AtomicBoolean, back: () -> Unit) {
+        menu.show(listOf("Saving…"), {}) {
+            cancelled.set(true)
+            back()
+        }
+        thread(name = "guides") {
+            val saved = runCatching(save).onFailure { if (it !is CancellationException) Log.w(TAG, "saving a guide failed", it) }
+            val docs = saved.getOrNull()?.let { runCatching { documents(g) }.getOrNull() }
+            main.post {
+                if (cancelled.get()) return@post
+                saved.onFailure {
+                    menu.show(listOf("Couldn't save the guide"), {}, back)
+                    return@post
+                }
+                val (manual, guides) = docs ?: (null to emptyList())
+                openMenu(g, name, manual, guides)
+                guides.firstOrNull { it.key == saved.getOrNull() }?.let(::view)
+            }
+        }
     }
 
     /** Opens [doc] over the menu, which takes focus back when the viewer closes. */

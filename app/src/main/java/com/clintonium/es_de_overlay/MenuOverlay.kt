@@ -96,6 +96,7 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
     private val screenW = wm.maximumWindowMetrics.bounds.width()
     private val screenH = wm.maximumWindowMetrics.bounds.height()
     private var root: View? = null
+    private var rows: List<TextView> = emptyList()
     private var captureView: View? = null
     private val captureParams = WindowManager.LayoutParams(
         1, 1,
@@ -172,11 +173,21 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
         }
         wm.addFullScreen(view, PixelFormat.TRANSLUCENT)
         root = view
+        this.rows = rows
+    }
+
+    /**
+     * Changes row [i]'s label in place, for progress. Showing a new list instead removes the focused window for
+     * a moment, handing focus (and an unpause) back to the game.
+     */
+    fun relabel(i: Int, label: String) {
+        rows.getOrNull(i)?.text = label
     }
 
     fun close() {
         root?.let(wm::removeView)
         root = null
+        rows = emptyList()
     }
 
     /** Adds the invisible window that [nudge] relayouts, so a static screen still yields capture frames. */
