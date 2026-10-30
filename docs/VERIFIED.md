@@ -130,3 +130,9 @@ Checked on the Nova on 2026-10-30 (WebView 109, `com.android.webview`) in Shanta
 - **Closing.** Back walks the history and then closes; Close, Home and leaving the game each end the `:viewer` process.
 - **Memory.** The service read 89.6 MB PSS with the menu open before the browser. It was 104.4 MB 67 s after closing, then 92.4–93.0 MB from 73 s on.
 - **Inspecting sites.** Debug builds let desktop Chrome inspect the browser: `adb forward tcp:9333 localabstract:webview_devtools_remote_<pid of :viewer>`.
+- **Reading guides from the page.** Checked on live guide pages on 2026-10-30:
+  - GameFAQs text guides are `#faqtext`, split into `<pre>` blocks at line ends, with the newline dropped at each split.
+  - GameFAQs HTML guides are `#faqwrap`. Named-page guides list their pages in `#faq_toc .toc_menu`. Numbered `?page=N` guides list only some pages there; their pager's Last Page gives the count.
+  - Neoseeker text FAQs are `#faqtxt.text_only pre`. Its wiki walkthroughs are `.mw-parser-output`, with every chapter in `.wiki-toc`.
+  - ZeldaDungeon chapters are `.content-wrap`. They list the chapters in a `<ul>` in which the current one is a `<strong>`.
+- **Guide images.** GameFAQs (`/a/faqs/…`) and ZeldaDungeon images are on the page's own host, so they read from inside the page. ZeldaDungeon's `http://` images need https. Neoseeker's `cdn.staticneo.com` is cross-origin, so CORS blocks it in the page, but it answers a plain request with the app's User-Agent. GameFAQs' image host answered such a request from the Nova, but refused it from a desktop with a 403.
