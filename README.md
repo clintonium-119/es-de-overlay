@@ -14,8 +14,9 @@ the `minui-menu-es-de-custom` theme:
 
 - **Manual** opens the game's scraped ES-DE manual.
 - **Guide** opens the game's guides (see [Guides](#guides)).
-- **Find guides** looks the game up on StrategyWiki and VGMaps, saves the guide you pick next to
-  your own, and opens it.
+- **Find guides** looks the game up on StrategyWiki and VGMaps, and opens GameFAQs, Neoseeker and
+  ZeldaDungeon in a touch browser over the game. It saves the guide you pick next to your own and
+  opens it.
 
 A second press of Home goes to ES-DE as usual. System screenshots (power + volume down) taken
 during a game are filed the same way as captures.
@@ -61,10 +62,22 @@ Open **ES-DE Overlay** (ES-DE also lists it under Android Apps) and:
 - **Manual** and **Guide** only appear when the game has one. With several guides, Guide shows a
   list first.
 - **Find guides** checks VGMaps and StrategyWiki for the game and lists the ones that have it, e.g.
-  `VGMaps: 56 maps` and `StrategyWiki: Shantae (2 pages)`, or `No guides found`. Picking one saves
-  it with progress in the menu (**B** cancels and saves nothing) and then opens it; Guide lists it
-  from then on. Picking a source again replaces the saved file. Without a connection the menu says
+  `VGMaps: 56 maps` and `StrategyWiki: Shantae (2 pages)`. Picking one saves it with progress in the
+  menu (**B** cancels and saves nothing) and then opens it; Guide lists it from then on. Picking a
+  source again replaces the saved file. Without a connection the menu says
   `Couldn't reach the guide sources`.
+- Below those, Find guides always lists **Search GameFAQs** and **Search Neoseeker**, plus
+  **ZeldaDungeon** for a Zelda game it has a walkthrough for. These sites are only contacted once
+  you pick one. Each opens a browser over the game, used by touch, at the site's search for the game
+  (ZeldaDungeon at the game's walkthrough). Its bar has **Back**, the page title, **Save guide** on a
+  guide's page, and **Close**; tapping a text field brings up the keyboard. The first visit to a site
+  may show a security check: it either clears by itself or asks you to tap "Verify you are human".
+- **Save guide** saves the open guide. A text guide saves at once. A guide split into pages saves
+  by loading each page in turn in the same browser, at least 2 seconds apart, with
+  `Saving page 3 of 8, image 12 of 40` in the bar. If a page shows a security check, the bar says
+  `Clear the check to continue` and the save waits until you have. **Cancel** stops and saves
+  nothing. When it's done, the browser closes and the guide opens. Closing the browser without
+  saving returns to the Find guides list.
 - The viewer works like ES-DE's own manual viewer:
 
   | | Zoomed out | Zoomed in |
@@ -99,12 +112,17 @@ Find guides saves into the folder form, e.g. for Shantae:
 ```
 <ES-DE>/downloaded_media/gbc/guides/Shantae/VGMaps - Shantae.cbz
 <ES-DE>/downloaded_media/snes/guides/Super Metroid/StrategyWiki - Super Metroid.html
+<ES-DE>/downloaded_media/gbc/guides/Shantae/GameFAQs - Shantae – Guide and Walkthrough by DEngel.html
 ```
 
 A VGMaps save is one CBZ of the game's maps in the atlas's order. A StrategyWiki save is one HTML
 file: a contents list, one section per wiki page, its images inside the file, and the source and
-license (CC BY-SA 4.0) at the end. The viewer shows it offline in the theme's colours and font;
-opened anywhere else it is a plain web page.
+license (CC BY-SA 4.0) at the end. A guide saved from the browser is the same kind of HTML file:
+a text guide is kept as fixed-width text, and a guide in pages gets one section per page with its
+images inside. Site scripts, ads and comments are left out, and the end names the source page and
+author. These guides belong to their authors; save them for your own reading. The viewer shows
+saved guides offline in the theme's colours and font; opened anywhere else they are plain web
+pages.
 
 ## How it finds the game
 
@@ -135,9 +153,13 @@ identified with certainty (the notification shows the raw launch line instead).
   menu (not seen so far).
 - Find guides matches the game's ES-DE name exactly (ignoring case, punctuation, region tags and a
   trailing ", The"), so some games aren't found even when a site has them; it never picks a
-  different game. It covers StrategyWiki (through its API) and VGMaps only.
-- The app goes online only when you pick Find guides, one request at a time, with its own
-  User-Agent. Saved guides need no connection.
+  different game. GameFAQs and Neoseeker are searched in the browser, where you pick the game.
+- Saving from the browser reads each site's page layout, as seen in October 2026. A site that
+  changes its layout can break Save guide until the app is updated, and a site could block the
+  in-app browser outright. Ads show in the live browser; saved guides leave them out. Guides with
+  many large images make large files (Super Metroid's GameFAQs guide with 264 images is 58 MB).
+- The app goes online only when you pick Find guides or a browser site, with its own User-Agent for
+  its own requests; the browser is a normal WebView. Saved guides need no connection.
 - Device findings and how each was checked: [`docs/VERIFIED.md`](docs/VERIFIED.md). Plan:
   [`PLAN.md`](PLAN.md).
 

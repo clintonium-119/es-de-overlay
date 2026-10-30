@@ -128,7 +128,9 @@ Checked on the Nova on 2026-10-30 (WebView 109, `com.android.webview`) in Shanta
 - **GameFAQs' first page after the check came back empty.** `search?game=Shantae` showed the empty search form straight after the check, then the results when searched again or opened later.
 - **Typing works in an overlay window.** Tapping a page's field brings up Gboard. Insets that include `ime()` shrink the window above the keyboard, so the bar and the field stay visible. A resize soft-input mode is ignored once a window sets its own insets. Sticky site banners can still cover a field.
 - **Closing.** Back walks the history and then closes; Close, Home and leaving the game each end the `:viewer` process.
-- **Memory.** The service read 89.6 MB PSS with the menu open before the browser. It was 104.4 MB 67 s after closing, then 92.4–93.0 MB from 73 s on.
+- **Memory.** The browser's WebView lives and dies with the `:viewer` process, so only the service's own reading changes:
+  - With the menu open, 89.6 MB before the browser; 104.4 MB 67 s after closing; then 92.4–93.0 MB from 73 s on.
+  - From Find guides in Shantae: 90.3 MB once the checks had settled; 101.8 MB 65 s after Close; then 97.6–98.0 MB from 71 s to 136 s. The service's native heap was 19.5 MB then, against 11.4 MB in an earlier reading. That growth is in the service, which only starts the browser; the cause isn't known.
 - **Inspecting sites.** Debug builds let desktop Chrome inspect the browser: `adb forward tcp:9333 localabstract:webview_devtools_remote_<pid of :viewer>`.
 - **Reading guides from the page.** Checked on live guide pages on 2026-10-30:
   - GameFAQs text guides are `#faqtext`, split into `<pre>` blocks at line ends, with the newline dropped at each split.
@@ -139,4 +141,7 @@ Checked on the Nova on 2026-10-30 (WebView 109, `com.android.webview`) in Shanta
 - **Saving whole guides.**
   - Shantae's 82 KB GameFAQs text guide saved in under a second as an 84 KB file.
   - Super Metroid's 8-page GameFAQs HTML guide (bover_87) loaded each page in the visible browser 3–14 s apart. It saved 264 images in about 65 s, every one read inside the page. The file is 58 MB, mostly base64 map images, and the viewer opens it in about 2 s.
-  - No bot check appeared during either save.
+  - Link's Awakening DX's ZeldaDungeon walkthrough (Game Boy Color, 9 chapters) saved in about 2.5 minutes as an 8.2 MB file. Of its 558 images, 554 were read in the page and 4 came from plain requests: they are on `zeldadungeon.net` without `www`, which is another origin. One gave a 404 and kept its alt text.
+  - Its Neoseeker FAQ/Walkthrough saved at once as a 173 KB file, with its ASCII title art aligned.
+  - ZeldaDungeon's walkthrough front page covers the Switch remake. Each Switch chapter links its Game Boy Color version, and a GBC chapter lists all nine GBC chapters, so saving from there gets the DX walkthrough.
+  - No bot check appeared during any save. Neoseeker's check came up once, on the first visit, and cookies kept it from showing again.
