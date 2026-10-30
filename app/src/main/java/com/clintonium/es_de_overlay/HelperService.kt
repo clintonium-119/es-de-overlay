@@ -235,7 +235,7 @@ class HelperService : Service() {
                 }
                 "Manual" -> view(manual!!)
                 "Find guides" -> findGuides(g, name, back)
-                "Browser (debug)" -> startService(ViewerService.browse(this, "https://gamefaqs.gamespot.com/search?game=${Uri.encode(name)}"))
+                "Browser (debug)" -> startService(ViewerService.browse(this, "https://gamefaqs.gamespot.com/search?game=${Uri.encode(name)}", g))
                 // Several guides get their own list; B there returns to this menu.
                 else -> if (guides.size == 1) view(guides[0]) else menu.show(guides.map { it.name }, { view(guides[it]) }, back)
             }

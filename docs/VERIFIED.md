@@ -136,3 +136,7 @@ Checked on the Nova on 2026-10-30 (WebView 109, `com.android.webview`) in Shanta
   - Neoseeker text FAQs are `#faqtxt.text_only pre`. Its wiki walkthroughs are `.mw-parser-output`, with every chapter in `.wiki-toc`.
   - ZeldaDungeon chapters are `.content-wrap`. They list the chapters in a `<ul>` in which the current one is a `<strong>`.
 - **Guide images.** GameFAQs (`/a/faqs/…`) and ZeldaDungeon images are on the page's own host, so they read from inside the page. ZeldaDungeon's `http://` images need https. Neoseeker's `cdn.staticneo.com` is cross-origin, so CORS blocks it in the page, but it answers a plain request with the app's User-Agent. GameFAQs' image host answered such a request from the Nova, but refused it from a desktop with a 403.
+- **Saving whole guides.**
+  - Shantae's 82 KB GameFAQs text guide saved in under a second as an 84 KB file.
+  - Super Metroid's 8-page GameFAQs HTML guide (bover_87) loaded each page in the visible browser 3–14 s apart. It saved 264 images in about 65 s, every one read inside the page. The file is 58 MB, mostly base64 map images, and the viewer opens it in about 2 s.
+  - No bot check appeared during either save.

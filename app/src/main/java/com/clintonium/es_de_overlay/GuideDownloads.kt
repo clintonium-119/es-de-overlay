@@ -126,7 +126,7 @@ fun saveVgmaps(
 }
 
 /** Builds the guide in a cache file with [build], then copies it into the guides folder; the cache file never stays. */
-private fun saveVia(
+fun saveVia(
     writer: MediaWriter, cache: File, game: GameRef, romIsDirectory: Boolean, name: String, mime: String,
     cancelled: () -> Boolean, build: (File) -> Unit,
 ): String {

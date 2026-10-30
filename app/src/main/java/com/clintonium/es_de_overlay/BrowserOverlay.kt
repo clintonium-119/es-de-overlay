@@ -17,12 +17,23 @@ import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.LinearLayout
+import android.widget.TextView
+import com.clintonium.es_de_overlay.core.GameRef
 import com.clintonium.es_de_overlay.core.GuideImage
+import com.clintonium.es_de_overlay.core.GuideSection
+import com.clintonium.es_de_overlay.core.escapeHtml
+import com.clintonium.es_de_overlay.core.guideFileName
+import com.clintonium.es_de_overlay.core.isBotCheck
 import com.clintonium.es_de_overlay.core.isGuidePage
+import com.clintonium.es_de_overlay.core.siteOf
+import com.clintonium.es_de_overlay.core.textSection
+import com.clintonium.es_de_overlay.core.writeHtmlGuide
 import java.io.IOException
 import java.net.URLConnection
 import java.util.Base64
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.CancellationException
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 import org.json.JSONArray
@@ -30,6 +41,9 @@ import org.json.JSONObject
 
 /** Characters per piece when a long result comes back from the page; `guide-extract.js` uses the same. */
 private const val CHUNK = 256 * 1024
+
+/** The least time between two page loads of a save, so a whole guide never arrives faster than a reader's taps. */
+private const val PAGE_GAP_MS = 2_000L
 
 /**
  * The guide on the browser's page: [text] for a text guide, else [html], whose image sources are `img:0` to
@@ -47,10 +61,12 @@ class PageGuide(
 
 /**
  * A touch browser over the game, for guide sites only a browser gets into: a WebView with its own User-Agent
- * and cookie settings, above a bar like the viewer's with Back, the page title and Close. Built on [open] and
- * destroyed on [close]; it runs in the viewer's process, which ends when it closes.
+ * and cookie settings, above a bar like the viewer's with Back, the page title, Save guide on a guide page, and
+ * Close. Save guide loads each of the guide's pages in turn in this same visible WebView, waits for the user on a
+ * bot check, and writes the guide as one HTML file in the game's guides folder. Built on [open] and destroyed on
+ * [close]; it runs in the viewer's process, which ends when it closes.
  */
-class BrowserOverlay(private val context: Context) {
+class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
     private val wm = context.getSystemService(WindowManager::class.java)
     private val main = Handler(Looper.getMainLooper())
     private val script by lazy { context.assets.open("guide-extract.js").bufferedReader().use { it.readText() } }
@@ -59,10 +75,20 @@ class BrowserOverlay(private val context: Context) {
     private val tapH = (48 * context.resources.displayMetrics.density).toInt()
     private var root: View? = null
     private var web: WebView? = null
+    /** Main thread: a save is running. */
+    private var saving = false
+    @Volatile private var cancelled = false
+    /** URLs of finished page loads, which a save waits on. */
+    private val finished = LinkedBlockingQueue<String>()
+    /** Save thread only: when the last page load started. */
+    private var lastLoad = 0L
 
-    /** Opens [url]; [onClose] runs when Back runs out of history, Close is tapped or the page's renderer dies. */
+    /**
+     * Opens [url]. A saved guide of [game]'s goes to [onSaved] as its path below the ES-DE folder; [onClose] runs
+     * when Back runs out of history, Close is tapped or the page's renderer dies.
+     */
     @SuppressLint("SetJavaScriptEnabled")
-    fun open(url: String, onClose: () -> Unit) {
+    fun open(url: String, game: GameRef, onSaved: (String) -> Unit, onClose: () -> Unit) {
         close()
         val done = {
             close()
@@ -74,11 +100,27 @@ class BrowserOverlay(private val context: Context) {
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true
         val title = barText(context, barH, Gravity.CENTER)
-        // Temporary, until Save guide: tapping the title logs what a save would read from this page.
-        if (BuildConfig.DEBUG) {
-            title.setOnClickListener { thread(name = "guide-extract") { runCatching(::logGuide).onFailure { Log.w(TAG, "browser: reading the guide failed", it) } } }
+        fun button(label: String, onTap: () -> Unit) = barText(context, barH, Gravity.CENTER).apply {
+            text = label
+            setPadding(barH, 0, barH, 0)
+            setOnClickListener { onTap() }
         }
+        lateinit var save: TextView
+        save = button("Save guide") {
+            if (saving) cancelled = true else startSave(game, title, save, onSaved)
+        }.apply { visibility = View.GONE }
         web.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView, url: String) {
+                finished.offer(url)
+                if (saving) return
+                save.visibility = View.GONE
+                if (isGuidePage(url)) {
+                    view.evaluateJavascript("$script;esdeGuide.describe().kind") { kind ->
+                        if (!saving && kind.trim('"') in setOf("text", "html")) save.visibility = View.VISIBLE
+                    }
+                }
+            }
+
             // Without this a crashed renderer takes the process down with it.
             override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
                 Log.w(TAG, "browser: renderer gone")
@@ -88,19 +130,16 @@ class BrowserOverlay(private val context: Context) {
         }
         web.webChromeClient = object : WebChromeClient() {
             override fun onReceivedTitle(view: WebView, text: String?) {
-                title.text = text
+                // While saving, the title shows progress instead.
+                if (!saving) title.text = text
             }
-        }
-        fun button(label: String, onTap: () -> Unit) = barText(context, barH, Gravity.CENTER).apply {
-            text = label
-            setPadding(barH, 0, barH, 0)
-            setOnClickListener { onTap() }
         }
         val bar = LinearLayout(context).apply {
             setBackgroundColor(VIEWER_BAR)
             val fill = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            addView(button("Back") { if (web.canGoBack()) web.goBack() else done() }, fill)
+            addView(button("Back") { if (saving) Unit else if (web.canGoBack()) web.goBack() else done() }, fill)
             addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
+            addView(save, fill)
             addView(button("Close", done), fill)
         }
         val view = LinearLayout(context).apply {
@@ -113,6 +152,97 @@ class BrowserOverlay(private val context: Context) {
         wm.addFullScreen(view, PixelFormat.OPAQUE, WindowInsets.Type.ime())
         root = view
         this.web = web
+    }
+
+    /** Main thread: saves the guide on this page on its own thread, with progress in [status]; [button] cancels it. */
+    private fun startSave(game: GameRef, status: TextView, button: TextView, onSaved: (String) -> Unit) {
+        saving = true
+        cancelled = false
+        button.text = "Cancel"
+        thread(name = "guide-save") {
+            val result = runCatching { saveGuide(game) { text -> main.post { status.text = text } } }
+                .onFailure { if (it !is CancellationException) Log.w(TAG, "browser: saving the guide failed", it) }
+            main.post {
+                saving = false
+                if (web == null) return@post
+                button.text = "Save guide"
+                result.onSuccess(onSaved).onFailure { status.text = if (it is CancellationException) "Save cancelled" else "Couldn't save the guide" }
+            }
+        }
+    }
+
+    /**
+     * Save thread: [game]'s guide from the loaded page, written into its guides folder only once all of it has
+     * arrived. Each page of an HTML guide loads in turn in this browser. Returns the path written.
+     */
+    private fun saveGuide(game: GameRef, progress: (String) -> Unit): String {
+        val here = string(eval("location.href")).substringBefore('#')
+        val guide = extract() ?: throw IOException("no guide on $here")
+        val site = siteOf(here) ?: throw IOException("not a guide site: $here")
+        val sections = mutableListOf<GuideSection>()
+        // ponytail: holds every image in memory until the file is written; spool to files if guides outgrow the heap.
+        val images = mutableMapOf<String, GuideImage>()
+        if (guide.text != null) {
+            sections += textSection(guide.title, guide.text)
+        } else {
+            guide.pages.forEachIndexed { i, (url, title) ->
+                val of = "Saving page ${i + 1} of ${guide.pages.size}"
+                progress(of)
+                val page = if (i == 0 && url == here) {
+                    guide
+                } else {
+                    load(url, progress)
+                    progress(of)
+                    extract() ?: throw IOException("no guide on $url")
+                }
+                // Each page numbers its own images from 0.
+                sections += GuideSection(title, page.html!!.replace("src=\"img:", "src=\"img:$i-"))
+                for (n in 0 until page.imageCount) {
+                    if (cancelled) throw CancellationException()
+                    progress("$of, image ${n + 1} of ${page.imageCount}")
+                    image(n)?.let { images["img:$i-$n"] = it }
+                }
+            }
+        }
+        if (cancelled) throw CancellationException()
+        progress("Writing the guide")
+        val source = guide.pages.first().first
+        val by = if (guide.author.isEmpty()) "" else " by ${escapeHtml(guide.author)}"
+        val credit = "From <a href=\"${escapeHtml(source)}\">${site.label}</a> (${escapeHtml(source)})$by. " +
+            "© the author; saved for personal use."
+        val name = guideFileName(site, if (guide.author.isEmpty()) guide.title else "${guide.title} by ${guide.author}")
+        val dir = isDirectory(context, prefs.romsTree!!, "${game.system}/${game.romRelativePath}")
+        return saveVia(MediaWriter(context, prefs.esdeTree!!), context.cacheDir, game, dir, name, "text/html", { cancelled }) { file ->
+            file.bufferedWriter().use { writeHtmlGuide(it, guide.title, sections, images, credit) }
+        }.also { Log.i(TAG, "browser: saved $it: ${sections.size} sections, ${images.size} images") }
+    }
+
+    /**
+     * Save thread: loads [url] in this browser, no sooner than [PAGE_GAP_MS] after the last load, and waits until
+     * it has finished. On a bot check it says so and waits, for as long as it takes, for the user to clear it.
+     */
+    private fun load(url: String, progress: (String) -> Unit) {
+        val wait = lastLoad + PAGE_GAP_MS - SystemClock.uptimeMillis()
+        if (wait > 0) Thread.sleep(wait)
+        finished.clear()
+        lastLoad = SystemClock.uptimeMillis()
+        main.post {
+            val w = web ?: return@post
+            Log.i(TAG, "browser: loading $url (shown: ${w.isShown})")
+            w.loadUrl(url)
+        }
+        var checking = false
+        while (true) {
+            if (cancelled) throw CancellationException()
+            if (finished.poll(1, TimeUnit.SECONDS) == null) {
+                if (!checking && SystemClock.uptimeMillis() - lastLoad > 60_000) throw IOException("$url didn't load")
+                continue
+            }
+            if (!isBotCheck(string(eval("document.title")))) return
+            if (!checking) Log.i(TAG, "browser: bot check on $url")
+            checking = true
+            progress("Clear the check to continue")
+        }
     }
 
     /** Worker thread: the guide on the loaded page, or null when it isn't a guide page. */
@@ -153,19 +283,6 @@ class BrowserOverlay(private val context: Context) {
             .getOrNull()
     }
 
-    private fun logGuide() {
-        val g = extract() ?: return Unit.also { Log.i(TAG, "browser: no guide on this page") }
-        Log.i(TAG, "browser: ${g.kind} guide \"${g.title}\" by \"${g.author}\", ${g.pages.size} pages")
-        g.pages.forEachIndexed { i, (url, title) -> Log.i(TAG, "browser: page ${i + 1}: $title $url") }
-        g.text?.let { Log.i(TAG, "browser: text ${it.length} chars, first lines:\n" + it.lineSequence().take(12).joinToString("\n")) }
-        g.html?.let { html ->
-            Log.i(TAG, "browser: html ${html.length} chars, ${g.imageCount} images; <script ${"<script" in html}, <iframe ${"<iframe" in html}, " +
-                "on*= ${Regex("\\son\\w+=").containsMatchIn(html)}, style= ${"style=" in html}")
-            Log.i(TAG, "browser: html starts: " + html.take(600))
-        }
-        for (n in 0 until g.imageCount) image(n)
-    }
-
     /** Worker thread: runs [js] in the page and returns its result as JSON; "null" once the browser has closed. */
     private fun eval(js: String): String {
         val result = ArrayBlockingQueue<String>(1)
@@ -181,6 +298,7 @@ class BrowserOverlay(private val context: Context) {
     }
 
     fun close() {
+        cancelled = true
         web?.let {
             (it.parent as? ViewGroup)?.removeView(it)
             it.stopLoading()
