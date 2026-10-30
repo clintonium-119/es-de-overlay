@@ -1,16 +1,22 @@
 # ES-DE Overlay
 
 Android app for the Retroid Pocket Nova (Android 13) that runs next to [ES-DE](https://es-de.org).
-During a game launched from ES-DE, one tap on a small floating button saves a screenshot and a
-15-second clip straight into ES-DE's media folders, named exactly the way ES-DE expects, so they
-show up in the gamelist with no renaming:
+During a game launched from ES-DE, the first press of Home opens a menu over the game, styled like
+the `minui-menu-es-de-custom` theme:
 
-```
-<ES-DE>/downloaded_media/<system>/screenshots/<ROM subfolders>/<ROM name>.png
-<ES-DE>/downloaded_media/<system>/videos/<ROM subfolders>/<ROM name>.mp4
-```
+- **Capture** saves a screenshot and a 15-second clip straight into ES-DE's media folders, named
+  exactly the way ES-DE expects, so they show up in the gamelist with no renaming:
 
-System screenshots (power + volume down) taken during a game are filed the same way.
+  ```
+  <ES-DE>/downloaded_media/<system>/screenshots/<ROM subfolders>/<ROM name>.png
+  <ES-DE>/downloaded_media/<system>/videos/<ROM subfolders>/<ROM name>.mp4
+  ```
+
+- **Manual** opens the game's scraped ES-DE manual.
+- **Guide** opens guides you've added for the game (see [Guides](#guides)).
+
+A second press of Home goes to ES-DE as usual. System screenshots (power + volume down) taken
+during a game are filed the same way as captures.
 
 ## Build and install
 
@@ -31,32 +37,67 @@ Open **ES-DE Overlay** (ES-DE also lists it under Android Apps) and:
    these are two separate picks.
 3. Grant the permission rows: notifications, game sound, read screenshots, display over other
    apps, usage access, and ignore battery optimization.
-4. Optional: screenshot media type folder (default `screenshots`), clip length (default 15 s),
-   what to do when the file exists (Replace / Skip / Keep both), button corner, and the boot
-   notification.
-5. **Start service → Start now.** One consent covers every capture until the service stops.
-6. Optional: **Quick settings tile → Add** puts an *ES-DE Overlay* on/off tile in the swipe-down
+4. **Home menu (accessibility service) → Open**, then turn on *ES-DE Overlay* in Android's
+   accessibility settings. It only listens for Retroid's Home message; it doesn't read or block
+   any buttons.
+5. Keep Retroid's **Prevent pressing Home accidentally** on. The menu opens on the message it shows
+   for the first Home press in a game.
+6. Optional: screenshot media type folder (default `screenshots`), clip length (default 15 s),
+   what to do when the file exists (Replace / Skip / Keep both), and the boot notification.
+7. **Start service → Start now.** One consent covers every capture until the service stops.
+8. Optional: **Quick settings tile → Add** puts an *ES-DE Overlay* on/off tile in the swipe-down
    shade. Turning it on shows the consent dialog and then returns to whatever you were doing.
 
 ## Use
 
-- Launch a game from ES-DE. The ● button appears in the chosen corner (it hides inside ES-DE).
-- Tap it: the button disappears, a screenshot is taken, and the clip records. Tap the invisible
-  button again to stop early; leaving the game also stops and saves.
-- The button shows ✓ or ✗ and a notification names the saved files, e.g.
+- Launch a game from ES-DE and press **Home** once. The menu opens; the D-pad moves, **A** opens,
+  **B** closes it and returns to the game. With the menu or a guide open, Home goes to ES-DE.
+- **Capture** closes the menu, waits for Retroid's Home message to clear, then takes the screenshot
+  and records the clip. Press Home during the clip to stop early; leaving the game also stops and
+  saves. A toast and a notification name the saved files, e.g.
   `Saved: snes/screenshots/02) Hacks/Easyland.png, snes/videos/02) Hacks/Easyland.mp4`.
-- ES-DE shows the new media when you return to the gamelist; no reload needed.
+- **Manual** and **Guide** only appear when the game has one. With several guides, Guide shows a
+  list first.
+- The viewer works like ES-DE's own manual viewer:
+
+  | | Zoomed out | Zoomed in |
+  |---|---|---|
+  | D-pad left/right | previous/next page | pan |
+  | D-pad up/down | — | pan |
+  | L1 / R1 | zoom out / in | zoom out / in |
+  | L2 / R2 | first / last page | reset the zoom |
+  | B | close | close |
+
+  Text guides scroll with the D-pad (left/right by a page) and jump with L2/R2.
+- ES-DE shows new media when you return to the gamelist; no reload needed.
+
+## Guides
+
+Guides aren't downloaded; add them yourself next to ES-DE's other media, named like the ROM:
+
+```
+<ES-DE>/downloaded_media/<system>/guides/<ROM subfolders>/<ROM name>.<ext>
+<ES-DE>/downloaded_media/<system>/guides/<ROM subfolders>/<ROM name>/<any name>.<ext>
+```
+
+The folder form holds several guides. Supported: `pdf`, `txt` (UTF-8; ASCII art keeps its columns),
+`png`, `jpg`/`jpeg` (large maps are decoded a region at a time) and `cbz`. Not supported: `cbr` and
+HTML; save a web page as PDF instead. A ROM that is a folder (e.g. `dig.scummvm`) keeps its whole
+name, as for ES-DE's own media.
 
 ## How it finds the game
 
 It reads `ES-DE/logs/es_log.txt`. Each launch logs the game name, system, and the app package.
 The ROM path is taken from the launch line when ES-DE logs one (RetroArch and some standalone
-emulators); otherwise the name is looked up in `gamelists/<system>/gamelist.xml`. Captures only
-count while the launched package is the app in front, and nothing is saved when the game can't be
+emulators); otherwise the name is looked up in `gamelists/<system>/gamelist.xml`. The menu only
+opens while the launched package is the app in front, and nothing is saved when the game can't be
 identified with certainty (the notification shows the raw launch line instead).
 
 ## Known limitations
 
+- The menu depends on Retroid's firmware: "Prevent pressing Home accidentally" must be on, and a
+  firmware update could change its message.
+- RetroArch pauses while the menu or viewer is open. Other emulators and Android games are untested.
 - Clips are recorded at half resolution (640x480 on the Nova); the screenshot is full resolution.
   The Nova's encoder ignores bitrate settings, so size is controlled by resolution.
 - Clips include the game's sound when **Game sound in clips** is granted (Android labels it audio
@@ -64,11 +105,13 @@ identified with certainty (the notification shows the raw launch line instead).
   capture; every game and emulator on this Nova allows it. Without the permission clips are silent.
 - RetroArch's 120 Hz shader sub-frames (`video_shader_subframes`) put a dark frame between real
   ones. The app skips those, so clips play at 60 fps without flicker, and media keep the shader look.
+- A very large PNG map takes about a second to sharpen after opening or moving; the view moves at
+  once and fills in.
 - Capture consent can't be granted at boot without a person. With "Offer to start after boot" on,
   a notification after boot opens the consent dialog in one tap.
 - Reinstalling or stopping the service (including from the tile) needs a new consent.
-- Emulators that hand off to a different app package after launch would block captures (not seen
-  so far).
+- Emulators that hand off to a different app package after launch would block captures and the
+  menu (not seen so far).
 - Device findings and how each was checked: [`docs/VERIFIED.md`](docs/VERIFIED.md). Plan:
   [`PLAN.md`](PLAN.md).
 

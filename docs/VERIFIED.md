@@ -28,7 +28,7 @@ Device: Retroid Pocket Nova (`kalama`), checked over adb on 2026-10-28.
 | A6 | Verified | One consent at service start covered several captures in a row across app switches. Reinstalling or restarting the service needs a new consent. | Two back-to-back captures, no dialog |
 | A7 | Verified | ES-DE plays the app's H.264 MP4 from `videos/`. | User observation |
 | A8 | Partly | Clips now carry game audio (playback capture): an Easyland clip had AAC 48 kHz stereo, 14.89 s for 14.88 s of video, mean -23.3 dB. Whether the theme plays it in the gamelist is up to ES-DE's video-audio settings. All installed games/emulators have `ALLOW_AUDIO_PLAYBACK_CAPTURE`. | `ffprobe`, `ffmpeg -af volumedetect`, `dumpsys package` |
-| A9 | Out of scope | Gamepad combo through an AccessibilityService (PLAN.md Phase 4) | — |
+| A9 | Superseded | Gamepad combo through an AccessibilityService (PLAN.md Phase 4). The menu now opens on Retroid's Home message instead; see [In-game menu](#in-game-menu). | — |
 
 ## Game resolution
 
@@ -44,7 +44,7 @@ ES-DE's bundled `assets/systems/android/es_systems.xml` (pulled from the install
 - **RetroArch shader sub-frames.** `video_shader_subframes = "2"` in `retroarch.cfg` makes RetroArch draw a near-black frame between real frames at 120 Hz. A raw mirror recording flickers (mean luma alternating ~40 / ~118 each frame) and a screenshot can land on the dark frame. The app takes the brighter of the first two frames for the PNG and drops frames much darker than the previous one from the clip; a 15 s clip came out at 60 fps with luma steady at 117 ±0.6.
 - **MediaRecorder max duration.** With a surface source the recorder stops writing at `setMaxDuration` but never calls `OnInfoListener`, so the app stops clips on its own timer.
 - **Bitrate hint ignored.** A 1280x960 clip of the mirror (~120 fps) came out at ~15 Mbit/s with 8 Mbit/s and with 4 Mbit/s requested. Clips are recorded at 640x480 instead (~2.7 MB per 15 s at 60 fps).
-- **Transparent windows get no touches.** An overlay window at alpha 0 is skipped for input, so the button is at alpha 0 only for the screenshot frame and at 1% while recording (still tappable to stop early).
+- **Transparent windows get no touches.** An overlay window at alpha 0 is skipped for input, so the old capture button was at alpha 0 only for the screenshot frame and at 1% while recording (still tappable to stop early). The button has since been replaced by the Home menu.
 - **Capture display stays empty until a window layout pass.** The MediaProjection display is bound to its own layer stack and only starts mirroring the screen when the window manager runs a layout pass. RetroArch changes its windows often enough that this happened by itself; Stuffy Frights (Unity) sitting on its menu gave 0 frames in 15 s, and a RetroArch cold start stalled after 1 frame. Showing the volume panel mid-capture made frames flow (951 in 15 s), confirming the cause. The app now relayouts its own button invisibly (window title change) right after creating the display and whenever 300 ms pass without a frame: Stuffy Frights then captured 900 frames with no outside help. `adb shell screenrecord` was never affected (it binds layer stack 0 directly).
 - **ES-DE log on reboot.** After a device reboot ES-DE overwrote `es_log.txt` without moving it to `es_log.txt.bak`. The app detects the new log by its first bytes and starts over.
 - **Logcat flooding.** During games the device logs ~600 SELinux lines/s, so the default logcat buffer drops app lines within seconds; use `adb logcat -G 16M` when debugging.
@@ -64,3 +64,44 @@ Capture mirrors whatever is on screen, so it doesn't depend on the emulator. Wha
 | PPSSPP, Azahar, melonDS, Cemu, ARMSX2, Dolphin, NetherSX2 | own packages | `%ROMSAF%` | Format confirmed from ES-DE code; parser unit-tested |
 
 If the path ever can't be read, a unique `<name>` in the system's `gamelist.xml` still identifies the game; failing both, nothing is saved and the notification shows the raw launch line. Not measured: any frame-rate cost of recording during the heaviest games (Switch, Wii U, PS2).
+
+## In-game menu
+
+Checked on the Nova on 2026-10-29 with Easyland (`snes/02) Hacks/Easyland.zip`) in RetroArch.
+
+- **Home key.** The Nova's Home button reaches accessibility services as `KEYCODE_MOVE_HOME` from the "Retroid Pocket Controller", not `KEYCODE_HOME`. It doesn't appear in `getevent` on any input device.
+- **Key filtering was dropped.** A key-filtering accessibility service could swallow Home. With it on, RetroArch seemed to ignore the whole controller, but the game turned out to be paused in its save state, so that result is unconfirmed. Either way, Retroid still showed its own message for the swallowed press. The app doesn't filter keys.
+- **Retroid's Home guard.** With *Prevent pressing Home accidentally* on (`prevent_press_home_accidentally=1`), the first Home press in a game shows an `android.widget.Toast` from `com.rp.settings`: "Press the Home button again to return to launcher." A second press while it's up goes to the launcher. In ES-DE, Home shows no message. A listen-only service with only `typeNotificationStateChanged` sees the toast, and the controller keeps working in RetroArch and ES-DE (`dumpsys accessibility`: `capabilities=0`).
+- **Latency.** Toast created to `HelperService` acting: 15 ms (4 ms after the toast's window appeared). The toast stays up about 2.6 s, long enough to land in a capture, so Capture waits until 3 s after the Home press.
+- **Toasts while the menu has focus.** They still arrive, so Home with the menu or a guide open goes to ES-DE (70 ms to ES-DE in front). On a quick double press, Retroid goes home itself and the menu closes when ES-DE comes to the front.
+- **D-pad.** The D-pad sends `ABS_HAT0X`/`ABS_HAT0Y` and reaches a focused overlay window as `KEYCODE_DPAD_*`. A, B, L1/R1 and L2/R2 arrive as gamepad buttons.
+- **RetroArch pauses** while the menu has focus, and resumes when it closes.
+- **System bars.** A focusable full-screen overlay brings the navigation bar back over the game. Hiding the system bars through the overlay's own `WindowInsetsController` works, with `fitInsetsTypes = 0` so the window covers their area.
+- **SAF file descriptors.** `PdfRenderer` and `Typeface.Builder(FileDescriptor)` (the theme's VAG Rounded font) both work with descriptors from the SD card's external storage provider.
+- **Large PNG maps.** A `BitmapRegionDecoder` region of an 8192x2048 PNG takes about a second, because PNG rows above the region are inflated each time. The viewer moves the bitmap already shown at once, and decodes the sharp region on a worker.
+- **GPU cache after closing.** Drawing pages as hardware textures left about 70 MB of "Graphics" memory in the renderer's cache after the viewer closed, and nothing trims it in an overlay-only process. The page view now draws through a software layer.
+
+### Idle cost
+
+`dumpsys meminfo com.clintonium.es_de_overlay` (TOTAL PSS) and `top -b -n 3 -d 15` for the app process, with the menu closed and Easyland in front:
+
+| State | PSS | Graphics | CPU (one core) |
+|---|---|---|---|
+| Baseline before the menu (earlier build, capture button) | about 55 MB | — | about 0.2% |
+| Fresh process, menu never opened | 66–71 MB | 2.6 MB | 0.0–0.3% |
+| After opening, zooming and closing the 8192x2048 map (software layer) | 77–78 MB | 8.0 MB | 0.0–0.2% |
+| The same, before the software layer | 139–141 MB | 70.5 MB | 0.0–0.3% |
+
+The fresh process had also opened the settings screen for capture consent.
+
+
+### Acceptance (2026-10-29)
+
+With test files for Easyland (a 3-page manual PDF; guides: a text file with ASCII art, an 8192x2048 PNG map, a PDF and a 3-page CBZ), removed afterwards:
+
+- Home in Easyland opens the menu; Home again goes to ES-DE, with no overlay window left (`dumpsys window`).
+- Capture saved `snes/screenshots/02) Hacks/Easyland.png` and `snes/videos/02) Hacks/Easyland.mp4` (15 s, 1787 frames, with audio). The PNG shows no menu and, with the 3 s wait, no Retroid message.
+- Home 4 s into a clip stopped it and saved both files.
+- The manual and all four guide formats open. Pages turn, zoom and pan with ES-DE's controls; the text keeps its 80 columns; CBZ pages follow file-name order.
+- With no manual or guide on the card, the menu shows Capture only.
+- No app crash in the logs across the runs.
