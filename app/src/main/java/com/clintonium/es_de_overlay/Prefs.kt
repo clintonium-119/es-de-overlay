@@ -6,6 +6,9 @@ import com.clintonium.es_de_overlay.core.Overwrite
 
 class Prefs(context: Context) {
     private val sp = context.getSharedPreferences("prefs", Context.MODE_PRIVATE)
+    // Written only by the viewer's process: a process writes back its whole cached file, so sharing "prefs"
+    // with the settings screen would let one erase the other's changes.
+    private val positions = context.getSharedPreferences("positions", Context.MODE_PRIVATE)
 
     var esdeTree: Uri?
         get() = sp.getString("esdeTree", null)?.let(Uri::parse)
@@ -25,4 +28,10 @@ class Prefs(context: Context) {
     var bootStart: Boolean
         get() = sp.getBoolean("bootStart", false)
         set(v) = sp.edit().putBoolean("bootStart", v).apply()
+
+    /** Where the viewer left a document (a page, or a scroll fraction), keyed by its path below the ES-DE folder. */
+    fun position(key: String) = positions.getInt(key, 0)
+
+    /** Written at once: the viewer's process ends right after it closes, before an apply() would land. */
+    fun setPosition(key: String, value: Int) = positions.edit().putInt(key, value).commit()
 }

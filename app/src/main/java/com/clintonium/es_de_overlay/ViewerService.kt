@@ -28,11 +28,12 @@ class ViewerService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val uri = intent?.data
         val name = intent?.getStringExtra(EXTRA_NAME)
-        if (uri == null || name == null) {
+        val key = intent?.getStringExtra(EXTRA_KEY)
+        if (uri == null || name == null || key == null) {
             stopSelf()
             return START_NOT_STICKY
         }
-        runCatching { viewer.open(uri, name) { stopSelf() } }.onFailure {
+        runCatching { viewer.open(uri, name, key) { stopSelf() } }.onFailure {
             Log.e(TAG, "opening $name failed", it)
             Toast.makeText(this, "Couldn't open $name: ${it.message}", Toast.LENGTH_SHORT).show()
             // Ending the process at once could take the toast with it.
@@ -49,9 +50,13 @@ class ViewerService : Service() {
 
     companion object {
         private const val EXTRA_NAME = "name"
+        private const val EXTRA_KEY = "key"
 
-        /** Opens [uri] over whatever is on screen, picking the format from [name]'s extension. */
-        fun intent(context: Context, uri: Uri, name: String): Intent =
-            Intent(context, ViewerService::class.java).setData(uri).putExtra(EXTRA_NAME, name)
+        /**
+         * Opens [uri] over whatever is on screen, picking the format from [name]'s extension, where it was left
+         * last time; [key] is the document's path below the ES-DE folder.
+         */
+        fun intent(context: Context, uri: Uri, name: String, key: String): Intent =
+            Intent(context, ViewerService::class.java).setData(uri).putExtra(EXTRA_NAME, name).putExtra(EXTRA_KEY, key)
     }
 }

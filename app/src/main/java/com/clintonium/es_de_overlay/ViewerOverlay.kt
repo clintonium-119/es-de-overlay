@@ -104,19 +104,26 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
     private val main = Handler(Looper.getMainLooper())
     private var root: View? = null
     private var release: () -> Unit = {}
+    /** Where the open document is: its page, or its scroll position from [fraction]. Saved under [key] on close. */
+    private var position: () -> Int = { 0 }
+    private var key: String? = null
 
-    /** Opens [uri], picking the format from [name]'s extension; [onClose] runs when B closes it. */
-    fun open(uri: Uri, name: String, onClose: () -> Unit) {
+    /**
+     * Opens [uri], picking the format from [name]'s extension, at the position saved under [key] (its path
+     * below the ES-DE folder); [onClose] runs when B closes it.
+     */
+    fun open(uri: Uri, name: String, key: String, onClose: () -> Unit) {
         close()
         try {
-            build(uri, name, onClose)
+            build(uri, name, prefs.position(key), onClose)
+            this.key = key
         } catch (e: Exception) {
             close()
             throw e
         }
     }
 
-    private fun build(uri: Uri, name: String, onClose: () -> Unit) {
+    private fun build(uri: Uri, name: String, saved: Int, onClose: () -> Unit) {
         val label = bar(Gravity.START or Gravity.CENTER_VERTICAL)
         val help = bar(Gravity.CENTER)
         val content: View
@@ -125,7 +132,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         var back = { false }
         when (val ext = name.substringAfterLast('.').lowercase()) {
             "html" -> {
-                val web = web(uri, name, label, onClose)
+                val web = web(uri, name, saved, label, onClose)
                 help.text = "✚ SCROLL   L1/R1 ZOOM   L2/R2 SECTION"
                 content = web
                 back = { web.canGoBack().also { if (it) web.goBack() } }
@@ -158,6 +165,15 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                         setPadding(screenW / 40, barH / 2, screenW / 40, viewH / 2)
                     })
                 }
+                fun range() = scroll.getChildAt(0).height - scroll.height
+                var restored = false
+                scroll.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                    if (!restored) {
+                        restored = true
+                        scroll.scrollTo(0, unfraction(saved, range()))
+                    }
+                }
+                position = { fraction(scroll.scrollY, range()) }
                 label.text = name
                 help.text = "✚ SCROLL   L2 TOP   R2 BOTTOM"
                 content = scroll
@@ -187,7 +203,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                     setLayerType(View.LAYER_TYPE_SOFTWARE, null)
                 }
                 content = image
-                keys = paged(doc, name, image, label, help)
+                keys = paged(doc, name, saved, image, label, help)
             }
         }
         val view = FrameLayout(context).apply {
@@ -223,13 +239,13 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
      * decode inflates every row above it (about a second on a big map), so zoom and pan move the bitmap
      * already shown at once and the sharp one replaces it when ready.
      */
-    private fun paged(doc: Doc, name: String, image: ImageView, label: TextView, help: TextView): (Int) -> Boolean {
+    private fun paged(doc: Doc, name: String, start: Int, image: ImageView, label: TextView, help: TextView): (Int) -> Boolean {
         val worker = Executors.newSingleThreadExecutor()
         // Worker thread only.
         var opened: Page? = null
         var openedIndex = -1
         // Main thread. The page size is 0 until the page has opened.
-        var page = 0
+        var page = start.coerceIn(0, (doc.count - 1).coerceAtLeast(0))
         var pw = 0
         var ph = 0
         var fit = 1f
@@ -340,6 +356,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
             render()
         }
 
+        position = { page }
         release = {
             closed = true
             image.setImageDrawable(null)
@@ -378,7 +395,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
      * within the page are followed. JavaScript is on for the viewer's own section lookups; there is no bridge.
      */
     @SuppressLint("SetJavaScriptEnabled")
-    private fun web(uri: Uri, name: String, label: TextView, onClose: () -> Unit): WebView {
+    private fun web(uri: Uri, name: String, saved: Int, label: TextView, onClose: () -> Unit): WebView {
         val css = css().toByteArray()
         val refused = ConcurrentHashMap.newKeySet<String>()
         val web = WebView(context)
@@ -420,7 +437,18 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) =
                 !(request.url.host == HOST && request.url.path == "/guide.html" && request.url.fragment != null)
 
-            override fun onPageFinished(view: WebView, url: String) = refresh.run()
+            private var restored = false
+
+            override fun onPageFinished(view: WebView, url: String) {
+                // Also called after a # link; only the first load restores.
+                if (!restored) {
+                    restored = true
+                    web.evaluateJavascript(
+                        "scrollTo(0,(document.documentElement.scrollHeight-innerHeight)*${saved.coerceIn(0, 10_000)}/10000)", null,
+                    )
+                }
+                refresh.run()
+            }
 
             // Without this a crashed renderer takes the service down with it.
             override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
@@ -431,6 +459,8 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
             }
         }
         web.loadUrl("https://$HOST/guide.html")
+        val density = context.resources.displayMetrics.density
+        position = { fraction(web.scrollY, (web.contentHeight * density).toInt() - web.height) }
         release = {
             main.removeCallbacks(refresh)
             (web.parent as? ViewGroup)?.removeView(web)
@@ -485,6 +515,9 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
     }
 
     fun close() {
+        key?.let { prefs.setPosition(it, position()) }
+        key = null
+        position = { 0 }
         release()
         release = {}
         root?.let(wm::removeView)
@@ -506,6 +539,12 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
     private fun <T> zip(uri: Uri, read: (ZipInputStream) -> T): T = ZipInputStream(resolver.openInputStream(uri)!!).use(read)
 
     private companion object {
+        /** [offset] into a scroll [range] as parts per 10,000, so the position survives a zoom or font change. */
+        fun fraction(offset: Int, range: Int) = if (range > 0) (offset * 10_000L / range).toInt().coerceIn(0, 10_000) else 0
+
+        /** The offset into [range] for a saved [fraction], clamped to the range. */
+        fun unfraction(fraction: Int, range: Int) = (fraction.coerceIn(0, 10_000) * range.coerceAtLeast(0).toLong() / 10_000).toInt()
+
         val TEXT_KEYS = setOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
             KeyEvent.KEYCODE_BUTTON_L2, KeyEvent.KEYCODE_BUTTON_R2,

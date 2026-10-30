@@ -230,12 +230,13 @@ class HelperService : Service() {
 
     /** Opens [doc] over the menu, which takes focus back when the viewer closes. */
     private fun view(doc: Doc) {
-        startService(ViewerService.intent(this, doc.uri, doc.name))
+        startService(ViewerService.intent(this, doc.uri, doc.name, doc.key))
     }
 
     private fun closeViewer() = stopService(Intent(this, ViewerService::class.java))
 
-    private class Doc(val name: String, val uri: Uri)
+    /** A manual or guide; [key] is its path below the ES-DE folder, which the viewer files its position under. */
+    private class Doc(val name: String, val uri: Uri, val key: String)
 
     /** io thread: the game's manual and guides that exist, found by listing their folders below downloaded_media. */
     private fun documents(g: GameRef): Pair<Doc?, List<Doc>> {
@@ -243,9 +244,10 @@ class HelperService : Service() {
         val dir = isDirectory(this, prefs.romsTree!!, "${g.system}/${g.romRelativePath}")
         val media = DocumentsContract.getTreeDocumentId(tree) + "/downloaded_media/"
         fun list(id: String) = runCatching { children(this, tree, id) }.getOrDefault(emptyMap())
-        fun doc(name: String, id: String) = Doc(name, DocumentsContract.buildDocumentUriUsingTree(tree, id))
+        fun doc(name: String, id: String, path: String) =
+            Doc(name, DocumentsContract.buildDocumentUriUsingTree(tree, id), "downloaded_media/$path")
         val manual = manualPath(g, dir).let { path ->
-            list(media + path.dropLast(1).joinToString("/"))[path.last()]?.let { doc(path.last(), it) }
+            list(media + path.dropLast(1).joinToString("/"))[path.last()]?.let { doc(path.last(), it, path.joinToString("/")) }
         }
         val path = guidePath(g, dir)
         val base = path.last()
@@ -253,7 +255,8 @@ class HelperService : Service() {
         val inner = folder[base]?.let(::list).orEmpty()
         val guides = guideEntries(base, folder.keys, inner.keys).map { entry ->
             val name = entry.substringAfter("$base/")
-            doc(name, if (entry.startsWith("$base/")) inner.getValue(name) else folder.getValue(entry))
+            val id = if (entry.startsWith("$base/")) inner.getValue(name) else folder.getValue(entry)
+            doc(name, id, (path.dropLast(1) + entry).joinToString("/"))
         }
         return manual to guides
     }
