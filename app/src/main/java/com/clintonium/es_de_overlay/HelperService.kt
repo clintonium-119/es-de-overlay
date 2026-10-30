@@ -30,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.clintonium.es_de_overlay.core.GameRef
+import com.clintonium.es_de_overlay.core.GuideSite
 import com.clintonium.es_de_overlay.core.Launch
 import com.clintonium.es_de_overlay.core.guideEntries
 import com.clintonium.es_de_overlay.core.guidePath
@@ -37,6 +38,7 @@ import com.clintonium.es_de_overlay.core.manualPath
 import com.clintonium.es_de_overlay.core.mediaPath
 import com.clintonium.es_de_overlay.core.nextLaunch
 import com.clintonium.es_de_overlay.core.resolveGame
+import com.clintonium.es_de_overlay.core.startUrl
 import java.io.File
 import java.io.FileInputStream
 import java.nio.ByteBuffer
@@ -224,8 +226,6 @@ class HelperService : Service() {
         val back = { openMenu(g, name, manual, guides) }
         val items = listOfNotNull(
             "Capture", manual?.let { "Manual" }, guides.firstOrNull()?.let { "Guide" }, prefs.esdeTree?.let { "Find guides" },
-            // Temporary, until Find guides lists the browser sources.
-            "Browser (debug)".takeIf { BuildConfig.DEBUG },
         )
         menu.show(items, { i ->
             when (items[i]) {
@@ -235,7 +235,6 @@ class HelperService : Service() {
                 }
                 "Manual" -> view(manual!!)
                 "Find guides" -> findGuides(g, name, back)
-                "Browser (debug)" -> startService(ViewerService.browse(this, "https://gamefaqs.gamespot.com/search?game=${Uri.encode(name)}", g))
                 // Several guides get their own list; B there returns to this menu.
                 else -> if (guides.size == 1) view(guides[0]) else menu.show(guides.map { it.name }, { view(guides[it]) }, back)
             }
@@ -243,8 +242,9 @@ class HelperService : Service() {
     }
 
     /**
-     * Main thread: checks VGMaps, then StrategyWiki, for the game and lists those that have it; picking one saves
-     * it and opens it. Requests run one at a time on their own thread, and only from here. B cancels and goes [back].
+     * Main thread: checks VGMaps, then StrategyWiki, for the game and lists those that have it, then the browser
+     * sites, which aren't contacted until picked. Picking a checked source saves it and opens it. Requests run one
+     * at a time on their own thread, and only from here. B cancels and goes [back].
      */
     private fun findGuides(g: GameRef, name: String, back: () -> Unit) {
         val cancelled = AtomicBoolean().also { finding = it }
@@ -275,12 +275,24 @@ class HelperService : Service() {
             main.post {
                 when {
                     cancelled.get() -> {}
-                    found.isNotEmpty() -> menu.show(found.map { it.first }, { saveGuide(g, name, found[it].second, cancelled, back) }, cancel)
                     // A row rather than a toast: toasts draw under the menu's window.
-                    failures.isNotEmpty() -> menu.show(listOf("Couldn't reach the guide sources"), {}, back)
-                    else -> menu.show(listOf("No guides found"), {}, back)
+                    found.isEmpty() && failures.isNotEmpty() -> menu.show(listOf("Couldn't reach the guide sources"), {}, back)
+                    else -> {
+                        val rows = found.map { (label, save) -> label to { saveGuide(g, name, save, cancelled, back) } } + browserRows(g, name)
+                        menu.show(rows.map { it.first }, { rows[it].second() }, cancel)
+                    }
                 }
             }
+        }
+    }
+
+    /**
+     * The sites only a browser gets into, which open over this menu at the game's search, or ZeldaDungeon's walkthrough.
+     * Closing the browser shows the menu again; a guide saved there opens in the viewer.
+     */
+    private fun browserRows(g: GameRef, name: String): List<Pair<String, () -> Unit>> = GuideSite.entries.mapNotNull { site ->
+        startUrl(site, name)?.let { url ->
+            (if (site == GuideSite.ZELDADUNGEON) site.label else "Search ${site.label}") to { startService(ViewerService.browse(this, url, g)) }
         }
     }
 
