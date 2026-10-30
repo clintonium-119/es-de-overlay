@@ -1,11 +1,13 @@
 package com.clintonium.es_de_overlay
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapRegionDecoder
 import android.graphics.Color
 import android.graphics.Matrix
+import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.Typeface
@@ -20,10 +22,18 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.webkit.RenderProcessGoneDetail
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.ScrollView
 import android.widget.TextView
+import java.io.ByteArrayInputStream
+import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.zip.ZipInputStream
 
@@ -78,10 +88,11 @@ private class Rendered(val page: Int, val width: Int, val height: Int, val rect:
 /**
  * Full-screen viewer for a manual or guide that works like ES-DE's own manual viewer. PDF, CBZ and
  * PNG/JPG pages are fitted whole and centered; zoomed out, D-pad left/right turn pages and L2/R2 go to
- * the first or last page; zoomed in, the D-pad pans and L2/R2 reset; L1/R1 zoom. Text scrolls. Only the
- * current page's bitmap is held, and everything is released on [close].
+ * the first or last page; zoomed in, the D-pad pans and L2/R2 reset; L1/R1 zoom. Text scrolls. Saved
+ * HTML guides scroll in an offline WebView styled like the theme. Only the current page's bitmap is
+ * held, and everything is released on [close].
  */
-class ViewerOverlay(private val context: Context) {
+class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
     private val wm = context.getSystemService(WindowManager::class.java)
     private val bounds = wm.maximumWindowMetrics.bounds
     private val screenW = bounds.width()
@@ -93,8 +104,6 @@ class ViewerOverlay(private val context: Context) {
     private val main = Handler(Looper.getMainLooper())
     private var root: View? = null
     private var release: () -> Unit = {}
-
-    val isOpen get() = root != null
 
     /** Opens [uri], picking the format from [name]'s extension; [onClose] runs when B closes it. */
     fun open(uri: Uri, name: String, onClose: () -> Unit) {
@@ -112,7 +121,28 @@ class ViewerOverlay(private val context: Context) {
         val help = bar(Gravity.CENTER)
         val content: View
         val keys: (Int) -> Boolean
+        // B steps back through a guide's links before it closes.
+        var back = { false }
         when (val ext = name.substringAfterLast('.').lowercase()) {
+            "html" -> {
+                val web = web(uri, name, label, onClose)
+                help.text = "✚ SCROLL   L1/R1 ZOOM   L2/R2 SECTION"
+                content = web
+                back = { web.canGoBack().also { if (it) web.goBack() } }
+                keys = { code ->
+                    when (code) {
+                        KeyEvent.KEYCODE_DPAD_UP -> web.scrollBy(0, -viewH / 4)
+                        KeyEvent.KEYCODE_DPAD_DOWN -> web.scrollBy(0, viewH / 4)
+                        KeyEvent.KEYCODE_DPAD_LEFT -> web.pageUp(false)
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> web.pageDown(false)
+                        KeyEvent.KEYCODE_BUTTON_L1 -> web.settings.textZoom = (web.settings.textZoom - 25).coerceAtLeast(50)
+                        KeyEvent.KEYCODE_BUTTON_R1 -> web.settings.textZoom = (web.settings.textZoom + 25).coerceAtMost(200)
+                        KeyEvent.KEYCODE_BUTTON_L2 -> web.evaluateJavascript(section(-1), null)
+                        KeyEvent.KEYCODE_BUTTON_R2 -> web.evaluateJavascript(section(1), null)
+                    }
+                    code in HTML_KEYS
+                }
+            }
             "txt" -> {
                 // Invalid UTF-8 shows as replacement characters rather than failing.
                 val text = resolver.openInputStream(uri)!!.use { String(it.readBytes(), Charsets.UTF_8) }
@@ -176,7 +206,7 @@ class ViewerOverlay(private val context: Context) {
             isFocusableInTouchMode = true
             setOnKeyListener { _, code, event ->
                 if (code == KeyEvent.KEYCODE_BUTTON_B || code == KeyEvent.KEYCODE_BACK) {
-                    if (event.action == KeyEvent.ACTION_DOWN) { close(); onClose() }
+                    if (event.action == KeyEvent.ACTION_DOWN && !back()) { close(); onClose() }
                     return@setOnKeyListener true
                 }
                 if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
@@ -342,6 +372,95 @@ class ViewerOverlay(private val context: Context) {
         }
     }
 
+    /**
+     * A WebView for a saved guide that never reaches the network: the page, `guide.css` and the theme's
+     * font are served from [uri] and the ES-DE folder, every other request gets a 404, and only `#` links
+     * within the page are followed. JavaScript is on for the viewer's own section lookups; there is no bridge.
+     */
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun web(uri: Uri, name: String, label: TextView, onClose: () -> Unit): WebView {
+        val css = css().toByteArray()
+        val refused = ConcurrentHashMap.newKeySet<String>()
+        val web = WebView(context)
+        web.settings.apply {
+            javaScriptEnabled = true
+            blockNetworkLoads = true
+            allowFileAccess = false
+            allowContentAccess = false
+            // Safe Browsing would look pages up with Google.
+            safeBrowsingEnabled = false
+        }
+        web.setBackgroundColor(BACKGROUND)
+        web.isVerticalScrollBarEnabled = false
+        val refresh = Runnable {
+            web.evaluateJavascript("(function(){$SECTIONS return n+' '+s.length})()") { r ->
+                val (n, of) = r.trim('"').split(' ').map { it.toIntOrNull() ?: 0 }
+                label.text = if (of > 0) "SECTION ${n.coerceAtLeast(1)} OF $of" else name
+            }
+        }
+        web.setOnScrollChangeListener { _, _, _, _, _ ->
+            main.removeCallbacks(refresh)
+            main.postDelayed(refresh, 100)
+        }
+        web.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse {
+                val url = request.url
+                if (url.host == HOST) {
+                    when (url.path) {
+                        "/guide.html" -> return WebResourceResponse("text/html", "utf-8", resolver.openInputStream(uri))
+                        "/guide.css" -> return WebResourceResponse("text/css", "utf-8", ByteArrayInputStream(css))
+                        "/font.otf" -> prefs.esdeTree?.let { runCatching { resolver.openInputStream(treeChild(it, FONT)) }.getOrNull() }
+                            ?.let { return WebResourceResponse("font/otf", null, it) }
+                    }
+                }
+                if (refused.add(url.toString())) Log.w(TAG, "viewer: refused $url")
+                return WebResourceResponse("text/plain", "utf-8", 404, "Not Found", emptyMap(), ByteArrayInputStream(ByteArray(0)))
+            }
+
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) =
+                !(request.url.host == HOST && request.url.path == "/guide.html" && request.url.fragment != null)
+
+            override fun onPageFinished(view: WebView, url: String) = refresh.run()
+
+            // Without this a crashed renderer takes the service down with it.
+            override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                Log.w(TAG, "viewer: $name renderer gone")
+                close()
+                onClose()
+                return true
+            }
+        }
+        web.loadUrl("https://$HOST/guide.html")
+        release = {
+            main.removeCallbacks(refresh)
+            (web.parent as? ViewGroup)?.removeView(web)
+            web.stopLoading()
+            web.destroy()
+        }
+        return web
+    }
+
+    /** The theme's colours and font for saved guides; `<pre>` fits 80 columns like the text viewer. */
+    private fun css(): String {
+        val density = context.resources.displayMetrics.density
+        fun px(device: Float) = "%.2fpx".format(Locale.ROOT, device / density)
+        fun color(c: Int) = "#%06X".format(c and 0xFFFFFF)
+        val mono = Paint().apply { typeface = Typeface.MONOSPACE; textSize = 100f }.measureText("M".repeat(80))
+        return """
+            @font-face { font-family: theme; src: url(font.otf); }
+            body { background: ${color(BACKGROUND)}; color: ${color(TEXT)}; font-family: theme, sans-serif;
+                font-size: ${px(screenH * LIST_FONT)}; margin: 0;
+                padding: ${px(barH / 2f)} ${px(screenW / 40f)} ${px(viewH / 2f)}; }
+            a { color: ${color(TEXT)}; }
+            img { max-width: 100%; height: auto; }
+            pre { font-family: monospace; font-size: ${px(100f * screenW * 0.95f / mono)}; overflow-x: auto; }
+            #contents ol { list-style: none; padding: 0; }
+            #contents a { display: inline-block; background: ${color(PILL)}; color: ${color(PILL_TEXT)};
+                border-radius: 1em; padding: 0.1em 0.7em; margin: 0.15em 0; text-decoration: none; }
+            footer { color: ${color(VIEWER_TEXT)}; font-size: 0.7em; margin-top: 2em; }
+        """.trimIndent()
+    }
+
     private fun pdf(uri: Uri): Doc {
         val fd = resolver.openFileDescriptor(uri, "r")!!
         val pdf = runCatching { PdfRenderer(fd) }.onFailure { fd.close() }.getOrThrow()
@@ -391,5 +510,16 @@ class ViewerOverlay(private val context: Context) {
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
             KeyEvent.KEYCODE_BUTTON_L2, KeyEvent.KEYCODE_BUTTON_R2,
         )
+        val HTML_KEYS = TEXT_KEYS + setOf(KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_BUTTON_R1)
+
+        /** A made-up origin, so the guide's relative `guide.css` and `font.otf` resolve to the viewer. */
+        const val HOST = "guide.local"
+
+        /** JavaScript: `s` the guide's sections, `n` the one at the top of the view (1-based, 0 above the first). */
+        const val SECTIONS = "var s=document.querySelectorAll('section'),n=0;" +
+            "for(var i=0;i<s.length;i++)if(s[i].getBoundingClientRect().top<innerHeight/4)n=i+1;"
+
+        /** JavaScript that scrolls [by] sections from the current one; before the first is the contents. */
+        fun section(by: Int) = "(function(){$SECTIONS n+=$by;if(n<1)scrollTo(0,0);else if(n<=s.length)s[n-1].scrollIntoView()})()"
     }
 }

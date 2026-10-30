@@ -51,10 +51,18 @@ class GuidesTest {
     }
 
     @Test
+    fun `a saved html guide is listed with the other formats`() {
+        assertEquals(
+            listOf("Shantae/guide.html", "Shantae/maps.cbz", "Shantae/notes.txt"),
+            guideEntries("Shantae", listOf("Shantae"), listOf("notes.txt", "guide.html", "maps.cbz")),
+        )
+    }
+
+    @Test
     fun `unsupported extensions are skipped`() {
         assertEquals(
             listOf("Easyland/scan.jpg"),
-            guideEntries("Easyland", listOf("Easyland.cbr", "Easyland.html"), listOf("readme.doc", "scan.jpg")),
+            guideEntries("Easyland", listOf("Easyland.cbr", "Easyland.epub"), listOf("readme.doc", "scan.jpg")),
         )
     }
 

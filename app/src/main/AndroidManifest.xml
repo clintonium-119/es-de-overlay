@@ -18,6 +18,11 @@
         android:icon="@android:drawable/ic_menu_camera"
         android:label="ES-DE Overlay">
 
+        <!-- Saved guides are read offline; WebView shouldn't report usage to Google either. -->
+        <meta-data
+            android:name="android.webkit.WebView.MetricsOptOut"
+            android:value="true" />
+
         <activity
             android:name=".SettingsActivity"
             android:exported="true"
@@ -33,6 +38,12 @@
             android:name=".HelperService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection|microphone" />
+
+        <!-- Its own process, which ends when the viewer closes and takes the viewer's memory with it. -->
+        <service
+            android:name=".ViewerService"
+            android:exported="false"
+            android:process=":viewer" />
 
         <service
             android:name=".CaptureTile"

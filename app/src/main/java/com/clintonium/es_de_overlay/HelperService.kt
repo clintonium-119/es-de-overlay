@@ -72,6 +72,13 @@ fun notify(context: Context, id: Int, text: String, grant: Boolean = false, ongo
 fun treeChild(tree: Uri, path: String): Uri =
     DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree) + "/" + path)
 
+/** A context for overlay windows on the built-in display. */
+fun overlayContext(context: Context): Context = context.createWindowContext(
+    context.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY),
+    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+    null,
+)
+
 /** The ROMs root as ES-DE logs it (absolute path) and as SAF document id, e.g. `/storage/7BEF-E760/ROMs`, `7BEF-E760:ROMs`. */
 fun romRoots(romsTree: Uri): List<String> {
     val docId = DocumentsContract.getTreeDocumentId(romsTree)
@@ -85,7 +92,6 @@ class HelperService : Service() {
     private val io = Executors.newSingleThreadScheduledExecutor()
     private lateinit var prefs: Prefs
     private lateinit var menu: MenuOverlay
-    private lateinit var viewer: ViewerOverlay
     private lateinit var screenshots: ScreenshotObserver
     private lateinit var windowContext: Context
     private var projection: MediaProjection? = null
@@ -107,13 +113,8 @@ class HelperService : Service() {
     override fun onCreate() {
         super.onCreate()
         prefs = Prefs(this)
-        windowContext = createWindowContext(
-            getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY),
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            null,
-        )
+        windowContext = overlayContext(this)
         menu = MenuOverlay(windowContext, prefs)
-        viewer = ViewerOverlay(windowContext)
         screenshots = ScreenshotObserver(this, main, ::onScreenshot)
         if (checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED) screenshots.register()
         io.scheduleWithFixedDelay({
@@ -153,7 +154,7 @@ class HelperService : Service() {
     override fun onDestroy() {
         running = false
         capture?.stop()
-        viewer.close()
+        closeViewer()
         menu.close()
         menu.endCapture()
         screenshots.unregister()
@@ -180,13 +181,13 @@ class HelperService : Service() {
     /** Main thread: when the game is left, close the menu and end a recording. */
     private fun onForeground(fg: String?) {
         if (fg == launch?.pkg) return
-        viewer.close()
+        closeViewer()
         menu.close()
         capture?.stop()
     }
 
     /**
-     * Main thread: Retroid's first-Home toast. Stops a recording; with the menu or viewer open, goes home
+     * Main thread: Retroid's first-Home toast. Stops a recording; with the menu (and any viewer over it) open, goes home
      * (Home pressed twice); otherwise opens the menu for the game in front, if ES-DE launched one.
      */
     private fun onHomeGuard() {
@@ -194,8 +195,8 @@ class HelperService : Service() {
             it.stop()
             return
         }
-        if (menu.isOpen || viewer.isOpen) {
-            viewer.close()
+        if (menu.isOpen) {
+            closeViewer()
             menu.close()
             startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             return
@@ -229,11 +230,10 @@ class HelperService : Service() {
 
     /** Opens [doc] over the menu, which takes focus back when the viewer closes. */
     private fun view(doc: Doc) {
-        runCatching { viewer.open(doc.uri, doc.name) {} }.onFailure {
-            Log.e(TAG, "opening ${doc.name} failed", it)
-            toast("Couldn't open ${doc.name}: ${it.message}")
-        }
+        startService(ViewerService.intent(this, doc.uri, doc.name))
     }
+
+    private fun closeViewer() = stopService(Intent(this, ViewerService::class.java))
 
     private class Doc(val name: String, val uri: Uri)
 

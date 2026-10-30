@@ -37,7 +37,7 @@ const val LIST_SPACING = 1.75f
 const val VIEWER_BAR = 0xFF222222.toInt()
 const val VIEWER_TEXT = 0xFFAAAAAA.toInt()
 
-private const val FONT = "themes/minui-menu-es-de-custom/_inc/color-schemes/_default/VAG Rounded Std Bold.otf"
+const val FONT = "themes/minui-menu-es-de-custom/_inc/color-schemes/_default/VAG Rounded Std Bold.otf"
 
 /** The theme's VAG Rounded font from the ES-DE folder (it isn't ours to bundle), else sans-serif. */
 fun themeFont(context: Context, prefs: Prefs): Typeface = runCatching {
