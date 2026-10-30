@@ -60,4 +60,61 @@ class GuideSourcesTest {
         assertNull(VGMAPS_SYSTEMS["switch"])
         assertEquals("https://www.vgmaps.com/Atlas/SuperNES/index.htm", vgmapsUrl(VGMAPS_SYSTEMS.getValue("snes")))
     }
+
+    private fun parsed(name: String) = File("../fixtures/guides/$name").inputStream().use(::parsedText)!!
+    private val pages = guidePages("Super Metroid", parsed("strategywiki-super-metroid-toc.xml"))
+
+    @Test
+    fun `StrategyWiki contents give the main page then the contents order`() {
+        assertEquals(
+            listOf(
+                "Super Metroid", "Gameplay", "Controls", "Allies", "Enemies", "Bosses", "Walkthrough", "Space Colony Ceres",
+                "Crateria", "Brinstar", "Norfair", "Wrecked Ship", "Maridia", "Tourian", "Items", "Objects",
+                "Secrets, Tricks and Glitches",
+            ).mapIndexed { i, p -> if (i == 0) p else "Super Metroid/$p" },
+            pages,
+        )
+    }
+
+    @Test
+    fun `contents drop duplicates, the contents page, red links and other games`() {
+        val toc = """<a href="/wiki/Super_Metroid/Bosses">Bosses</a>
+            <a href="/w/index.php?title=Super_Metroid/Speedruns&amp;action=edit&amp;redlink=1" class="new">Speedruns</a>
+            <a href="/wiki/Super_Metroid/Table_of_Contents">Table of Contents</a>
+            <a href="/wiki/Metroid_Fusion/Walkthrough">Metroid Fusion</a>
+            <a href="/wiki/File:ZericsSuperMetroidMaps.png">Complete Map</a>
+            <a href="/wiki/Super_Metroid/Bosses#Kraid">Kraid</a>"""
+        assertEquals(listOf("Super Metroid", "Super Metroid/Bosses"), guidePages("Super Metroid", toc))
+    }
+
+    @Test
+    fun `a wiki page becomes a section without site chrome`() {
+        val (section, images) = wikiSection("Crateria", parsed("strategywiki-super-metroid-page.xml"), pages)
+        val html = section.html
+        for (gone in listOf("<script", "<style", "<link", "mw-editsection", "nav_box", "section-ad", "id=\"toc\"", "/wiki/")) {
+            assertTrue(gone, !html.contains(gone, ignoreCase = true))
+        }
+        val links = Regex("<a\\b[^>]*>").findAll(html).map { it.value }.toList()
+        assertTrue(links.isNotEmpty())
+        assertTrue(links.all { Regex("<a href=\"#s\\d+\">").matches(it) })
+        assertTrue(images.isNotEmpty() && images.all { it.startsWith("https://") })
+        val srcs = Regex("<img [^>]*src=\"([^\"]*)\"").findAll(html).map { it.groupValues[1] }.toList()
+        assertEquals(images, srcs.distinct())
+        assertTrue(!html.contains("srcset"))
+    }
+
+    @Test
+    fun `a missing page gives null`() {
+        val error = """<?xml version="1.0"?><api><error code="missingtitle" info="The page you specified doesn&#039;t exist." xml:space="preserve">See https://strategywiki.org/w/api.php for API usage.</error></api>"""
+        assertNull(parsedText(error.byteInputStream()))
+    }
+
+    @Test
+    fun `the parse URL encodes the page title`() {
+        assertEquals(
+            "https://strategywiki.org/w/api.php?action=parse&page=The_Legend_of_Zelda%3A_Link%27s_Awakening_DX" +
+                "&prop=text&disableeditsection=1&redirects=1&format=xml",
+            strategyWikiParseUrl("The Legend of Zelda: Link's Awakening DX"),
+        )
+    }
 }
