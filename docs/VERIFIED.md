@@ -105,3 +105,17 @@ With test files for Easyland (a 3-page manual PDF; guides: a text file with ASCI
 - The manual and all four guide formats open. Pages turn, zoom and pan with ES-DE's controls; the text keeps its 80 columns; CBZ pages follow file-name order.
 - With no manual or guide on the card, the menu shows Capture only.
 - No app crash in the logs across the runs.
+
+## Find guides and the HTML viewer
+
+Checked on the Nova on 2026-10-30 with Shantae (`gbc/Shantae.zip`), Super Metroid (`snes/Super Metroid.zip`) and Easyland.
+
+- **WebView memory stays after `destroy()`.** A WebView in the service process left it at 137.6 MB PSS 60 s after closing (126.2 MB after a trim), against 69.2 MB before: Chromium's library and code (Code: 47.7 MB) stay loaded for the life of the process. The viewer now runs in its own `:viewer` process, which ends when it closes. The service then returned to 74.0–75.3 MB, with Code unchanged at 27.7 MB. The viewer process starts about 0.3 s before the page is requested.
+- **The offline WebView.** Responses from `shouldInterceptRequest` load with `blockNetworkLoads` on, and a WebView created from the service's window context draws and takes keys and touch in an overlay window.
+- **Toasts draw under the overlay.** A toast shown while the menu is up exists for its 2.6 s but stays hidden under the opaque menu window, so the menu shows errors as rows.
+- **Regex on Android.** Kotlin's `Regex.findAll` and `replace { }` start a new `Matcher` per match, and on Android each one copies the whole input into native memory. Parsing the 4.7 MB SuperNES atlas page that way grew the service to 3.7 GB before the low-memory killer stopped it, taking ES-DE and other apps too. With one `Matcher`, the check peaks at 208 MB RSS.
+- **Idle cost after Find guides.** After several Find guides runs, the service settles at 89.5–95.9 MB PSS once its Java heap is collected, against 67.8 MB for a fresh process; the HTML viewer adds nothing after it closes. The difference is what the network and TLS code leave loaded.
+- **Save times on Wi-Fi.** The VGMaps check is one atlas page, up to 4.7 MB; StrategyWiki is two API calls. A check takes about 2 s. Super Metroid's StrategyWiki guide takes about 15 s: 17 pages and 166 images, 3.1 MB. Shantae's 56 VGMaps maps take about 8 s, a 7.2 MB CBZ.
+- **Image hosts.** StrategyWiki's images (`cdn.wikimg.net`) and VGMaps' maps answer plain requests with the app's User-Agent.
+- **Testing Home over adb.** `input keyevent KEYCODE_HOME` and `KEYCODE_MOVE_HOME` go straight to ES-DE without Retroid's message, so the menu needs the physical button.
+- **RetroArch and a second launch.** A RetroArch left running in the background after Home receives ES-DE's next launch as a new intent, closes itself and exits; launching again works.

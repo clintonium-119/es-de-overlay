@@ -13,7 +13,9 @@ the `minui-menu-es-de-custom` theme:
   ```
 
 - **Manual** opens the game's scraped ES-DE manual.
-- **Guide** opens guides you've added for the game (see [Guides](#guides)).
+- **Guide** opens the game's guides (see [Guides](#guides)).
+- **Find guides** looks the game up on StrategyWiki and VGMaps, saves the guide you pick next to
+  your own, and opens it.
 
 A second press of Home goes to ES-DE as usual. System screenshots (power + volume down) taken
 during a game are filed the same way as captures.
@@ -58,6 +60,11 @@ Open **ES-DE Overlay** (ES-DE also lists it under Android Apps) and:
   `Saved: snes/screenshots/02) Hacks/Easyland.png, snes/videos/02) Hacks/Easyland.mp4`.
 - **Manual** and **Guide** only appear when the game has one. With several guides, Guide shows a
   list first.
+- **Find guides** checks VGMaps and StrategyWiki for the game and lists the ones that have it, e.g.
+  `VGMaps: 56 maps` and `StrategyWiki: Shantae (2 pages)`, or `No guides found`. Picking one saves
+  it with progress in the menu (**B** cancels and saves nothing) and then opens it; Guide lists it
+  from then on. Picking a source again replaces the saved file. Without a connection the menu says
+  `Couldn't reach the guide sources`.
 - The viewer works like ES-DE's own manual viewer:
 
   | | Zoomed out | Zoomed in |
@@ -68,12 +75,15 @@ Open **ES-DE Overlay** (ES-DE also lists it under Android Apps) and:
   | L2 / R2 | first / last page | reset the zoom |
   | B | close | close |
 
-  Text guides scroll with the D-pad (left/right by a page) and jump with L2/R2.
+  Text guides scroll with the D-pad (left/right by a page) and jump with L2/R2. Saved web guides
+  (`.html`) scroll the same way, L1/R1 change the text size, L2/R2 move between sections, entries in
+  the contents list can be tapped, and **B** first steps back through tapped links, then closes.
+- Every guide and manual reopens at the page or place where you left it, also after a restart.
 - ES-DE shows new media when you return to the gamelist; no reload needed.
 
 ## Guides
 
-Guides aren't downloaded; add them yourself next to ES-DE's other media, named like the ROM:
+Add guides next to ES-DE's other media, named like the ROM, or let **Find guides** save them there:
 
 ```
 <ES-DE>/downloaded_media/<system>/guides/<ROM subfolders>/<ROM name>.<ext>
@@ -81,9 +91,20 @@ Guides aren't downloaded; add them yourself next to ES-DE's other media, named l
 ```
 
 The folder form holds several guides. Supported: `pdf`, `txt` (UTF-8; ASCII art keeps its columns),
-`png`, `jpg`/`jpeg` (large maps are decoded a region at a time) and `cbz`. Not supported: `cbr` and
-HTML; save a web page as PDF instead. A ROM that is a folder (e.g. `dig.scummvm`) keeps its whole
-name, as for ES-DE's own media.
+`png`, `jpg`/`jpeg` (large maps are decoded a region at a time), `cbz` and `html`. Not supported:
+`cbr`. A ROM that is a folder (e.g. `dig.scummvm`) keeps its whole name, as for ES-DE's own media.
+
+Find guides saves into the folder form, e.g. for Shantae:
+
+```
+<ES-DE>/downloaded_media/gbc/guides/Shantae/VGMaps - Shantae.cbz
+<ES-DE>/downloaded_media/snes/guides/Super Metroid/StrategyWiki - Super Metroid.html
+```
+
+A VGMaps save is one CBZ of the game's maps in the atlas's order. A StrategyWiki save is one HTML
+file: a contents list, one section per wiki page, its images inside the file, and the source and
+license (CC BY-SA 4.0) at the end. The viewer shows it offline in the theme's colours and font;
+opened anywhere else it is a plain web page.
 
 ## How it finds the game
 
@@ -112,6 +133,11 @@ identified with certainty (the notification shows the raw launch line instead).
 - Reinstalling or stopping the service (including from the tile) needs a new consent.
 - Emulators that hand off to a different app package after launch would block captures and the
   menu (not seen so far).
+- Find guides matches the game's ES-DE name exactly (ignoring case, punctuation, region tags and a
+  trailing ", The"), so some games aren't found even when a site has them; it never picks a
+  different game. It covers StrategyWiki (through its API) and VGMaps only.
+- The app goes online only when you pick Find guides, one request at a time, with its own
+  User-Agent. Saved guides need no connection.
 - Device findings and how each was checked: [`docs/VERIFIED.md`](docs/VERIFIED.md). Plan:
   [`PLAN.md`](PLAN.md).
 
