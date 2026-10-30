@@ -41,11 +41,12 @@ fun writeHtmlGuide(
     sections.forEachIndexed { i, s ->
         out.write("<section id=\"s${i + 1}\"><h2>${escapeHtml(s.title)}</h2>\n")
         var at = 0
-        for (img in IMG.findAll(s.html)) {
-            out.write(s.html, at, img.range.first - at)
-            val key = IMG_SRC.findAll(img.value).firstOrNull { it.groupValues[1].equals("src", true) }
+        for (img in IMG.scan(s.html)) {
+            out.write(s.html, at, img.start() - at)
+            val tag = img.group()
+            val key = IMG_SRC.findAll(tag).firstOrNull { it.groupValues[1].equals("src", true) }
                 ?.groupValues?.get(2)?.trim('"', '\'')
-            val rest = img.value.replace(IMG_SRC, "")
+            val rest = tag.replace(IMG_SRC, "")
             val image = key?.let { images[it] }
             if (image == null) {
                 out.write(rest)
@@ -54,7 +55,7 @@ fun writeHtmlGuide(
                 out.write(Base64.getEncoder().encodeToString(image.bytes))
                 out.write("\"" + rest.substring("<img".length))
             }
-            at = img.range.last + 1
+            at = img.end()
         }
         out.write(s.html, at, s.html.length - at)
         out.write("\n</section>\n")
