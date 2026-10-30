@@ -113,7 +113,7 @@ class HelperService : Service() {
             null,
         )
         menu = MenuOverlay(windowContext, prefs)
-        viewer = ViewerOverlay(windowContext, prefs)
+        viewer = ViewerOverlay(windowContext)
         screenshots = ScreenshotObserver(this, main, ::onScreenshot)
         if (checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED) screenshots.register()
         io.scheduleWithFixedDelay({

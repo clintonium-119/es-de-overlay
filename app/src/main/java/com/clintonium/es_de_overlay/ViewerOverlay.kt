@@ -9,7 +9,6 @@ import android.graphics.Matrix
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Handler
@@ -28,16 +27,68 @@ import android.widget.TextView
 import java.util.concurrent.Executors
 import java.util.zip.ZipInputStream
 
+/** One page: its size in source units (PDF points or image pixels) and a renderer for part of it. Worker thread only. */
+private interface Page {
+    val width: Int
+    val height: Int
+
+    /** Renders [rect] for [scale] screen pixels per source unit; returns the bitmap and its pixels per source unit. */
+    fun render(rect: Rect, scale: Float): Pair<Bitmap, Float>
+    fun close()
+}
+
+private class RegionPage(private val decoder: BitmapRegionDecoder) : Page {
+    override val width get() = decoder.width
+    override val height get() = decoder.height
+
+    override fun render(rect: Rect, scale: Float): Pair<Bitmap, Float> {
+        // The largest power-of-two subsample that still has a pixel per screen pixel.
+        val sample = Integer.highestOneBit((1 / scale).toInt().coerceAtLeast(1))
+        return decoder.decodeRegion(rect, BitmapFactory.Options().apply { inSampleSize = sample }) to 1f / sample
+    }
+
+    override fun close() = decoder.recycle()
+}
+
+private class PdfPage(private val page: PdfRenderer.Page) : Page {
+    override val width get() = page.width
+    override val height get() = page.height
+
+    override fun render(rect: Rect, scale: Float): Pair<Bitmap, Float> {
+        val bitmap = Bitmap.createBitmap(
+            (rect.width() * scale).toInt().coerceAtLeast(1), (rect.height() * scale).toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888,
+        )
+        bitmap.eraseColor(Color.WHITE)
+        val transform = Matrix().apply {
+            setScale(scale, scale)
+            postTranslate(-rect.left * scale, -rect.top * scale)
+        }
+        page.render(bitmap, null, transform, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+        return bitmap to scale
+    }
+
+    override fun close() = page.close()
+}
+
+/** [count] pages; [open] gives page n on the worker thread; [close] releases the file. */
+private class Doc(val count: Int, val open: (Int) -> Page, val close: () -> Unit)
+
+private class Rendered(val page: Int, val width: Int, val height: Int, val rect: Rect, val bitmap: Bitmap, val density: Float)
+
 /**
- * Full-screen viewer for a manual or guide: PDF and CBZ one page at a time, fit to width; text in a
- * monospaced scroll; PNG/JPG decoding only the visible region, so huge maps work. Everything it opens
- * is released on [close].
+ * Full-screen viewer for a manual or guide that works like ES-DE's own manual viewer. PDF, CBZ and
+ * PNG/JPG pages are fitted whole and centered; zoomed out, D-pad left/right turn pages and L2/R2 go to
+ * the first or last page; zoomed in, the D-pad pans and L2/R2 reset; L1/R1 zoom. Text scrolls. Only the
+ * current page's bitmap is held, and everything is released on [close].
  */
-class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
+class ViewerOverlay(private val context: Context) {
     private val wm = context.getSystemService(WindowManager::class.java)
     private val bounds = wm.maximumWindowMetrics.bounds
     private val screenW = bounds.width()
     private val screenH = bounds.height()
+    /** ES-DE's bottom bar: 40 px of the Nova's 960. */
+    private val barH = screenH / 24
+    private val viewH = screenH - barH
     private val resolver = context.contentResolver
     private val main = Handler(Looper.getMainLooper())
     private var root: View? = null
@@ -57,204 +108,69 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
     }
 
     private fun build(uri: Uri, name: String, onClose: () -> Unit) {
-        val font = themeFont(context, prefs)
-        val textPx = screenH * LIST_FONT
-        val title = chrome(font, textPx * 0.65f).apply { text = name }
-        val scroll = ScrollView(context).apply { isVerticalScrollBarEnabled = false }
-        val keys: (Int) -> Boolean
-        val help: Array<Pair<String, String>>
+        val label = bar(Gravity.START or Gravity.CENTER_VERTICAL)
+        val help = bar(Gravity.CENTER)
         val content: View
-        when (name.substringAfterLast('.').lowercase()) {
+        val keys: (Int) -> Boolean
+        when (val ext = name.substringAfterLast('.').lowercase()) {
             "txt" -> {
                 // Invalid UTF-8 shows as replacement characters rather than failing.
                 val text = resolver.openInputStream(uri)!!.use { String(it.readBytes(), Charsets.UTF_8) }
-                scroll.addView(TextView(context).apply {
-                    this.text = text
-                    typeface = Typeface.MONOSPACE
-                    setTextColor(TEXT)
-                    // 80 columns across the screen, so ASCII guides keep their layout.
-                    setTextSize(TypedValue.COMPLEX_UNIT_PX, 100f)
-                    setTextSize(TypedValue.COMPLEX_UNIT_PX, 100f * screenW * 0.95f / paint.measureText("M".repeat(80)))
-                    setPadding(screenW / 40, (textPx * 2.5f).toInt(), screenW / 40, screenH / 2)
-                })
+                val scroll = ScrollView(context).apply {
+                    isVerticalScrollBarEnabled = false
+                    addView(TextView(context).apply {
+                        this.text = text
+                        typeface = Typeface.MONOSPACE
+                        setTextColor(TEXT)
+                        // 80 columns across the screen, so ASCII guides keep their layout.
+                        setTextSize(TypedValue.COMPLEX_UNIT_PX, 100f)
+                        setTextSize(TypedValue.COMPLEX_UNIT_PX, 100f * screenW * 0.95f / paint.measureText("M".repeat(80)))
+                        setPadding(screenW / 40, barH / 2, screenW / 40, viewH / 2)
+                    })
+                }
+                label.text = name
+                help.text = "✚ SCROLL   L2 TOP   R2 BOTTOM"
                 content = scroll
-                help = arrayOf("L1/R1" to "Page", "B" to "Back")
-                keys = { code -> scrollKeys(scroll, code) }
-            }
-            "png", "jpg", "jpeg" -> {
-                val image = ImageView(context).apply { scaleType = ImageView.ScaleType.MATRIX }
-                val decoder = resolver.openInputStream(uri)!!.use { BitmapRegionDecoder.newInstance(it)!! }
-                val iw = decoder.width
-                val ih = decoder.height
-                val fit = minOf(screenW.toFloat() / iw, screenH.toFloat() / ih)
-                var scale = fit
-                var cx = iw / 2f
-                var cy = ih / 2f
-                // The decoded bitmap, the image area it covers and its subsample.
-                var bitmap: Bitmap? = null
-                var shown = Rect()
-                var shownSample = 1
-                // A PNG region decode inflates every row above it (about a second on a big map), so moves
-                // shift the bitmap already shown at once while a sharper one decodes on the worker.
-                val worker = Executors.newSingleThreadExecutor()
-                var decoding = false
-                var again = false
-                var closed = false
-                fun place() {
-                    val k = scale * shownSample
-                    image.imageMatrix = Matrix().apply {
-                        setScale(k, k)
-                        postTranslate((shown.left - cx) * scale + screenW / 2f, (shown.top - cy) * scale + screenH / 2f)
-                    }
-                }
-                fun render() {
-                    val vw = screenW / scale
-                    val vh = screenH / scale
-                    cx = if (vw >= iw) iw / 2f else cx.coerceIn(vw / 2, iw - vw / 2)
-                    cy = if (vh >= ih) ih / 2f else cy.coerceIn(vh / 2, ih - vh / 2)
-                    place()
-                    if (decoding) {
-                        again = true
-                        return
-                    }
-                    decoding = true
-                    // The view plus a quarter screen on each side, so the next pan step is already sharp.
-                    val rect = Rect(
-                        (cx - vw * 0.75f).toInt().coerceAtLeast(0), (cy - vh * 0.75f).toInt().coerceAtLeast(0),
-                        (cx + vw * 0.75f).toInt().coerceAtMost(iw), (cy + vh * 0.75f).toInt().coerceAtMost(ih),
-                    )
-                    // The largest power-of-two subsample that still has a pixel per screen pixel.
-                    val sample = Integer.highestOneBit((1 / scale).toInt().coerceAtLeast(1))
-                    worker.execute {
-                        val next = runCatching { decoder.decodeRegion(rect, BitmapFactory.Options().apply { inSampleSize = sample }) }
-                            .onFailure { Log.w(TAG, "viewer: $name", it) }.getOrNull()
-                        main.post {
-                            if (closed) {
-                                next?.recycle()
-                                return@post
-                            }
-                            if (next != null) {
-                                image.setImageBitmap(next)
-                                bitmap?.recycle()
-                                bitmap = next
-                                shown = rect
-                                shownSample = sample
-                                place()
-                            }
-                            decoding = false
-                            if (again) {
-                                again = false
-                                render()
-                            }
-                        }
-                    }
-                }
-                release = {
-                    closed = true
-                    worker.shutdown()
-                    image.setImageDrawable(null)
-                    bitmap?.recycle()
-                    bitmap = null
-                    // Waits for a decode in flight; BitmapRegionDecoder serializes the two.
-                    decoder.recycle()
-                }
-                render()
-                content = image
-                help = arrayOf("X/Y" to "Zoom", "B" to "Back")
-                keys = handler@{ code ->
-                    val step = screenW / scale / 4
-                    when (code) {
-                        KeyEvent.KEYCODE_DPAD_UP -> cy -= step
-                        KeyEvent.KEYCODE_DPAD_DOWN -> cy += step
-                        KeyEvent.KEYCODE_DPAD_LEFT -> cx -= step
-                        KeyEvent.KEYCODE_DPAD_RIGHT -> cx += step
-                        KeyEvent.KEYCODE_BUTTON_X -> scale = (scale * 1.5f).coerceAtMost(maxOf(fit, 2f))
-                        KeyEvent.KEYCODE_BUTTON_Y -> scale = (scale / 1.5f).coerceAtLeast(fit)
-                        else -> return@handler false
-                    }
-                    render()
-                    true
-                }
-            }
-            "pdf", "cbz" -> {
-                val image = ImageView(context).apply { adjustViewBounds = true }
-                scroll.addView(image, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-                val pages: Int
-                val renderPage: (Int) -> Bitmap
-                if (name.endsWith(".pdf", ignoreCase = true)) {
-                    val fd = resolver.openFileDescriptor(uri, "r")!!
-                    val pdf = runCatching { PdfRenderer(fd) }.onFailure { fd.close() }.getOrThrow()
-                    pages = pdf.pageCount
-                    renderPage = { n ->
-                        pdf.openPage(n).use { page ->
-                            // Fit to width, but no taller than four screens so a long page can't exhaust memory.
-                            val h = (screenW.toLong() * page.height / page.width).toInt().coerceAtMost(screenH * 4)
-                            val w = h * page.width / page.height
-                            Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).apply {
-                                eraseColor(Color.WHITE)
-                                page.render(this, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                            }
-                        }
-                    }
-                    release = { pdf.close(); fd.close() }
-                } else {
-                    val entries = zip(uri) { z ->
-                        generateSequence { z.nextEntry }
-                            .filter { !it.isDirectory && it.name.substringAfterLast('.').lowercase() in setOf("png", "jpg", "jpeg") }
-                            .map { it.name }
-                            .sortedWith(String.CASE_INSENSITIVE_ORDER)
-                            .toList()
-                    }
-                    pages = entries.size
-                    renderPage = { n ->
-                        val bytes = zip(uri) { z -> generateSequence { z.nextEntry }.first { it.name == entries[n] }; z.readBytes() }
-                        val size = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, size)
-                        val sample = Integer.highestOneBit((size.outWidth / screenW).coerceAtLeast(1))
-                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
-                    }
-                }
-                val counter = chrome(font, textPx * 0.65f)
-                var page = 0
-                var bitmap: Bitmap? = null
-                fun show(n: Int) {
-                    if (n !in 0 until pages) return
-                    val next = renderPage(n)
-                    image.setImageBitmap(next)
-                    bitmap?.recycle()
-                    bitmap = next
-                    page = n
-                    counter.text = "${n + 1} / $pages"
-                    scroll.scrollTo(0, 0)
-                }
-                show(0)
-                val closeDoc = release
-                release = {
-                    image.setImageDrawable(null)
-                    bitmap?.recycle()
-                    bitmap = null
-                    closeDoc()
-                }
-                content = FrameLayout(context).apply {
-                    addView(scroll)
-                    addView(counter, corner(Gravity.TOP or Gravity.END))
-                }
-                help = arrayOf("L1/R1" to "Page", "B" to "Back")
                 keys = { code ->
                     when (code) {
-                        KeyEvent.KEYCODE_BUTTON_L1 -> { show(page - 1); true }
-                        KeyEvent.KEYCODE_BUTTON_R1 -> { show(page + 1); true }
-                        else -> scrollKeys(scroll, code)
+                        KeyEvent.KEYCODE_DPAD_UP -> scroll.smoothScrollBy(0, -viewH / 4)
+                        KeyEvent.KEYCODE_DPAD_DOWN -> scroll.smoothScrollBy(0, viewH / 4)
+                        KeyEvent.KEYCODE_DPAD_LEFT -> scroll.pageScroll(View.FOCUS_UP)
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> scroll.pageScroll(View.FOCUS_DOWN)
+                        KeyEvent.KEYCODE_BUTTON_L2 -> scroll.fullScroll(View.FOCUS_UP)
+                        KeyEvent.KEYCODE_BUTTON_R2 -> scroll.fullScroll(View.FOCUS_DOWN)
                     }
+                    code in TEXT_KEYS
                 }
             }
-            else -> throw IllegalArgumentException("unsupported guide format: $name")
+            else -> {
+                val doc = when (ext) {
+                    "pdf" -> pdf(uri)
+                    "cbz" -> cbz(uri)
+                    "png", "jpg", "jpeg" -> Doc(1, { RegionPage(resolver.openInputStream(uri)!!.use { BitmapRegionDecoder.newInstance(it)!! }) }) {}
+                    else -> throw IllegalArgumentException("unsupported guide format: $name")
+                }
+                val image = ImageView(context).apply {
+                    scaleType = ImageView.ScaleType.MATRIX
+                    // Drawn in software: pages uploaded as GPU textures stayed in the renderer's cache
+                    // (~70 MB after a big map) once the viewer closed, and nothing trims it in an overlay.
+                    setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+                }
+                content = image
+                keys = paged(doc, name, image, label, help)
+            }
         }
         val view = FrameLayout(context).apply {
             setBackgroundColor(Color.BLACK)
-            addView(content)
-            addView(title, corner(Gravity.TOP or Gravity.START))
-            addView(helpPill(context, font, textPx, *help), corner(Gravity.BOTTOM or Gravity.END))
+            addView(content, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, viewH, Gravity.TOP))
+            addView(
+                FrameLayout(context).apply {
+                    setBackgroundColor(VIEWER_BAR)
+                    addView(label)
+                    addView(help)
+                },
+                FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, barH, Gravity.BOTTOM),
+            )
             descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
             isFocusable = true
             isFocusableInTouchMode = true
@@ -264,12 +180,189 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                     return@setOnKeyListener true
                 }
                 if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
-                // A bad page or region shouldn't take the service down with it.
+                // A bad page shouldn't take the service down with it.
                 runCatching { keys(code) }.onFailure { Log.w(TAG, "viewer: $name", it) }.getOrDefault(true)
             }
         }
         wm.addFullScreen(view, PixelFormat.OPAQUE)
         root = view
+    }
+
+    /**
+     * Shows [doc] in [image] and returns its key handler. Pages open and render on a worker: a PNG region
+     * decode inflates every row above it (about a second on a big map), so zoom and pan move the bitmap
+     * already shown at once and the sharp one replaces it when ready.
+     */
+    private fun paged(doc: Doc, name: String, image: ImageView, label: TextView, help: TextView): (Int) -> Boolean {
+        val worker = Executors.newSingleThreadExecutor()
+        // Worker thread only.
+        var opened: Page? = null
+        var openedIndex = -1
+        // Main thread. The page size is 0 until the page has opened.
+        var page = 0
+        var pw = 0
+        var ph = 0
+        var fit = 1f
+        var scale = 1f
+        var cx = 0f
+        var cy = 0f
+        var bitmap: Bitmap? = null
+        var shown = Rect()
+        var density = 1f
+        var busy = false
+        var again = false
+        var closed = false
+
+        fun zoomed() = pw > 0 && scale > fit * 1.01f
+        fun chrome() {
+            label.text = if (doc.count > 1) "PAGE ${page + 1} OF ${doc.count}" else name
+            help.text = when {
+                zoomed() -> "✚ PAN   L2/R2 RESET   L1/R1 ZOOM"
+                doc.count > 1 -> "✚ BROWSE   L2 FIRST   R2 LAST   L1/R1 ZOOM"
+                else -> "L1/R1 ZOOM"
+            }
+        }
+        fun place() {
+            if (pw == 0) return
+            val k = scale / density
+            image.imageMatrix = Matrix().apply {
+                setScale(k, k)
+                postTranslate((shown.left - cx) * scale + screenW / 2f, (shown.top - cy) * scale + viewH / 2f)
+            }
+        }
+        fun render() {
+            if (pw > 0) {
+                val vw = screenW / scale
+                val vh = viewH / scale
+                cx = if (vw >= pw) pw / 2f else cx.coerceIn(vw / 2, pw - vw / 2)
+                cy = if (vh >= ph) ph / 2f else cy.coerceIn(vh / 2, ph - vh / 2)
+                place()
+            }
+            chrome()
+            if (busy) {
+                again = true
+                return
+            }
+            busy = true
+            val n = page
+            val s = scale
+            // The view plus a quarter screen on each side, so the next pan step is already sharp. Unknown
+            // until the page opens; then the whole page renders at its fit.
+            val rect = if (pw == 0) null else Rect(
+                (cx - screenW * 0.75f / s).toInt().coerceAtLeast(0), (cy - viewH * 0.75f / s).toInt().coerceAtLeast(0),
+                (cx + screenW * 0.75f / s).toInt().coerceAtMost(pw), (cy + viewH * 0.75f / s).toInt().coerceAtMost(ph),
+            )
+            worker.execute {
+                val result = runCatching {
+                    if (openedIndex != n) {
+                        opened?.close()
+                        opened = null
+                        opened = doc.open(n)
+                        openedIndex = n
+                    }
+                    val p = opened!!
+                    val r = rect ?: Rect(0, 0, p.width, p.height)
+                    val (b, d) = p.render(r, if (rect == null) minOf(screenW.toFloat() / p.width, viewH.toFloat() / p.height) else s)
+                    Rendered(n, p.width, p.height, r, b, d)
+                }.onFailure { Log.w(TAG, "viewer: $name page ${n + 1}", it) }.getOrNull()
+                main.post {
+                    busy = false
+                    when {
+                        result == null -> {}
+                        closed || result.page != page -> result.bitmap.recycle()
+                        else -> {
+                            if (pw == 0) {
+                                pw = result.width
+                                ph = result.height
+                                fit = minOf(screenW.toFloat() / pw, viewH.toFloat() / ph)
+                                scale = fit
+                                cx = pw / 2f
+                                cy = ph / 2f
+                            }
+                            image.setImageBitmap(result.bitmap)
+                            bitmap?.recycle()
+                            bitmap = result.bitmap
+                            shown = result.rect
+                            density = result.density
+                            place()
+                            chrome()
+                        }
+                    }
+                    if (again && !closed) {
+                        again = false
+                        render()
+                    }
+                }
+            }
+        }
+        fun turnTo(n: Int) {
+            if (n !in 0 until doc.count || n == page) return
+            page = n
+            pw = 0
+            image.setImageDrawable(null)
+            bitmap?.recycle()
+            bitmap = null
+            render()
+        }
+        fun zoom(to: Float) {
+            if (pw == 0) return
+            scale = to.coerceIn(fit, maxOf(fit * 4, 2f))
+            render()
+        }
+
+        release = {
+            closed = true
+            image.setImageDrawable(null)
+            bitmap?.recycle()
+            bitmap = null
+            // On the worker, after any render in flight: PdfRenderer isn't thread-safe.
+            worker.execute {
+                opened?.close()
+                opened = null
+                doc.close()
+            }
+            worker.shutdown()
+        }
+        render()
+
+        return handler@{ code ->
+            val step = screenW / scale / 4
+            when (code) {
+                KeyEvent.KEYCODE_DPAD_LEFT -> if (zoomed()) { cx -= step; render() } else turnTo(page - 1)
+                KeyEvent.KEYCODE_DPAD_RIGHT -> if (zoomed()) { cx += step; render() } else turnTo(page + 1)
+                KeyEvent.KEYCODE_DPAD_UP -> if (zoomed()) { cy -= step; render() } else return@handler false
+                KeyEvent.KEYCODE_DPAD_DOWN -> if (zoomed()) { cy += step; render() } else return@handler false
+                KeyEvent.KEYCODE_BUTTON_L1 -> zoom(scale / 1.5f)
+                KeyEvent.KEYCODE_BUTTON_R1 -> zoom(scale * 1.5f)
+                KeyEvent.KEYCODE_BUTTON_L2 -> if (zoomed()) zoom(fit) else turnTo(0)
+                KeyEvent.KEYCODE_BUTTON_R2 -> if (zoomed()) zoom(fit) else turnTo(doc.count - 1)
+                else -> return@handler false
+            }
+            true
+        }
+    }
+
+    private fun pdf(uri: Uri): Doc {
+        val fd = resolver.openFileDescriptor(uri, "r")!!
+        val pdf = runCatching { PdfRenderer(fd) }.onFailure { fd.close() }.getOrThrow()
+        return Doc(pdf.pageCount, { PdfPage(pdf.openPage(it)) }) {
+            pdf.close()
+            fd.close()
+        }
+    }
+
+    private fun cbz(uri: Uri): Doc {
+        val entries = zip(uri) { z ->
+            generateSequence { z.nextEntry }
+                .filter { !it.isDirectory && it.name.substringAfterLast('.').lowercase() in setOf("png", "jpg", "jpeg") }
+                .map { it.name }
+                .sortedWith(String.CASE_INSENSITIVE_ORDER)
+                .toList()
+        }
+        return Doc(entries.size, { n ->
+            val bytes = zip(uri) { z -> generateSequence { z.nextEntry }.first { it.name == entries[n] }; z.readBytes() }
+            RegionPage(BitmapRegionDecoder.newInstance(bytes, 0, bytes.size)!!)
+        }) {}
     }
 
     fun close() {
@@ -279,32 +372,24 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         root = null
     }
 
-    private fun corner(gravity: Int) = FrameLayout.LayoutParams(-2, -2, gravity).apply {
-        val m = screenH / 60
-        setMargins(m, m, m, m)
-    }
-
-    /** Title and page counter, in a help-pill box so they stay readable over the page. */
-    private fun chrome(font: Typeface, px: Float) = TextView(context).apply {
-        typeface = font
-        setTextColor(HELP_TEXT)
-        setTextSize(TypedValue.COMPLEX_UNIT_PX, px)
+    /** Text in ES-DE's viewer bar: its own condensed face, grey, upper case. */
+    private fun bar(gravity: Int) = TextView(context).apply {
+        typeface = Typeface.create("sans-serif-condensed", Typeface.NORMAL)
+        setTextColor(VIEWER_TEXT)
+        setTextSize(TypedValue.COMPLEX_UNIT_PX, barH * 0.7f)
+        isAllCaps = true
         maxLines = 1
-        val pad = (px * 0.6f).toInt()
-        setPadding(pad * 2, pad, pad * 2, pad)
-        background = GradientDrawable().apply { setColor(HELP_BG); cornerRadius = px }
-    }
-
-    private fun scrollKeys(scroll: ScrollView, code: Int): Boolean {
-        when (code) {
-            KeyEvent.KEYCODE_DPAD_UP -> scroll.smoothScrollBy(0, -screenH / 4)
-            KeyEvent.KEYCODE_DPAD_DOWN -> scroll.smoothScrollBy(0, screenH / 4)
-            KeyEvent.KEYCODE_BUTTON_L1 -> scroll.pageScroll(View.FOCUS_UP)
-            KeyEvent.KEYCODE_BUTTON_R1 -> scroll.pageScroll(View.FOCUS_DOWN)
-            else -> return false
-        }
-        return true
+        this.gravity = gravity
+        setPadding(barH / 4, 0, barH / 4, 0)
+        layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
 
     private fun <T> zip(uri: Uri, read: (ZipInputStream) -> T): T = ZipInputStream(resolver.openInputStream(uri)!!).use(read)
+
+    private companion object {
+        val TEXT_KEYS = setOf(
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
+            KeyEvent.KEYCODE_BUTTON_L2, KeyEvent.KEYCODE_BUTTON_R2,
+        )
+    }
 }

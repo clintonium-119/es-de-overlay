@@ -23,8 +23,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 
 // The minui-menu-es-de-custom theme's dark-bold colors (colors.xml) and small font size (theme.xml).
-/** Black background, at 85% so the game shows through faintly. */
-const val SCRIM = 0xD9000000.toInt()
+const val BACKGROUND = 0xFF000000.toInt()
 const val PILL = 0xFFF7FBF7.toInt()
 const val PILL_TEXT = 0xFF000000.toInt()
 const val TEXT = 0xFFF7FBF7.toInt()
@@ -34,6 +33,9 @@ const val HELP_TEXT = 0xFFF7FBF7.toInt()
 /** List font size and line spacing as fractions of the screen height (`listFontSize`, `listLineSpacing`). */
 const val LIST_FONT = 0.041666666666667f
 const val LIST_SPACING = 1.75f
+// ES-DE's own manual-viewer bar, which the theme doesn't style.
+const val VIEWER_BAR = 0xFF222222.toInt()
+const val VIEWER_TEXT = 0xFFAAAAAA.toInt()
 
 private const val FONT = "themes/minui-menu-es-de-custom/_inc/color-schemes/_default/VAG Rounded Std Bold.otf"
 
@@ -143,7 +145,7 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
             rows.forEach(::addView)
         }
         val view = FrameLayout(context).apply {
-            setBackgroundColor(SCRIM)
+            setBackgroundColor(BACKGROUND)
             // ES-DE's gamelist margins: 5% of the width at the sides, 7% of the height above, 6% below.
             setPadding((screenW * 0.05f).toInt(), (screenH * 0.07f).toInt(), (screenW * 0.05f).toInt(), (screenH * 0.06f).toInt())
             addView(ScrollView(context).apply { isVerticalScrollBarEnabled = false; addView(list) })
