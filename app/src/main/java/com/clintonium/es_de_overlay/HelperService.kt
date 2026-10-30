@@ -193,7 +193,7 @@ class HelperService : Service() {
     }
 
     /**
-     * Main thread: Retroid's first-Home toast. Stops a recording; with the menu (and any viewer over it) open, goes home
+     * Main thread: Retroid's first-Home toast. Stops a recording; with the menu (and any viewer or browser over it) open, goes home
      * (Home pressed twice); otherwise opens the menu for the game in front, if ES-DE launched one.
      */
     private fun onHomeGuard() {
@@ -224,6 +224,8 @@ class HelperService : Service() {
         val back = { openMenu(g, name, manual, guides) }
         val items = listOfNotNull(
             "Capture", manual?.let { "Manual" }, guides.firstOrNull()?.let { "Guide" }, prefs.esdeTree?.let { "Find guides" },
+            // Temporary, until Find guides lists the browser sources.
+            "Browser (debug)".takeIf { BuildConfig.DEBUG },
         )
         menu.show(items, { i ->
             when (items[i]) {
@@ -233,6 +235,7 @@ class HelperService : Service() {
                 }
                 "Manual" -> view(manual!!)
                 "Find guides" -> findGuides(g, name, back)
+                "Browser (debug)" -> startService(ViewerService.browse(this, "https://gamefaqs.gamespot.com/search?game=${Uri.encode(name)}"))
                 // Several guides get their own list; B there returns to this menu.
                 else -> if (guides.size == 1) view(guides[0]) else menu.show(guides.map { it.name }, { view(guides[it]) }, back)
             }

@@ -124,8 +124,8 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
     }
 
     private fun build(uri: Uri, name: String, saved: Int, onClose: () -> Unit) {
-        val label = bar(Gravity.START or Gravity.CENTER_VERTICAL)
-        val help = bar(Gravity.CENTER)
+        val label = barText(context, barH, Gravity.START or Gravity.CENTER_VERTICAL)
+        val help = barText(context, barH, Gravity.CENTER)
         val content: View
         val keys: (Int) -> Boolean
         // B steps back through a guide's links before it closes.
@@ -522,18 +522,6 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         release = {}
         root?.let(wm::removeView)
         root = null
-    }
-
-    /** Text in ES-DE's viewer bar: its own condensed face, grey, upper case. */
-    private fun bar(gravity: Int) = TextView(context).apply {
-        typeface = Typeface.create("sans-serif-condensed", Typeface.NORMAL)
-        setTextColor(VIEWER_TEXT)
-        setTextSize(TypedValue.COMPLEX_UNIT_PX, barH * 0.7f)
-        isAllCaps = true
-        maxLines = 1
-        this.gravity = gravity
-        setPadding(barH / 4, 0, barH / 4, 0)
-        layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     }
 
     private fun <T> zip(uri: Uri, read: (ZipInputStream) -> T): T = ZipInputStream(resolver.openInputStream(uri)!!).use(read)

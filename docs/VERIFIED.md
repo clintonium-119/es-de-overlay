@@ -119,3 +119,14 @@ Checked on the Nova on 2026-10-30 with Shantae (`gbc/Shantae.zip`), Super Metroi
 - **Image hosts.** StrategyWiki's images (`cdn.wikimg.net`) and VGMaps' maps answer plain requests with the app's User-Agent.
 - **Testing Home over adb.** `input keyevent KEYCODE_HOME` and `KEYCODE_MOVE_HOME` go straight to ES-DE without Retroid's message, so the menu needs the physical button.
 - **RetroArch and a second launch.** A RetroArch left running in the background after Home receives ES-DE's next launch as a new intent, closes itself and exits; launching again works.
+
+## The guide browser
+
+Checked on the Nova on 2026-10-30 (WebView 109, `com.android.webview`) in Shantae, with the browser in the `:viewer` process and the WebView's own User-Agent and cookie settings.
+
+- **Each site lets the overlay WebView in.** GameFAQs' "Performing security verification" page cleared by itself within 16 s. Neoseeker showed Cloudflare's "Verify you are human" checkbox, which cleared after one tap. ZeldaDungeon's challenge page cleared by itself within 12 s. Once cleared, GameFAQs opened again without a check.
+- **GameFAQs' first page after the check came back empty.** `search?game=Shantae` showed the empty search form straight after the check, then the results when searched again or opened later.
+- **Typing works in an overlay window.** Tapping a page's field brings up Gboard. Insets that include `ime()` shrink the window above the keyboard, so the bar and the field stay visible. A resize soft-input mode is ignored once a window sets its own insets. Sticky site banners can still cover a field.
+- **Closing.** Back walks the history and then closes; Close, Home and leaving the game each end the `:viewer` process.
+- **Memory.** The service read 89.6 MB PSS with the menu open before the browser. It was 104.4 MB 67 s after closing, then 92.4–93.0 MB from 73 s on.
+- **Inspecting sites.** Debug builds let desktop Chrome inspect the browser: `adb forward tcp:9333 localabstract:webview_devtools_remote_<pid of :viewer>`.

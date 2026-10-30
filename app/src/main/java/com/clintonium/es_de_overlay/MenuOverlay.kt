@@ -46,8 +46,12 @@ fun themeFont(context: Context, prefs: Prefs): Typeface = runCatching {
     }
 }.getOrDefault(Typeface.SANS_SERIF)
 
-/** Adds [view] as a focusable full-screen window over the game, with the system bars hidden, and focuses it. */
-fun WindowManager.addFullScreen(view: View, format: Int) {
+/**
+ * Adds [view] as a focusable full-screen window over the game, with the system bars hidden, and focuses it.
+ * The window shrinks to stay clear of [fitInsets]: `WindowInsets.Type.ime()` keeps a text field above the
+ * keyboard, which is what a resize soft-input mode would do if setting the insets didn't turn that off.
+ */
+fun WindowManager.addFullScreen(view: View, format: Int, fitInsets: Int = 0) {
     addView(
         view,
         WindowManager.LayoutParams(
@@ -58,7 +62,7 @@ fun WindowManager.addFullScreen(view: View, format: Int) {
             format,
         ).apply {
             // Cover the bars' area as well, instead of leaving the game showing there.
-            fitInsetsTypes = 0
+            fitInsetsTypes = fitInsets
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
         },
     )
@@ -84,6 +88,18 @@ fun helpPill(context: Context, font: Typeface, textPx: Float, vararg entries: Pa
     val pad = (textPx * 0.5f).toInt()
     setPadding(pad * 2, pad, pad * 2, pad)
     background = GradientDrawable().apply { setColor(HELP_BG); cornerRadius = textPx }
+}
+
+/** Text in ES-DE's viewer bar, sized for a bar [barH] pixels tall: its own condensed face, grey, upper case. */
+fun barText(context: Context, barH: Int, gravity: Int) = TextView(context).apply {
+    typeface = Typeface.create("sans-serif-condensed", Typeface.NORMAL)
+    setTextColor(VIEWER_TEXT)
+    setTextSize(TypedValue.COMPLEX_UNIT_PX, barH * 0.7f)
+    isAllCaps = true
+    maxLines = 1
+    this.gravity = gravity
+    setPadding(barH / 4, 0, barH / 4, 0)
+    layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
 }
 
 /**
