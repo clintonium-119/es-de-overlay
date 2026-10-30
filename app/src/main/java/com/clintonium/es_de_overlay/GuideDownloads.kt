@@ -7,6 +7,7 @@ import com.clintonium.es_de_overlay.core.GuideSection
 import com.clintonium.es_de_overlay.core.Overwrite
 import com.clintonium.es_de_overlay.core.VGMAPS_SYSTEMS
 import com.clintonium.es_de_overlay.core.cleanName
+import com.clintonium.es_de_overlay.core.fileName
 import com.clintonium.es_de_overlay.core.guidePages
 import com.clintonium.es_de_overlay.core.guidePath
 import com.clintonium.es_de_overlay.core.parsedPage
@@ -140,7 +141,4 @@ private fun saveVia(
         file.delete()
     }
 }
-
-/** [title] as a file name the SD card accepts: "A: B" becomes "A - B", other reserved characters "_". */
-private fun fileName(title: String) = title.replace(": ", " - ").replace(Regex("[\\\\/:*?\"<>|]"), "_")
 

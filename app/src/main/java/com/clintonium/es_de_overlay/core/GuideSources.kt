@@ -1,6 +1,7 @@
 package com.clintonium.es_de_overlay.core
 
 import java.io.InputStream
+import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.text.Normalizer
@@ -31,6 +32,92 @@ fun matchKey(name: String): String {
         // &amp;, &nbsp; and the like carry no letters.
         .replace(Regex("&\\w+;"), "")
     return Normalizer.normalize(decoded, Normalizer.Form.NFD).lowercase().filter { it in 'a'..'z' || it in '0'..'9' }
+}
+
+/** [title] as a file name the SD card accepts: "A: B" becomes "A - B", other reserved characters "_". */
+fun fileName(title: String) = title.replace(": ", " - ").replace(Regex("[\\\\/:*?\"<>|]"), "_")
+
+/** The guide sites only a browser gets into, which Find guides opens in the touch browser. */
+enum class GuideSite(val label: String, val host: String) {
+    GAMEFAQS("GameFAQs", "gamefaqs.gamespot.com"),
+    NEOSEEKER("Neoseeker", "www.neoseeker.com"),
+    ZELDADUNGEON("ZeldaDungeon", "www.zeldadungeon.net"),
+}
+
+/** ZeldaDungeon's walkthroughs, as its site menu listed them on 2026-10-30. The site has no index page. */
+val ZELDADUNGEON_WALKTHROUGHS = listOf(
+    "echoes-of-wisdom-walkthrough-guide", "tears-of-the-kingdom-walkthrough", "breath-of-the-wild-walkthrough",
+    "tri-force-heroes-walkthrough", "a-link-between-worlds-walkthrough", "skyward-sword-walkthrough",
+    "spirit-tracks-walkthrough", "phantom-hourglass-walkthrough", "twilight-princess-walkthrough",
+    "the-minish-cap-walkthrough", "the-wind-waker-walkthrough", "oracle-of-ages-walkthrough",
+    "oracle-of-seasons-walkthrough", "majoras-mask-walkthrough", "ocarina-of-time-walkthrough",
+    "links-awakening-walkthrough", "a-link-to-the-past-walkthrough", "the-adventure-of-link-walkthrough",
+    "the-legend-of-zelda-walkthrough", "four-swords-adventures-walkthrough", "link-the-faces-of-evil-walkthrough",
+    "zelda-the-wand-of-gamelon-walkthrough",
+)
+
+/**
+ * Where the browser opens for [name] on [site]: the site's search for it, or for ZeldaDungeon the game's
+ * walkthrough, since its search only finds news. Null when ZeldaDungeon has no walkthrough for the game.
+ */
+fun startUrl(site: GuideSite, name: String): String? {
+    val q = cleanName(name)
+    fun encode(text: String) = URLEncoder.encode(text, Charsets.UTF_8)
+    return when (site) {
+        GuideSite.GAMEFAQS -> "https://${site.host}/search?game=${encode(q)}"
+        // Neoseeker's search shows its blank form for a query with a colon in it.
+        GuideSite.NEOSEEKER -> "https://${site.host}/seeker.php?q=${encode(q.replace(":", ""))}&searchby=product&area=all"
+        GuideSite.ZELDADUNGEON -> zeldaDungeonWalkthrough(q)?.let { "https://${site.host}/$it/" }
+    }
+}
+
+/**
+ * The walkthrough whose title is in [name] ("Link's Awakening" in "The Legend of Zelda: Link's Awakening DX"),
+ * the longest if several are; the first game's only for that exact name, which every other title contains.
+ */
+private fun zeldaDungeonWalkthrough(name: String): String? {
+    val key = matchKey(name)
+    return ZELDADUNGEON_WALKTHROUGHS
+        .map { it to matchKey(it.removeSuffix("-guide").removeSuffix("-walkthrough")) }
+        .filter { (_, title) -> if (title == "thelegendofzelda") key == title else title in key }
+        .maxByOrNull { it.second.length }?.first
+}
+
+/** The guide site [url] is on, if any. */
+fun siteOf(url: String): GuideSite? = runCatching { URI(url).host }.getOrNull()?.let { host ->
+    GuideSite.entries.firstOrNull { it.host == host || it.host == "www.$host" }
+}
+
+/**
+ * Whether [url] is a guide's page, written from guide URLs seen on each site on 2026-10-30:
+ * - GameFAQs `/gameboy/563277-the-legend-of-zelda-links-awakening/faqs/18445`, plus `/main-walkthrough` for a page;
+ * - Neoseeker `/linkdx/faqs/182906-zelda-links-awakening-h.html` and its wiki walkthroughs,
+ *   `/metroid-samus-returns/walkthrough/Collectathon_-_Surface` and `/animal-well/Path_of_the_Seahorse_(B._Flame)`;
+ * - ZeldaDungeon `/links-awakening-walkthrough/` and its chapters, `/links-awakening-walkthrough/tail-cave/`.
+ */
+fun isGuidePage(url: String): Boolean {
+    val path = runCatching { URI(url).path }.getOrNull() ?: return false
+    val pattern = when (siteOf(url) ?: return false) {
+        GuideSite.GAMEFAQS -> GAMEFAQS_GUIDE
+        GuideSite.NEOSEEKER -> NEOSEEKER_GUIDE
+        GuideSite.ZELDADUNGEON -> ZELDADUNGEON_GUIDE
+    }
+    return pattern.matches(path)
+}
+
+private val GAMEFAQS_GUIDE = Regex("/[^/]+/\\d+-[^/]+/faqs/\\d+(/[^/]+)?/?")
+private val NEOSEEKER_GUIDE = Regex("/[^/]+/(faqs/\\d+-[^/]+\\.html|walkthrough(/.*)?|[A-Z][^/]*)")
+private val ZELDADUNGEON_GUIDE = Regex("/[a-z0-9-]+-walkthrough(-guide)?/.*")
+
+/** Whether a page titled [title] is a bot check waiting on the browser or the user, as the sites showed them on 2026-10-30. */
+fun isBotCheck(title: String): Boolean = BOT_CHECK_TITLES.any { title.trim().startsWith(it, ignoreCase = true) }
+
+private val BOT_CHECK_TITLES = listOf("Just a moment", "Security check", "Attention Required!")
+
+/** `<site> - <title>.html`, at most 120 characters. */
+fun guideFileName(site: GuideSite, title: String): String {
+    val prefix = "${site.label} - "
+    return prefix + fileName(title).take(120 - prefix.length - ".html".length).trimEnd() + ".html"
 }
 
 /** ES-DE system → VGMaps atlas folder, from the atlas index on 2026-10-30. */
