@@ -137,6 +137,9 @@ identified with certainty (the notification shows the raw launch line instead).
 
 - The menu depends on Retroid's firmware: "Prevent pressing Home accidentally" must be on, and a
   firmware update could change its message.
+- Home leaves the game running in the background, as Retroid's own Home does: Android doesn't let
+  the app end another app. Relaunching the same game resumes it. A RetroArch left running closes
+  when ES-DE launches a different RetroArch game; launching that game again works.
 - RetroArch pauses while the menu or viewer is open. Other emulators and Android games are untested.
 - Clips are recorded at half resolution (640x480 on the Nova); the screenshot is full resolution.
   The Nova's encoder ignores bitrate settings, so size is controlled by resolution.
