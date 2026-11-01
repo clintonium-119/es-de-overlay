@@ -114,6 +114,8 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
     private val screenH = wm.maximumWindowMetrics.bounds.height()
     private var root: View? = null
     private var rows: List<TextView> = emptyList()
+    /** Shows the list [show] last put up again, for [error] to go back to. */
+    private var reshow: () -> Unit = {}
     private var captureView: View? = null
     private val captureParams = WindowManager.LayoutParams(
         1, 1,
@@ -126,6 +128,7 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
 
     fun show(items: List<String>, onPick: (Int) -> Unit, onClose: () -> Unit) {
         close()
+        reshow = { show(items, onPick, onClose) }
         val font = themeFont(context, prefs)
         val textPx = screenH * LIST_FONT
         val rowPx = (textPx * LIST_SPACING).toInt()
@@ -207,6 +210,13 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
      */
     fun relabel(i: Int, label: String) {
         rows.getOrNull(i)?.text = label
+    }
+
+    /** Replaces an open menu's list with [text] as its only row; B goes back to the list. */
+    fun error(text: String) {
+        if (!isOpen) return
+        val back = reshow
+        show(listOf(text), {}, back)
     }
 
     fun close() {

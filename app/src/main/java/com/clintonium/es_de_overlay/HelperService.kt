@@ -139,6 +139,10 @@ class HelperService : Service() {
             onHomeGuard()
             return START_NOT_STICKY
         }
+        if (intent?.action == ACTION_OPEN_FAILED) {
+            menu.error("Couldn't open ${intent.getStringExtra(EXTRA_NAME)}")
+            return START_NOT_STICKY
+        }
         // The microphone type lets playback capture record game audio while the game is in front.
         startForeground(
             ONGOING_ID,
@@ -492,6 +496,9 @@ class HelperService : Service() {
         const val EXTRA_CODE = "code"
         const val EXTRA_DATA = "data"
         const val ACTION_HOME_GUARD = "com.clintonium.es_de_overlay.HOME_GUARD"
+        /** From the viewer's process: opening [EXTRA_NAME] failed, which the menu underneath shows. */
+        const val ACTION_OPEN_FAILED = "com.clintonium.es_de_overlay.OPEN_FAILED"
+        const val EXTRA_NAME = "name"
         var running by mutableStateOf(false)
     }
 }

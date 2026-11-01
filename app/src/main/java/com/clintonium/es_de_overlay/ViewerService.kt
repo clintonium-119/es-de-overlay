@@ -4,11 +4,8 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Handler
-import android.os.Looper
 import android.os.Process
 import android.util.Log
-import android.widget.Toast
 import com.clintonium.es_de_overlay.core.GameRef
 
 /**
@@ -54,13 +51,14 @@ class ViewerService : Service() {
         show(name) { viewer.open(treeChild(prefs.esdeTree!!, path), name, path) { stopSelf() } }
     }
 
-    /** Runs [open] for [name]; if it fails, says so and ends the service. */
+    /** Runs [open] for [name]; if it fails, says so in the menu underneath (a toast would draw below it) and ends the service. */
     private fun show(name: String, open: () -> Unit) {
         runCatching(open).onFailure {
             Log.e(TAG, "opening $name failed", it)
-            Toast.makeText(this, "Couldn't open $name: ${it.message}", Toast.LENGTH_SHORT).show()
-            // Ending the process at once could take the toast with it.
-            Handler(Looper.getMainLooper()).postDelayed({ stopSelf() }, 2_500)
+            startService(
+                Intent(this, HelperService::class.java).setAction(HelperService.ACTION_OPEN_FAILED).putExtra(HelperService.EXTRA_NAME, name),
+            )
+            stopSelf()
         }
     }
 

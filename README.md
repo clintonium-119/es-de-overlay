@@ -61,7 +61,7 @@ Open **ES-DE Overlay** (ES-DE also lists it under Android Apps) and:
   saves. A toast and a notification name the saved files, e.g.
   `Saved: snes/screenshots/02) Hacks/Easyland.png, snes/videos/02) Hacks/Easyland.mp4`.
 - **Manual** and **Guide** only appear when the game has one. With several guides, Guide shows a
-  list first.
+  list first. A file that won't open shows `Couldn't open <name>` in the menu; **B** goes back.
 - **Find guides** checks VGMaps and StrategyWiki for the game and lists the ones that have it, e.g.
   `VGMaps: 56 maps` and `StrategyWiki: Shantae (2 pages)`. Picking one saves it with progress in the
   menu (**B** cancels and saves nothing) and then opens it; Guide lists it from then on. Picking a
