@@ -8,6 +8,7 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.InsetDrawable
 import android.os.SystemClock
 import android.text.SpannableStringBuilder
+import android.text.TextUtils
 import android.text.style.ForegroundColorSpan
 import android.util.TypedValue
 import android.view.Gravity
@@ -137,7 +138,10 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
                 typeface = font
                 setTextSize(TypedValue.COMPLEX_UNIT_PX, textPx)
                 gravity = Gravity.CENTER_VERTICAL
-                maxLines = 1
+                // A row too wide for the list scrolls sideways while selected, like a long name in ES-DE's gamelist.
+                isSingleLine = true
+                ellipsize = TextUtils.TruncateAt.MARQUEE
+                marqueeRepeatLimit = -1
                 layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, rowPx)
             }
         }
@@ -145,6 +149,7 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
         fun select(i: Int) {
             selected = i
             rows.forEachIndexed { n, row ->
+                row.isSelected = false
                 row.setTextColor(if (n == i) PILL_TEXT else TEXT)
                 row.background = if (n == i) {
                     InsetDrawable(GradientDrawable().apply { setColor(PILL); cornerRadius = rowPx / 2f }, 0, pillInset, 0, pillInset)
@@ -154,7 +159,11 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
                 // A background with padding replaces the view's own, so set it back.
                 row.setPadding(textInset, 0, textInset, 0)
             }
-            rows.getOrNull(i)?.let { it.requestRectangleOnScreen(Rect(0, 0, it.width, it.height)) }
+            rows.getOrNull(i)?.let {
+                it.requestRectangleOnScreen(Rect(0, 0, it.width, it.height))
+                // The theme's textHorizontalScrollDelay: a long row starts scrolling a second after it's selected.
+                it.postDelayed({ it.isSelected = selected == i }, 1_000)
+            }
         }
         select(0)
         val list = LinearLayout(context).apply {

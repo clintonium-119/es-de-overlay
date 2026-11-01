@@ -119,6 +119,7 @@ Checked on the Nova on 2026-10-30 with Shantae (`gbc/Shantae.zip`), Super Metroi
 - **Image hosts.** StrategyWiki's images (`cdn.wikimg.net`) and VGMaps' maps answer plain requests with the app's User-Agent.
 - **Testing Home over adb.** `input keyevent KEYCODE_HOME` and `KEYCODE_MOVE_HOME` go straight to ES-DE without Retroid's message, so the menu needs the physical button.
 - **RetroArch and a second launch.** A RetroArch left running in the background after Home receives ES-DE's next launch as a new intent, closes itself and exits; launching again works.
+- **Long rows.** A `TextView` with `maxLines = 1` wraps at a space and shows only the first line, so a long label lost its end. Rows are now single-line marquees, started a second after selection (the theme's `textHorizontalScrollDelay` is 1).
 
 ## The guide browser
 

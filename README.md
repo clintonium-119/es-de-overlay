@@ -54,7 +54,8 @@ Open **ES-DE Overlay** (ES-DE also lists it under Android Apps) and:
 ## Use
 
 - Launch a game from ES-DE and press **Home** once. The menu opens; the D-pad moves, **A** opens,
-  **B** closes it and returns to the game. With the menu or a guide open, Home goes to ES-DE.
+  **B** closes it and returns to the game. With the menu or a guide open, Home goes to ES-DE. A row
+  too long for the screen scrolls sideways a second after it's selected, as in ES-DE's gamelist.
 - **Capture** closes the menu, waits for Retroid's Home message to clear, then takes the screenshot
   and records the clip. Press Home during the clip to stop early; leaving the game also stops and
   saves. A toast and a notification name the saved files, e.g.
