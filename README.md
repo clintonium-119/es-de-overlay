@@ -152,6 +152,8 @@ identified with certainty (the notification shows the raw launch line instead).
 - Quit game and Close when you leave need the overlay running. Switch games that take nearly all
   the Nova's memory in Eden (Super Mario Odyssey, Mario + Rabbids) make Android end the overlay
   within seconds, so the menu doesn't open; a lower CPU clock doesn't change this.
+- When Android ends the overlay for memory, it starts it again by itself a few seconds later. The
+  capture permission is lost with it, so the next Capture asks for it again.
 - RetroArch pauses while the menu or viewer is open. Other emulators and Android games are untested.
 - Clips are recorded at half resolution (640x480 on the Nova); the screenshot is full resolution.
   The Nova's encoder ignores bitrate settings, so size is controlled by resolution.

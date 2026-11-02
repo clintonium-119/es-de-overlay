@@ -135,15 +135,19 @@ class HelperService : Service() {
         }, 0, 1, TimeUnit.SECONDS)
     }
 
+    /**
+     * Every start returns sticky (Android keeps only the latest start's answer): after Android ends the process for
+     * memory, it starts the service again with no intent, so without capture consent. Stopping the service ends it for good.
+     */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_HOME_GUARD) {
             Log.i(TAG, "home guard")
             onHomeGuard()
-            return START_NOT_STICKY
+            return START_STICKY
         }
         if (intent?.action == ACTION_OPEN_FAILED) {
             menu.error("Couldn't open ${intent.getStringExtra(EXTRA_NAME)}")
-            return START_NOT_STICKY
+            return START_STICKY
         }
         // The microphone type lets playback capture record game audio while the game is in front.
         startForeground(
@@ -161,7 +165,7 @@ class HelperService : Service() {
             Log.i(TAG, "capture consent granted: ${projection != null}")
         }
         running = true
-        return START_NOT_STICKY
+        return START_STICKY
     }
 
     override fun onDestroy() {
