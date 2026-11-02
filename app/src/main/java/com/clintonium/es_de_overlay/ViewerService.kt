@@ -44,11 +44,19 @@ class ViewerService : Service() {
         return START_NOT_STICKY
     }
 
-    /** Swaps the browser for the viewer on the guide it just saved at [path] below the ES-DE folder. */
+    /**
+     * Swaps the browser for the viewer on the guide it just saved at [path] below the ES-DE folder. Closing the viewer
+     * has the menu underneath list the guides again, now with this one.
+     */
     private fun showSaved(path: String) {
         browser.close()
         val name = path.substringAfterLast('/')
-        show(name) { viewer.open(treeChild(prefs.esdeTree!!, path), name, path) { stopSelf() } }
+        show(name) {
+            viewer.open(treeChild(prefs.esdeTree!!, path), name, path) {
+                startService(Intent(this, HelperService::class.java).setAction(HelperService.ACTION_GUIDE_SAVED))
+                stopSelf()
+            }
+        }
     }
 
     /** Runs [open] for [name]; if it fails, says so in the menu underneath (a toast would draw below it) and ends the service. */

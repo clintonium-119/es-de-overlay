@@ -151,6 +151,12 @@ class HelperService : Service() {
             menu.error("Couldn't open ${intent.getStringExtra(EXTRA_NAME)}")
             return START_STICKY
         }
+        if (intent?.action == ACTION_GUIDE_SAVED) {
+            val g = currentGame()
+            val name = launch?.name
+            if (menu.isOpen && g != null && name != null) relist(g, name)
+            return START_STICKY
+        }
         // The microphone type lets playback capture record game audio while the game is in front.
         startForeground(
             ONGOING_ID,
@@ -278,10 +284,52 @@ class HelperService : Service() {
                     startCapture(g, keepShot = mode != 1, keepVideo = mode != 0)
                 }, back)
                 "Quit game" -> quitGame()
-                // Several guides get their own list; B there returns to this menu.
-                else -> if (guides.size == 1) view(guides[0]) else menu.show(guides.map { it.name }, { view(guides[it]) }, back)
+                else -> guidesList(g, name, guides, back)
             }
         }, menu::release, start = start)
+    }
+
+    /** Main thread: the game's [guides], then Find guides, with the cursor on [start]. X on a guide asks to delete it. */
+    private fun guidesList(g: GameRef, name: String, guides: List<Doc>, back: () -> Unit, start: Int = 0) {
+        menu.show(guides.map { it.name } + "Find guides", { i ->
+            if (i < guides.size) view(guides[i]) else findGuides(g, name) { guidesList(g, name, guides, back, i) }
+        }, back, "Delete" to { i ->
+            if (i < guides.size) confirmDelete(g, name, guides[i], i) { guidesList(g, name, guides, back, i) }
+        }, start)
+    }
+
+    /** Main thread: Delete removes [doc] (row [at] of the Guides list) and lists the guides again; Keep and B go to [keep]. */
+    private fun confirmDelete(g: GameRef, name: String, doc: Doc, at: Int, keep: () -> Unit) {
+        menu.show(listOf("Delete \"${doc.name}\"", "Keep"), { i ->
+            if (i == 1) {
+                keep()
+                return@show
+            }
+            io.execute {
+                val deleted = runCatching { deleteGuide(g, doc) }.onFailure { Log.w(TAG, "deleting ${doc.key} failed", it) }
+                main.post {
+                    if (deleted.getOrDefault(false)) relist(g, name, at) else menu.show(listOf("Couldn't delete ${doc.name}"), {}, keep)
+                }
+            }
+        }, keep)
+    }
+
+    /**
+     * Main thread: lists the game's guides again and shows them with the cursor on [start], or the main menu when none
+     * are left. Does nothing if the menu has closed meanwhile.
+     */
+    private fun relist(g: GameRef, name: String, start: Int = 0) {
+        io.execute {
+            val (manual, guides, info) = runCatching { documents(g) }
+                .onFailure { Log.w(TAG, "looking up manual and guides failed", it) }
+                .getOrDefault(Triple(null, emptyList(), null))
+            main.post {
+                if (!menu.isOpen) return@post
+                // The row after Resume: Guides, or Find guides once none are left.
+                val toMenu = { openMenu(g, name, manual, guides, info, start = 1) }
+                if (guides.isEmpty()) toMenu() else guidesList(g, name, guides, toMenu, start)
+            }
+        }
     }
 
     /**
@@ -412,6 +460,20 @@ class HelperService : Service() {
             contentResolver.openInputStream(treeChild(tree, "gamelists/${g.system}/gamelist.xml"))!!.use { gamelistInfo(it, g.romRelativePath) }
         }.getOrNull()
         return Triple(manual, guides, info)
+    }
+
+    /** io thread: deletes [g]'s guide [doc], and the game's `<base>/` guides folder when that leaves it empty. */
+    private fun deleteGuide(g: GameRef, doc: Doc): Boolean {
+        // documents() lists guides only below the game's guides path; never delete anything else.
+        check(doc.key.startsWith("downloaded_media/${g.system}/guides/")) { "not a guide: ${doc.key}" }
+        if (!DocumentsContract.deleteDocument(contentResolver, doc.uri)) return false
+        val tree = prefs.esdeTree!!
+        val dir = isDirectory(this, prefs.romsTree!!, "${g.system}/${g.romRelativePath}")
+        val folder = DocumentsContract.getTreeDocumentId(tree) + "/downloaded_media/" + guidePath(g, dir).joinToString("/")
+        if (DocumentsContract.getDocumentId(doc.uri).startsWith("$folder/") && children(this, tree, folder).isEmpty()) {
+            DocumentsContract.deleteDocument(contentResolver, DocumentsContract.buildDocumentUriUsingTree(tree, folder))
+        }
+        return true
     }
 
     /**
@@ -579,6 +641,8 @@ class HelperService : Service() {
         const val ACTION_HOME_GUARD = "com.clintonium.es_de_overlay.HOME_GUARD"
         /** From the viewer's process: opening [EXTRA_NAME] failed, which the menu underneath shows. */
         const val ACTION_OPEN_FAILED = "com.clintonium.es_de_overlay.OPEN_FAILED"
+        /** From the viewer's process: the viewer on a guide just saved from the browser has closed, so list the guides again. */
+        const val ACTION_GUIDE_SAVED = "com.clintonium.es_de_overlay.GUIDE_SAVED"
         const val EXTRA_NAME = "name"
         var running by mutableStateOf(false)
     }
