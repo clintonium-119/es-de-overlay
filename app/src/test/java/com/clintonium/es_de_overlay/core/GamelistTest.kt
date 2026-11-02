@@ -1,10 +1,11 @@
 package com.clintonium.es_de_overlay.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class GamelistTest {
-    // Shaped like the Nova's gamelists/androidgames/gamelist.xml, plus entity and duplicate cases.
+    // Shaped like the Nova's gamelists/androidgames/gamelist.xml and gbc's Shantae entry, plus entity and duplicate cases.
     private val xml = """
         <?xml version="1.0"?>
         <gameList>
@@ -24,6 +25,20 @@ class GamelistTest {
         	<game>
         		<path>./02) Hacks/Tetris &amp; Dr. Mario.sfc</path>
         		<name>Tetris &amp; Dr. Mario</name>
+        	</game>
+        	<game>
+        		<path>./Shantae.zip</path>
+        		<name>Shantae</name>
+        		<desc>Scuttle Town &amp; its genie.
+
+        Risky Boots invades.</desc>
+        		<rating>0.8</rating>
+        		<releasedate>20020602T000000</releasedate>
+        		<developer>Wayforward</developer>
+        		<publisher>Capcom</publisher>
+        		<genre>Platform</genre>
+        		<players>1</players>
+        		<playcount>29</playcount>
         	</game>
         </gameList>
     """.trimIndent()
@@ -47,5 +62,28 @@ class GamelistTest {
             lookup("Tetris & Dr. Mario"),
         )
         assertEquals(emptyList<String>(), lookup("Super Metroid"))
+    }
+
+    @Test
+    fun `metadata resolves by path with entities decoded`() {
+        assertEquals(
+            GameInfo("Wayforward", "Capcom", "2002-06-02", "Platform", "1", "Scuttle Town & its genie.\n\nRisky Boots invades."),
+            gamelistInfo(xml.byteInputStream(), "Shantae.zip"),
+        )
+    }
+
+    @Test
+    fun `an entry without metadata gives nulls and an unknown path gives null`() {
+        assertEquals(GameInfo(null, null, null, null, null, null), gamelistInfo(xml.byteInputStream(), "Dead Cells.app"))
+        assertNull(gamelistInfo(xml.byteInputStream(), "Super Metroid.sfc"))
+    }
+
+    @Test
+    fun `release dates become ISO dates or null`() {
+        assertEquals("2002-06-02", isoDate("20020602T000000"))
+        assertEquals("2002-06-02", isoDate("20020602"))
+        assertNull(isoDate(""))
+        assertNull(isoDate("2002"))
+        assertNull(isoDate("not-a-date-time"))
     }
 }

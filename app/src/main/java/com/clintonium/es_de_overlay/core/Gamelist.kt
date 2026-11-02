@@ -4,12 +4,42 @@ import java.io.InputStream
 import javax.xml.parsers.DocumentBuilderFactory
 import org.w3c.dom.Element
 
-/** ROM-relative paths (without the leading "./") of the gamelist.xml games whose <name> is [name]. */
-fun gamelistPaths(xml: InputStream, name: String): List<String> {
+/** A game's gamelist.xml metadata; a field is null when its tag is missing or empty. [released] is an ISO date. */
+data class GameInfo(
+    val developer: String?,
+    val publisher: String?,
+    val released: String?,
+    val genre: String?,
+    val players: String?,
+    val description: String?,
+)
+
+private fun games(xml: InputStream): List<Element> {
     val games = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(xml).getElementsByTagName("game")
-    return (0 until games.length).mapNotNull { i ->
-        val game = games.item(i) as Element
-        fun text(tag: String) = game.getElementsByTagName(tag).item(0)?.textContent?.trim()
-        if (text("name") == name.trim()) text("path")?.removePrefix("./") else null
-    }
+    return (0 until games.length).map { games.item(it) as Element }
 }
+
+private fun Element.text(tag: String) = getElementsByTagName(tag).item(0)?.textContent?.trim()
+
+/** ROM-relative paths (without the leading "./") of the gamelist.xml games whose <name> is [name]. */
+fun gamelistPaths(xml: InputStream, name: String): List<String> =
+    games(xml).mapNotNull { if (it.text("name") == name.trim()) it.text("path")?.removePrefix("./") else null }
+
+/** The metadata of the gamelist.xml game at [romRelativePath], or null when the gamelist has no such game. */
+fun gamelistInfo(xml: InputStream, romRelativePath: String): GameInfo? =
+    games(xml).firstOrNull { it.text("path")?.removePrefix("./") == romRelativePath }?.let { game ->
+        fun field(tag: String) = game.text(tag)?.takeIf { it.isNotEmpty() }
+        GameInfo(
+            developer = field("developer"),
+            publisher = field("publisher"),
+            released = field("releasedate")?.let(::isoDate),
+            genre = field("genre"),
+            players = field("players"),
+            description = field("desc"),
+        )
+    }
+
+/** ES-DE's `YYYYMMDDTHHMMSS` release date as `YYYY-MM-DD`, or null when it doesn't start with eight digits. */
+fun isoDate(releasedate: String): String? = releasedate.take(8)
+    .takeIf { it.length == 8 && it.all(Char::isDigit) }
+    ?.let { "${it.take(4)}-${it.substring(4, 6)}-${it.substring(6)}" }
