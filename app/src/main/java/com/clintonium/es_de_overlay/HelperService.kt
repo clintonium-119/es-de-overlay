@@ -258,8 +258,10 @@ class HelperService : Service() {
     /** Main thread: the main menu with the cursor on row [start]. */
     private fun openMenu(g: GameRef, name: String, manual: Doc?, guides: List<Doc>, info: GameInfo?, start: Int = 0) {
         val guidesRow = if (guides.isNotEmpty()) "Guides" else prefs.esdeTree?.let { "Find Guides" }
+        // ES-DE adds an entry with only a play count when it launches a game; that gives Game Info nothing to show.
+        val infoRow = info?.takeIf { it != GameInfo(null, null, null, null, null, null) }?.let { "Game Info" }
         val items = listOfNotNull(
-            "Resume", guidesRow, manual?.let { "Manual" }, info?.let { "Game Info" }, "Capture", "Quit Game",
+            "Resume", guidesRow, manual?.let { "Manual" }, infoRow, "Capture", "Quit Game",
         )
         menu.show(items, { i ->
             // B in a screen opened from here comes back to its row.
