@@ -94,11 +94,15 @@ Open **ES-DE Overlay** (ES-DE also lists it under Android Apps) and:
   (`.html`) scroll the same way, L1/R1 change the text size, L2/R2 move between sections, entries in
   the contents list can be tapped, and **B** first steps back through tapped links, then closes.
 - **Quit game** (the last row) ends the game's app at once, with no confirmation, and ES-DE comes
-  back. It works for any game ES-DE launched, emulator or Android game. The game gets no chance to
-  save: anything since its last save is lost (RetroArch's SRAM autosave runs every 10 s here).
+  back. It works for any game ES-DE launched, emulator or Android game. It closes without warning:
+  your saves are kept, but progress since your last save is lost (RetroArch writes in-game saves
+  every 10 s here), and an emulator's save-on-exit doesn't run.
 - **Close when you leave**, at the end of the app's settings, lists every app with an icon, all off
-  at first. With an app switched on, going back to ES-DE from a game in it ends that app the same
-  way, so Home twice works like Quit game.
+  at first. Switch on an app to close it completely when you go back to ES-DE from a game ES-DE
+  started in it, as Quit game does, so its next launch starts fresh. It closes without warning:
+  your saves are kept, but progress since your last save is lost, and an emulator's save-on-exit
+  doesn't run. Android's Settings app shows for a moment while it closes. Apps left off keep
+  running in the background, as with Retroid's own Home.
 - Every guide and manual reopens at the page or place where you left it, also after a restart.
 - ES-DE shows new media when you return to the gamelist; no reload needed.
 
