@@ -259,7 +259,7 @@ class HelperService : Service() {
     private fun openMenu(g: GameRef, name: String, manual: Doc?, guides: List<Doc>, info: GameInfo?, start: Int = 0) {
         val guidesRow = if (guides.isNotEmpty()) "Guides" else prefs.esdeTree?.let { "Find guides" }
         val items = listOfNotNull(
-            "Resume", guidesRow, manual?.let { "Manual" }, info?.let { "Game info" }, "Capture", "Quit game",
+            "Resume", guidesRow, manual?.let { "Manual" }, info?.let { "Game Info" }, "Capture", "Quit Game",
         )
         menu.show(items, { i ->
             // B in a screen opened from here comes back to its row.
@@ -268,7 +268,7 @@ class HelperService : Service() {
                 "Resume" -> menu.release()
                 "Manual" -> view(manual!!)
                 "Find guides" -> findGuides(g, name, back)
-                "Game info" -> menu.info(
+                "Game Info" -> menu.info(
                     listOfNotNull(
                         info!!.developer?.let { "Developer" to it },
                         info.publisher?.let { "Publisher" to it },
@@ -283,7 +283,7 @@ class HelperService : Service() {
                     menu.release()
                     startCapture(g, keepShot = mode != 1, keepVideo = mode != 0)
                 }, back)
-                "Quit game" -> quitGame()
+                "Quit Game" -> quitGame()
                 else -> guidesList(g, name, guides, back)
             }
         }, menu::release, start = start)

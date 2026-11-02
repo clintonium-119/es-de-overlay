@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.Typeface
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.InsetDrawable
 import android.os.SystemClock
@@ -287,7 +288,9 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
             }
             clipToOutline = true
             if (image != null) {
-                addView(ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_CROP; setImageBitmap(image) })
+                // Unfiltered, so pixel art keeps hard edges, as ES-DE's default nearest interpolation scales it.
+                val drawable = BitmapDrawable(context.resources, image).apply { isFilterBitmap = false }
+                addView(ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_CROP; setImageDrawable(drawable) })
             } else {
                 addView(
                     TextView(context).apply {

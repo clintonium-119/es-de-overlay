@@ -220,7 +220,7 @@ class SettingsActivity : ComponentActivity() {
 
             Section("Close when you leave")
             Text(
-                "Switch on an app to close it completely when you go back to ES-DE from a game ES-DE started in it, as Quit game does, so its next launch starts fresh. It closes without warning: your saves are kept, but progress since your last save is lost, and an emulator's save-on-exit doesn't run. Android's Settings app shows for a moment while it closes.",
+                "Switch on an app to close it completely when you go back to ES-DE from a game ES-DE started in it, as Quit Game does, so its next launch starts fresh. It closes without warning: your saves are kept, but progress since your last save is lost, and an emulator's save-on-exit doesn't run. Android's Settings app shows for a moment while it closes.",
                 style = MaterialTheme.typography.bodySmall,
             )
             apps.forEach { (pkg, label) ->
