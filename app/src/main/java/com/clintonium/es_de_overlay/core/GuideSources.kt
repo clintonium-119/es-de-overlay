@@ -37,7 +37,7 @@ fun matchKey(name: String): String {
 /** [title] as a file name the SD card accepts: "A: B" becomes "A - B", other reserved characters "_". */
 fun fileName(title: String) = title.replace(": ", " - ").replace(Regex("[\\\\/:*?\"<>|]"), "_")
 
-/** The guide sites only a browser gets into, which Find guides opens in the touch browser. */
+/** The guide sites only a browser gets into, which Find Guides opens in the touch browser. */
 enum class GuideSite(val label: String, val host: String) {
     GAMEFAQS("GameFAQs", "gamefaqs.gamespot.com"),
     NEOSEEKER("Neoseeker", "www.neoseeker.com"),

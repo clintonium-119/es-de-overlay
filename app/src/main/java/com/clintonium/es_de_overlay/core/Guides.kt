@@ -1,6 +1,6 @@
 package com.clintonium.es_de_overlay.core
 
-/** Guide formats the viewer reads, including the self-contained HTML that Find guides saves. CBR (a RAR archive) is left out. */
+/** Guide formats the viewer reads, including the self-contained HTML that Find Guides saves. CBR (a RAR archive) is left out. */
 val GUIDE_EXTENSIONS = setOf("pdf", "txt", "png", "jpg", "jpeg", "cbz", "html")
 
 /** ES-DE's scraped manual below downloaded_media, paired with the ROM like its other media. */

@@ -104,7 +104,7 @@ class HelperService : Service() {
     private var projection: MediaProjection? = null
     private var capture: Capture? = null
     private var guardAt = 0L
-    /** Main thread: the cancel flag of the running Find guides check or save, set when the menu goes away. */
+    /** Main thread: the cancel flag of the running Find Guides check or save, set when the menu goes away. */
     private var finding: AtomicBoolean? = null
 
     // Written on the io thread, read on main.
@@ -239,7 +239,7 @@ class HelperService : Service() {
             return
         }
         val g = currentGame() ?: return
-        // ES-DE's name for the game, which Find guides looks up.
+        // ES-DE's name for the game, which Find Guides looks up.
         val name = launch?.name ?: return
         guardAt = SystemClock.uptimeMillis()
         io.execute {
@@ -257,7 +257,7 @@ class HelperService : Service() {
 
     /** Main thread: the main menu with the cursor on row [start]. */
     private fun openMenu(g: GameRef, name: String, manual: Doc?, guides: List<Doc>, info: GameInfo?, start: Int = 0) {
-        val guidesRow = if (guides.isNotEmpty()) "Guides" else prefs.esdeTree?.let { "Find guides" }
+        val guidesRow = if (guides.isNotEmpty()) "Guides" else prefs.esdeTree?.let { "Find Guides" }
         val items = listOfNotNull(
             "Resume", guidesRow, manual?.let { "Manual" }, info?.let { "Game Info" }, "Capture", "Quit Game",
         )
@@ -267,7 +267,7 @@ class HelperService : Service() {
             when (items[i]) {
                 "Resume" -> menu.release()
                 "Manual" -> view(manual!!)
-                "Find guides" -> findGuides(g, name, back)
+                "Find Guides" -> findGuides(g, name, back)
                 "Game Info" -> menu.info(
                     listOfNotNull(
                         info!!.developer?.let { "Developer" to it },
@@ -279,7 +279,7 @@ class HelperService : Service() {
                     info.description,
                     back,
                 )
-                "Capture" -> menu.show(listOf("Screenshot", "Video", "Screenshot and video"), { mode ->
+                "Capture" -> menu.show(listOf("Screenshot", "Video", "Screenshot and Video"), { mode ->
                     menu.release()
                     startCapture(g, keepShot = mode != 1, keepVideo = mode != 0)
                 }, back)
@@ -289,9 +289,9 @@ class HelperService : Service() {
         }, menu::release, start = start)
     }
 
-    /** Main thread: the game's [guides], then Find guides, with the cursor on [start]. X on a guide asks to delete it. */
+    /** Main thread: the game's [guides], then Find Guides, with the cursor on [start]. X on a guide asks to delete it. */
     private fun guidesList(g: GameRef, name: String, guides: List<Doc>, back: () -> Unit, start: Int = 0) {
-        menu.show(guides.map { it.name } + "Find guides", { i ->
+        menu.show(guides.map { it.name } + "Find Guides", { i ->
             if (i < guides.size) view(guides[i]) else findGuides(g, name) { guidesList(g, name, guides, back, i) }
         }, back, "Delete" to { i ->
             if (i < guides.size) confirmDelete(g, name, guides[i], i) { guidesList(g, name, guides, back, i) }
@@ -325,7 +325,7 @@ class HelperService : Service() {
                 .getOrDefault(Triple(null, emptyList(), null))
             main.post {
                 if (!menu.isOpen) return@post
-                // The row after Resume: Guides, or Find guides once none are left.
+                // The row after Resume: Guides, or Find Guides once none are left.
                 val toMenu = { openMenu(g, name, manual, guides, info, start = 1) }
                 if (guides.isEmpty()) toMenu() else guidesList(g, name, guides, toMenu, start)
             }
@@ -369,10 +369,10 @@ class HelperService : Service() {
             val progress: (String) -> Unit = { label -> main.post { if (!cancelled.get()) menu.relabel(0, label) } }
             val found = buildList<Pair<String, () -> String>> {
                 if (maps.isNotEmpty()) {
-                    add("VGMaps: ${maps.size} maps" to { saveVgmaps(writer, cacheDir, g, dir, name, maps, progress, cancelled::get) })
+                    add("VGMaps: ${maps.size} Maps" to { saveVgmaps(writer, cacheDir, g, dir, name, maps, progress, cancelled::get) })
                 }
                 wiki?.let { (title, pages) ->
-                    add("StrategyWiki: $title (${pages.size} pages)" to {
+                    add("StrategyWiki: $title (${pages.size} Pages)" to {
                         saveStrategyWiki(writer, cacheDir, g, dir, title, pages, progress, cancelled::get)
                     })
                 }
