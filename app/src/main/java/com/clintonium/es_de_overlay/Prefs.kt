@@ -28,6 +28,10 @@ class Prefs(context: Context) {
     var bootStart: Boolean
         get() = sp.getBoolean("bootStart", false)
         set(v) = sp.edit().putBoolean("bootStart", v).apply()
+    /** Packages force-stopped when ES-DE comes back after a game in them. */
+    var closeOnLeave: Set<String>
+        get() = sp.getStringSet("closeOnLeave", emptySet())!!.toSet()
+        set(v) = sp.edit().putStringSet("closeOnLeave", v).apply()
 
     /** Where the viewer left a document (a page, or a scroll fraction), keyed by its path below the ES-DE folder. */
     fun position(key: String) = positions.getInt(key, 0)

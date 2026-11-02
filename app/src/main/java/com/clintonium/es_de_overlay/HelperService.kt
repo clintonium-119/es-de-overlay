@@ -111,6 +111,8 @@ class HelperService : Service() {
     @Volatile private var foreground: String? = null
 
     // io thread only.
+    /** The launched game's package once it has been in front, until ES-DE is back in front. */
+    private var played: String? = null
     private var logOffset = 0L
     private var logHead = ""
     private var eventsSince = 0L
@@ -186,6 +188,16 @@ class HelperService : Service() {
             foreground = fg
             Log.i(TAG, "foreground: $fg (current game: ${currentGame()})")
         }
+        val pkg = launch?.pkg
+        if (fg == pkg) {
+            played = pkg
+        } else if (fg == ESDE_PACKAGE) {
+            played?.takeIf { it in prefs.closeOnLeave }?.let {
+                launch = null
+                HomeGuardService.forceStop(it)
+            }
+            played = null
+        }
         main.post { onForeground(fg) }
     }
 
@@ -230,6 +242,7 @@ class HelperService : Service() {
         val back = { openMenu(g, name, manual, guides) }
         val items = listOfNotNull(
             "Capture", manual?.let { "Manual" }, guides.firstOrNull()?.let { "Guide" }, prefs.esdeTree?.let { "Find guides" },
+            "Quit game",
         )
         menu.show(items, { i ->
             when (items[i]) {
@@ -239,10 +252,25 @@ class HelperService : Service() {
                 }
                 "Manual" -> view(manual!!)
                 "Find guides" -> findGuides(g, name, back)
+                "Quit game" -> quitGame()
                 // Several guides get their own list; B there returns to this menu.
                 else -> if (guides.size == 1) view(guides[0]) else menu.show(guides.map { it.name }, { view(guides[it]) }, back)
             }
         }) {}
+    }
+
+    /**
+     * Main thread: force-stops the game's app, which then has no chance to save, and goes to ES-DE. Forgetting the
+     * launch keeps ES-DE's return from stopping it a second time.
+     */
+    private fun quitGame() {
+        val pkg = launch?.pkg ?: return
+        menu.close()
+        io.execute {
+            launch = null
+            played = null
+        }
+        HomeGuardService.forceStop(pkg)
     }
 
     /**

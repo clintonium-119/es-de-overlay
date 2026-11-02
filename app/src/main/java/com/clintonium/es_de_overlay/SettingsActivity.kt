@@ -87,6 +87,16 @@ class SettingsActivity : ComponentActivity() {
         var clip by remember { mutableStateOf(prefs.clipSeconds.toString()) }
         var overwrite by remember { mutableStateOf(prefs.overwrite) }
         var bootStart by remember { mutableStateOf(prefs.bootStart) }
+        var closeOnLeave by remember { mutableStateOf(prefs.closeOnLeave) }
+        // Every app with an icon, by name; not ES-DE itself or this app.
+        val apps = remember {
+            packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+                .map { it.activityInfo.applicationInfo }
+                .filter { it.packageName != packageName && it.packageName != ESDE_PACKAGE }
+                .distinctBy { it.packageName }
+                .map { it.packageName to it.loadLabel(packageManager).toString() }
+                .sortedBy { it.second.lowercase() }
+        }
 
         val pickEsde = treePicker { prefs.esdeTree = it }
         val pickRoms = treePicker { prefs.romsTree = it }
@@ -206,6 +216,21 @@ class SettingsActivity : ComponentActivity() {
             ) {
                 @Suppress("BatteryLife")
                 openSettings(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, withPackage = true)
+            }
+
+            Section("Close when you leave")
+            Text(
+                "Going back to ES-DE from a game ends the app it ran in, like Quit game in the menu. Settings shows for a moment while it does, and the game doesn't get to save.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            apps.forEach { (pkg, label) ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(label, Modifier.weight(1f))
+                    Switch(checked = pkg in closeOnLeave, onCheckedChange = { on ->
+                        closeOnLeave = if (on) closeOnLeave + pkg else closeOnLeave - pkg
+                        prefs.closeOnLeave = closeOnLeave
+                    })
+                }
             }
         }
     }

@@ -17,6 +17,7 @@ the `minui-menu-es-de-custom` theme:
 - **Find guides** looks the game up on StrategyWiki and VGMaps, and opens GameFAQs, Neoseeker and
   ZeldaDungeon in a touch browser over the game. It saves the guide you pick next to your own and
   opens it.
+- **Quit game** ends the game's app and returns to ES-DE.
 
 A second press of Home goes to ES-DE as usual. System screenshots (power + volume down) taken
 during a game are filed the same way as captures.
@@ -41,8 +42,8 @@ Open **ES-DE Overlay** (ES-DE also lists it under Android Apps) and:
 3. Grant the permission rows: notifications, game sound, read screenshots, display over other
    apps, usage access, and ignore battery optimization.
 4. **Home menu (accessibility service) → Open**, then turn on *ES-DE Overlay* in Android's
-   accessibility settings. It only listens for Retroid's Home message; it doesn't read or block
-   any buttons.
+   accessibility settings. It listens for Retroid's Home message, and for Quit game it presses
+   Force stop on the game's App Info page in Settings. It doesn't read or block any buttons.
 5. Keep Retroid's **Prevent pressing Home accidentally** on. The menu opens on the message it shows
    for the first Home press in a game.
 6. Optional: screenshot media type folder (default `screenshots`), clip length (default 15 s),
@@ -92,6 +93,12 @@ Open **ES-DE Overlay** (ES-DE also lists it under Android Apps) and:
   Text guides scroll with the D-pad (left/right by a page) and jump with L2/R2. Saved web guides
   (`.html`) scroll the same way, L1/R1 change the text size, L2/R2 move between sections, entries in
   the contents list can be tapped, and **B** first steps back through tapped links, then closes.
+- **Quit game** (the last row) ends the game's app at once, with no confirmation, and ES-DE comes
+  back. It works for any game ES-DE launched, emulator or Android game. The game gets no chance to
+  save: anything since its last save is lost (RetroArch's SRAM autosave runs every 10 s here).
+- **Close when you leave**, at the end of the app's settings, lists every app with an icon, all off
+  at first. With an app switched on, going back to ES-DE from a game in it ends that app the same
+  way, so Home twice works like Quit game.
 - Every guide and manual reopens at the page or place where you left it, also after a restart.
 - ES-DE shows new media when you return to the gamelist; no reload needed.
 
@@ -137,9 +144,14 @@ identified with certainty (the notification shows the raw launch line instead).
 
 - The menu depends on Retroid's firmware: "Prevent pressing Home accidentally" must be on, and a
   firmware update could change its message.
-- Home leaves the game running in the background, as Retroid's own Home does: Android doesn't let
-  the app end another app. Relaunching the same game resumes it. A RetroArch left running closes
-  when ES-DE launches a different RetroArch game; launching that game again works.
+- Home leaves the game running in the background, as Retroid's own Home does. Relaunching the same
+  game resumes it. A RetroArch left running closes when ES-DE launches a different RetroArch game;
+  launching that game again works. Quit game, or Close when you leave, ends it instead.
+- Android doesn't let the app end another app directly, so Quit game and Close when you leave go
+  through the app's App Info page in Settings, which shows for a moment.
+- Quit game and Close when you leave need the overlay running. Switch games that take nearly all
+  the Nova's memory in Eden (Super Mario Odyssey, Mario + Rabbids) make Android end the overlay
+  within seconds, so the menu doesn't open; a lower CPU clock doesn't change this.
 - RetroArch pauses while the menu or viewer is open. Other emulators and Android games are untested.
 - Clips are recorded at half resolution (640x480 on the Nova); the screenshot is full resolution.
   The Nova's encoder ignores bitrate settings, so size is controlled by resolution.
