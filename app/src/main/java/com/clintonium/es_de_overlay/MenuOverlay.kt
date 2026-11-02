@@ -199,7 +199,8 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
                 KeyEvent.KEYCODE_DPAD_DOWN -> select((selected + 1).coerceAtMost(rows.lastIndex))
                 KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER ->
                     if (rows.isNotEmpty()) onPick(selected)
-                KeyEvent.KEYCODE_BUTTON_X -> if (alt != null && rows.isNotEmpty()) alt.second(selected) else return@open false
+                // Always used: Android's gamepad key map turns an unused X into DPAD_CENTER, which would pick the row.
+                KeyEvent.KEYCODE_BUTTON_X -> if (alt != null && rows.isNotEmpty()) alt.second(selected)
                 KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK -> { close(); onClose() }
                 else -> return@open false
             }
