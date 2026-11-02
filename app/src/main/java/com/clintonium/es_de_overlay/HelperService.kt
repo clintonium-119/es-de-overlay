@@ -29,9 +29,11 @@ import android.widget.Toast
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.clintonium.es_de_overlay.core.GameInfo
 import com.clintonium.es_de_overlay.core.GameRef
 import com.clintonium.es_de_overlay.core.GuideSite
 import com.clintonium.es_de_overlay.core.Launch
+import com.clintonium.es_de_overlay.core.gamelistInfo
 import com.clintonium.es_de_overlay.core.guideEntries
 import com.clintonium.es_de_overlay.core.guidePath
 import com.clintonium.es_de_overlay.core.manualPath
@@ -235,32 +237,34 @@ class HelperService : Service() {
         val name = launch?.name ?: return
         guardAt = SystemClock.uptimeMillis()
         io.execute {
-            val (manual, guides) = runCatching { documents(g) }
+            val (manual, guides, info) = runCatching { documents(g) }
                 .onFailure { Log.w(TAG, "looking up manual and guides failed", it) }
-                .getOrDefault(null to emptyList())
+                .getOrDefault(Triple(null, emptyList(), null))
             val art = runCatching { screenshot(g) }.getOrNull()
             main.post {
                 menu.title = name
                 menu.art = art
-                openMenu(g, name, manual, guides)
+                openMenu(g, name, manual, guides, info)
             }
         }
     }
 
-    private fun openMenu(g: GameRef, name: String, manual: Doc?, guides: List<Doc>) {
-        val back = { openMenu(g, name, manual, guides) }
+    private fun openMenu(g: GameRef, name: String, manual: Doc?, guides: List<Doc>, info: GameInfo?) {
+        val back = { openMenu(g, name, manual, guides, info) }
+        val guidesRow = if (guides.isNotEmpty()) "Guides" else prefs.esdeTree?.let { "Find guides" }
         val items = listOfNotNull(
-            "Capture", manual?.let { "Manual" }, guides.firstOrNull()?.let { "Guide" }, prefs.esdeTree?.let { "Find guides" },
-            "Quit game",
+            "Resume", guidesRow, manual?.let { "Manual" }, info?.let { "Game info" }, "Capture", "Quit game",
         )
         menu.show(items, { i ->
             when (items[i]) {
-                "Capture" -> {
-                    menu.release()
-                    startCapture(g)
-                }
+                "Resume" -> menu.release()
                 "Manual" -> view(manual!!)
                 "Find guides" -> findGuides(g, name, back)
+                "Game info" -> {}
+                "Capture" -> menu.show(listOf("Screenshot", "Video", "Screenshot and video"), { mode ->
+                    menu.release()
+                    startCapture(g, keepShot = mode != 1, keepVideo = mode != 0)
+                }, back)
                 "Quit game" -> quitGame()
                 // Several guides get their own list; B there returns to this menu.
                 else -> if (guides.size == 1) view(guides[0]) else menu.show(guides.map { it.name }, { view(guides[it]) }, back)
@@ -352,8 +356,8 @@ class HelperService : Service() {
                     menu.show(listOf("Couldn't save the guide"), {}, back)
                     return@post
                 }
-                val (manual, guides) = docs ?: (null to emptyList())
-                openMenu(g, name, manual, guides)
+                val (manual, guides, info) = docs ?: Triple(null, emptyList(), null)
+                openMenu(g, name, manual, guides, info)
                 guides.firstOrNull { it.key == saved.getOrNull() }?.let(::view)
             }
         }
@@ -369,9 +373,12 @@ class HelperService : Service() {
     /** A manual or guide; [key] is its path below the ES-DE folder, which the viewer files its position under. */
     private class Doc(val name: String, val uri: Uri, val key: String)
 
-    /** io thread: the game's manual and guides that exist, found by listing their folders below downloaded_media. */
-    private fun documents(g: GameRef): Pair<Doc?, List<Doc>> {
-        val tree = prefs.esdeTree ?: return null to emptyList()
+    /**
+     * io thread: the game's manual and guides that exist, found by listing their folders below downloaded_media, and its
+     * gamelist.xml metadata when the gamelist has it.
+     */
+    private fun documents(g: GameRef): Triple<Doc?, List<Doc>, GameInfo?> {
+        val tree = prefs.esdeTree ?: return Triple(null, emptyList(), null)
         val dir = isDirectory(this, prefs.romsTree!!, "${g.system}/${g.romRelativePath}")
         val media = DocumentsContract.getTreeDocumentId(tree) + "/downloaded_media/"
         fun list(id: String) = runCatching { children(this, tree, id) }.getOrDefault(emptyMap())
@@ -389,7 +396,10 @@ class HelperService : Service() {
             val id = if (entry.startsWith("$base/")) inner.getValue(name) else folder.getValue(entry)
             doc(name, id, (path.dropLast(1) + entry).joinToString("/"))
         }
-        return manual to guides
+        val info = runCatching {
+            contentResolver.openInputStream(treeChild(tree, "gamelists/${g.system}/gamelist.xml"))!!.use { gamelistInfo(it, g.romRelativePath) }
+        }.getOrNull()
+        return Triple(manual, guides, info)
     }
 
     /**
@@ -411,7 +421,8 @@ class HelperService : Service() {
         return null
     }
 
-    private fun startCapture(g: GameRef) {
+    /** Captures the game and saves the screenshot when [keepShot] and the clip when [keepVideo]. */
+    private fun startCapture(g: GameRef, keepShot: Boolean, keepVideo: Boolean) {
         val p = projection ?: run {
             startActivity(
                 Intent(this, SettingsActivity::class.java)
@@ -425,10 +436,12 @@ class HelperService : Service() {
         // up about 2.6 s after the Home press.
         main.postDelayed({
             try {
-                capture = Capture(windowContext, p, prefs.clipSeconds, audioGranted(), menu::nudge, {}) { png, mp4 ->
+                // A screenshot alone stops as soon as its frame is taken, too soon for a usable clip.
+                val onRecording = { if (!keepVideo) capture?.stop() }
+                capture = Capture(windowContext, p, prefs.clipSeconds, audioGranted(), menu::nudge, onRecording) { png, mp4 ->
                     capture = null
                     menu.endCapture()
-                    io.execute { save(g, png, mp4) }
+                    io.execute { save(g, png?.takeIf { keepShot }, mp4?.takeIf { keepVideo }) }
                 }.also { it.start() }
                 Log.i(TAG, "capturing $g")
             } catch (e: Exception) {
