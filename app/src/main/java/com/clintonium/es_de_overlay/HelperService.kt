@@ -249,18 +249,30 @@ class HelperService : Service() {
         }
     }
 
-    private fun openMenu(g: GameRef, name: String, manual: Doc?, guides: List<Doc>, info: GameInfo?) {
-        val back = { openMenu(g, name, manual, guides, info) }
+    /** Main thread: the main menu with the cursor on row [start]. */
+    private fun openMenu(g: GameRef, name: String, manual: Doc?, guides: List<Doc>, info: GameInfo?, start: Int = 0) {
         val guidesRow = if (guides.isNotEmpty()) "Guides" else prefs.esdeTree?.let { "Find guides" }
         val items = listOfNotNull(
             "Resume", guidesRow, manual?.let { "Manual" }, info?.let { "Game info" }, "Capture", "Quit game",
         )
         menu.show(items, { i ->
+            // B in a screen opened from here comes back to its row.
+            val back = { openMenu(g, name, manual, guides, info, i) }
             when (items[i]) {
                 "Resume" -> menu.release()
                 "Manual" -> view(manual!!)
                 "Find guides" -> findGuides(g, name, back)
-                "Game info" -> {}
+                "Game info" -> menu.info(
+                    listOfNotNull(
+                        info!!.developer?.let { "Developer" to it },
+                        info.publisher?.let { "Publisher" to it },
+                        info.released?.let { "Released" to it },
+                        info.genre?.let { "Genre" to it },
+                        info.players?.let { "Players" to it },
+                    ),
+                    info.description,
+                    back,
+                )
                 "Capture" -> menu.show(listOf("Screenshot", "Video", "Screenshot and video"), { mode ->
                     menu.release()
                     startCapture(g, keepShot = mode != 1, keepVideo = mode != 0)
@@ -269,7 +281,7 @@ class HelperService : Service() {
                 // Several guides get their own list; B there returns to this menu.
                 else -> if (guides.size == 1) view(guides[0]) else menu.show(guides.map { it.name }, { view(guides[it]) }, back)
             }
-        }, menu::release)
+        }, menu::release, start = start)
     }
 
     /**

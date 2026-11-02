@@ -137,31 +137,22 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
 
     val isOpen get() = root != null
 
-    /** Shows [items]; with [alt], X calls it with the selected row and the help pill names it. */
-    fun show(items: List<String>, onPick: (Int) -> Unit, onClose: () -> Unit, alt: Pair<String, (Int) -> Unit>? = null) {
+    /** Shows [items] with the cursor on [start]; with [alt], X calls it with the selected row and the help pill names it. */
+    fun show(
+        items: List<String>,
+        onPick: (Int) -> Unit,
+        onClose: () -> Unit,
+        alt: Pair<String, (Int) -> Unit>? = null,
+        start: Int = 0,
+    ) {
         close()
-        reshow = { show(items, onPick, onClose, alt) }
+        reshow = { show(items, onPick, onClose, alt, start) }
         val font = themeFont(context, prefs)
         val textPx = screenH * LIST_FONT
         val rowPx = (textPx * LIST_SPACING).toInt()
         // Measured from ES-DE's gamelist with this theme: the pill fills 6/7 of a row, text inset 0.7 em.
         val pillInset = rowPx / 14
         val textInset = (textPx * 0.7f).toInt()
-        // The theme's large listFontSize, in a row of the same line spacing.
-        val titlePx = screenH * 0.058333333333333f
-        val titleRow = TextView(context).apply {
-            text = title
-            typeface = font
-            setTextColor(TEXT)
-            setTextSize(TypedValue.COMPLEX_UNIT_PX, titlePx)
-            gravity = Gravity.CENTER_VERTICAL
-            isSingleLine = true
-            ellipsize = TextUtils.TruncateAt.MARQUEE
-            marqueeRepeatLimit = -1
-            setPadding(textInset, 0, textInset, 0)
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (titlePx * LIST_SPACING).toInt())
-            postDelayed({ isSelected = true }, 1_000)
-        }
         val rows = items.map { label ->
             TextView(context).apply {
                 text = label
@@ -195,18 +186,97 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
                 it.postDelayed({ it.isSelected = selected == i }, 1_000)
             }
         }
-        select(0)
+        select(start.coerceIn(0, (rows.size - 1).coerceAtLeast(0)))
         val list = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             rows.forEach(::addView)
         }
+        val help = listOfNotNull("A" to "Open", alt?.let { "X" to it.first }, "B" to "Back")
+        open(font, ScrollView(context).apply { addView(list) }, help) { code ->
+            when (code) {
+                KeyEvent.KEYCODE_DPAD_UP -> select((selected - 1).coerceAtLeast(0))
+                KeyEvent.KEYCODE_DPAD_DOWN -> select((selected + 1).coerceAtMost(rows.lastIndex))
+                KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER ->
+                    if (rows.isNotEmpty()) onPick(selected)
+                KeyEvent.KEYCODE_BUTTON_X -> if (alt != null && rows.isNotEmpty()) alt.second(selected) else return@open false
+                KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK -> { close(); onClose() }
+                else -> return@open false
+            }
+            true
+        }
+        this.rows = rows
+    }
+
+    /**
+     * Shows [fields] as label–value lines, then [description], in the list column. Up and Down scroll a line at a
+     * time when it's taller than the column; B closes to [onClose].
+     */
+    fun info(fields: List<Pair<String, String>>, description: String?, onClose: () -> Unit) {
+        close()
+        val font = themeFont(context, prefs)
+        // The theme's x-small listFontSize.
+        val textPx = screenH * 0.033333333333333f
+        val linePx = (textPx * 1.25f).toInt()
+        val textInset = (screenH * LIST_FONT * 0.7f).toInt()
+        fun line(text: CharSequence) = TextView(context).apply {
+            this.text = text
+            typeface = font
+            setTextColor(TEXT)
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, textPx)
+            setLineSpacing(0f, 1.25f)
+        }
+        val text = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(textInset, 0, textInset, 0)
+            fields.forEach { (label, value) ->
+                addView(line(SpannableStringBuilder().append(label, ForegroundColorSpan(HELP_ICON), 0).append("  $value")))
+            }
+            description?.let {
+                addView(line(it), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    if (fields.isNotEmpty()) topMargin = linePx
+                })
+            }
+        }
+        val scroll = ScrollView(context).apply { addView(text) }
+        open(font, scroll, listOf("✚" to "Scroll", "B" to "Back")) { code ->
+            when (code) {
+                KeyEvent.KEYCODE_DPAD_UP -> scroll.scrollBy(0, -linePx)
+                KeyEvent.KEYCODE_DPAD_DOWN -> scroll.scrollBy(0, linePx)
+                KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK -> { close(); onClose() }
+                KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {}
+                else -> return@open false
+            }
+            true
+        }
+    }
+
+    /**
+     * Adds the menu window: the [title] above [content] in the list column, the art box beside it and a help pill of
+     * [help]. [onKey] gets each key press and returns whether it used it.
+     */
+    private fun open(font: Typeface, content: ScrollView, help: List<Pair<String, String>>, onKey: (Int) -> Boolean) {
+        val textPx = screenH * LIST_FONT
+        val textInset = (textPx * 0.7f).toInt()
+        // The theme's large listFontSize, in a row of the same line spacing.
+        val titlePx = screenH * 0.058333333333333f
+        val titleRow = TextView(context).apply {
+            text = title
+            typeface = font
+            setTextColor(TEXT)
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, titlePx)
+            gravity = Gravity.CENTER_VERTICAL
+            isSingleLine = true
+            ellipsize = TextUtils.TruncateAt.MARQUEE
+            marqueeRepeatLimit = -1
+            setPadding(textInset, 0, textInset, 0)
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (titlePx * LIST_SPACING).toInt())
+            postDelayed({ isSelected = true }, 1_000)
+        }
+        content.isVerticalScrollBarEnabled = false
         val column = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             addView(titleRow)
-            addView(
-                ScrollView(context).apply { isVerticalScrollBarEnabled = false; addView(list) },
-                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f),
-            )
+            addView(content, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         }
         val image = art
         val artBox = FrameLayout(context).apply {
@@ -243,7 +313,6 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
                 leftMargin = (screenW * 0.928125f).toInt() - artW - padX
                 topMargin = (screenH * 0.44166667f).toInt() - artH / 2 - padTop
             })
-            val help = listOfNotNull("A" to "Open", alt?.let { "X" to it.first }, "B" to "Back")
             addView(
                 helpPill(context, font, textPx, *help.toTypedArray()),
                 FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END),
@@ -252,23 +321,10 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
             descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
             isFocusable = true
             isFocusableInTouchMode = true
-            setOnKeyListener { _, code, event ->
-                if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener code in KEYS
-                when (code) {
-                    KeyEvent.KEYCODE_DPAD_UP -> select((selected - 1).coerceAtLeast(0))
-                    KeyEvent.KEYCODE_DPAD_DOWN -> select((selected + 1).coerceAtMost(rows.lastIndex))
-                    KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER ->
-                        if (rows.isNotEmpty()) onPick(selected)
-                    KeyEvent.KEYCODE_BUTTON_X -> if (alt != null && rows.isNotEmpty()) alt.second(selected) else return@setOnKeyListener false
-                    KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK -> { close(); onClose() }
-                    else -> return@setOnKeyListener false
-                }
-                true
-            }
+            setOnKeyListener { _, code, event -> if (event.action == KeyEvent.ACTION_DOWN) onKey(code) else code in KEYS }
         }
         wm.addFullScreen(view, PixelFormat.TRANSLUCENT)
         root = view
-        this.rows = rows
     }
 
     /**
