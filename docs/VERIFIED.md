@@ -147,3 +147,34 @@ Checked on the Nova on 2026-10-30 (WebView 109, `com.android.webview`) in Shanta
   - Its Neoseeker FAQ/Walkthrough saved at once as a 173 KB file, with its ASCII title art aligned.
   - ZeldaDungeon's walkthrough front page covers the Switch remake. Each Switch chapter links its Game Boy Color version, and a GBC chapter lists all nine GBC chapters, so saving from there gets the DX walkthrough.
   - No bot check appeared during any save. Neoseeker's check came up once, on the first visit, and cookies kept it from showing again.
+
+## In-game menu revamp
+
+Checked on the Nova on 2026-11-02 with Shantae (`gbc/Shantae.zip`), Easyland and Easyland 2 (`snes/02) Hacks/`), side by side with ES-DE's gamelist for Shantae.
+
+- **The theme's 4:3 gamelist** (`aspect-ratio-4-3.xml`, variant `gamelist-list-screenshot`, font size small), as fractions of the 1280x960 screen:
+
+  | Element | Theme value | On the Nova |
+  |---|---|---|
+  | List text | pos 0.071875 0.075, size 0.4 x 0.7333 | text at x 92, list 512 px wide |
+  | Selected pill | `selectedBackgroundMargins` 0.021875 | pill from x 64, hugging the text, as in ES-DE |
+  | Title | large `listFontSize` 0.058333 | 56 px |
+  | Art box | origin 1 0.5 at 0.928125 0.44166667, `cropSize` 0.3625 x 0.7333, corner radius 0.0078125 | x 724–1187, y 72–776 in both the menu and ES-DE's gamelist |
+  | Game Info text | x-small `listFontSize` 0.033333 | 32 px |
+
+- **ES-DE's art box plays the video.** The theme's `game-art` is a video with a 3 s `delay`, so ES-DE's screenshot of Shantae showed a video frame there. The menu shows the static screenshot instead, at the same place and size.
+- **Scraped screenshots are small.** `gbc/screenshots/Shantae.png` is 160x144, the console's own size, and 105 of the 7,729 screenshots on the card are `.jpg`. The menu halves only an image larger than the art box both ways (a 1280x960 capture), and tries PNG, then JPG. Android's default bitmap filtering smoothed the pixel art; ES-DE's art had hard pixel edges, so the menu draws it unfiltered. ES-DE's own static screenshot wasn't caught before its video started, so its interpolation there wasn't compared directly.
+- **ES-DE writes a gamelist entry when it launches a game.** Easyland 2 had no entry in `gamelists/snes/gamelist.xml`; launching it wrote `<game>` with only `<playcount>1</playcount>` at 18:22:45.9, a second before the launch line. So every game launched from ES-DE has an entry, and Game Info is shown only when the entry has a developer, publisher, release date, genre, players or description. All 8,413 `<releasedate>` values on the card are `YYYYMMDDTHHMMSS`.
+- **X on a list without an X action.** `input keyevent BUTTON_X` on the main menu, which then didn't handle X, opened the selected row as A does. That fits Android's generic key map, which falls back from an unhandled `BUTTON_X` to `DPAD_CENTER`. The menu now always takes X.
+- **Screenshot alone.** Stopping the capture from its first frame ended it 5 ms in with one video sample; `ClipWriter` gave no usable MP4, so only the PNG was saved and the notification named only it.
+- **No save states from RetroArch.** The installed RetroArch 1.22.2 (`com.retroarch.aarch64`) was pulled on 2026-11-02 and its `lib/arm64-v8a/libretroarch-activity.so` searched: it has the settings strings (`Network Commands`, `network_cmd_port`, `network_cmd_enable`) but none of the command words (`GET_STATUS`, `LOAD_STATE`, `STATE_SLOT_PLUS`, `READ_CORE_RAM`, `SET_SHADER`), so the network command interface is compiled out of the Android build.
+- **Memory.** Same steps on the pre-phase build (`9bf8195`) and this one: install, consent, Home in Easyland, B, then `dumpsys meminfo` TOTAL PSS:
+
+  | | Pre-phase build | This phase |
+  |---|---|---|
+  | Fresh, before the menu | 76.0 MB | 76.0 MB |
+  | Menu open | 88.0 MB | 96.5 MB |
+  | 60 s after B | 75.9 MB | 76.1 MB |
+
+  The 8.5 MB extra while open includes the decoded screenshot; it was gone 10 s after closing. In a process that had just made three captures, opening and closing the menu moved it from 85.7 to 86.7 MB. A fresh process reads about 76 MB on both builds, above the 66–71 MB noted for a long-running one.
+- **A guide saved in the browser.** The viewer that opens the saved guide tells the service when it closes, and the service lists the guides again then; nothing redraws the menu while the viewer is on top.
