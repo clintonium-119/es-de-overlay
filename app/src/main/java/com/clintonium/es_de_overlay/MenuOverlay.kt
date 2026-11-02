@@ -1,6 +1,7 @@
 package com.clintonium.es_de_overlay
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.Typeface
@@ -19,6 +20,7 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -105,7 +107,8 @@ fun barText(context: Context, barH: Int, gravity: Int) = TextView(context).apply
 
 /**
  * The in-game menu: a focusable full-screen window over the game, a themed list moved with the D-pad,
- * A to pick and B to close. Built on [show] and dropped on [close], so nothing is held between opens.
+ * A to pick and B to close, with the game's title and screenshot laid out like the theme's gamelist. Built on [show]
+ * and dropped on [close]; [release] also drops the title and screenshot, so nothing is held between opens.
  * Also owns the invisible window kept up during a capture.
  */
 class MenuOverlay(private val context: Context, private val prefs: Prefs) {
@@ -124,17 +127,41 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
         PixelFormat.TRANSLUCENT,
     ).apply { alpha = 0f }
 
+    // The theme's 4:3 gamelist art box (aspect-ratio-4-3.xml): 0.3625 × 0.73333333 of the screen.
+    val artW = (screenW * 0.3625f).toInt()
+    val artH = (screenH * 0.73333333f).toInt()
+
+    /** The game's name and screenshot, set before the menu opens; every [show] keeps them until [release]. */
+    var title = ""
+    var art: Bitmap? = null
+
     val isOpen get() = root != null
 
-    fun show(items: List<String>, onPick: (Int) -> Unit, onClose: () -> Unit) {
+    /** Shows [items]; with [alt], X calls it with the selected row and the help pill names it. */
+    fun show(items: List<String>, onPick: (Int) -> Unit, onClose: () -> Unit, alt: Pair<String, (Int) -> Unit>? = null) {
         close()
-        reshow = { show(items, onPick, onClose) }
+        reshow = { show(items, onPick, onClose, alt) }
         val font = themeFont(context, prefs)
         val textPx = screenH * LIST_FONT
         val rowPx = (textPx * LIST_SPACING).toInt()
         // Measured from ES-DE's gamelist with this theme: the pill fills 6/7 of a row, text inset 0.7 em.
         val pillInset = rowPx / 14
         val textInset = (textPx * 0.7f).toInt()
+        // The theme's large listFontSize, in a row of the same line spacing.
+        val titlePx = screenH * 0.058333333333333f
+        val titleRow = TextView(context).apply {
+            text = title
+            typeface = font
+            setTextColor(TEXT)
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, titlePx)
+            gravity = Gravity.CENTER_VERTICAL
+            isSingleLine = true
+            ellipsize = TextUtils.TruncateAt.MARQUEE
+            marqueeRepeatLimit = -1
+            setPadding(textInset, 0, textInset, 0)
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (titlePx * LIST_SPACING).toInt())
+            postDelayed({ isSelected = true }, 1_000)
+        }
         val rows = items.map { label ->
             TextView(context).apply {
                 text = label
@@ -173,13 +200,52 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
             orientation = LinearLayout.VERTICAL
             rows.forEach(::addView)
         }
+        val column = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(titleRow)
+            addView(
+                ScrollView(context).apply { isVerticalScrollBarEnabled = false; addView(list) },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f),
+            )
+        }
+        val image = art
+        val artBox = FrameLayout(context).apply {
+            // The theme's imageCornerRadius; the screenshot is clipped to this background's outline.
+            background = GradientDrawable().apply {
+                cornerRadius = screenW * 0.0078125f
+                if (image == null) setStroke(2, HELP_ICON)
+            }
+            clipToOutline = true
+            if (image != null) {
+                addView(ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_CROP; setImageBitmap(image) })
+            } else {
+                addView(
+                    TextView(context).apply {
+                        text = "No screenshot"
+                        typeface = font
+                        setTextColor(HELP_ICON)
+                        setTextSize(TypedValue.COMPLEX_UNIT_PX, textPx * 0.65f)
+                    },
+                    FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER),
+                )
+            }
+        }
         val view = FrameLayout(context).apply {
             setBackgroundColor(BACKGROUND)
             // ES-DE's gamelist margins: 5% of the width at the sides, 7% of the height above, 6% below.
-            setPadding((screenW * 0.05f).toInt(), (screenH * 0.07f).toInt(), (screenW * 0.05f).toInt(), (screenH * 0.06f).toInt())
-            addView(ScrollView(context).apply { isVerticalScrollBarEnabled = false; addView(list) })
+            val padX = (screenW * 0.05f).toInt()
+            val padTop = (screenH * 0.07f).toInt()
+            setPadding(padX, padTop, padX, (screenH * 0.06f).toInt())
+            // The theme's 4:3 list width (0.4 of the screen) plus the pill's margins either side.
+            addView(column, FrameLayout.LayoutParams((screenW * 0.4f).toInt() + 2 * textInset, ViewGroup.LayoutParams.MATCH_PARENT))
+            // The art box's origin (1, 0.5) sits at (0.928125, 0.44166667) of the screen.
+            addView(artBox, FrameLayout.LayoutParams(artW, artH).apply {
+                leftMargin = (screenW * 0.928125f).toInt() - artW - padX
+                topMargin = (screenH * 0.44166667f).toInt() - artH / 2 - padTop
+            })
+            val help = listOfNotNull("A" to "Open", alt?.let { "X" to it.first }, "B" to "Back")
             addView(
-                helpPill(context, font, textPx, "A" to "Open", "B" to "Back"),
+                helpPill(context, font, textPx, *help.toTypedArray()),
                 FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END),
             )
             // Keep focus on the root so the ScrollView doesn't take the D-pad.
@@ -193,6 +259,7 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
                     KeyEvent.KEYCODE_DPAD_DOWN -> select((selected + 1).coerceAtMost(rows.lastIndex))
                     KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER ->
                         if (rows.isNotEmpty()) onPick(selected)
+                    KeyEvent.KEYCODE_BUTTON_X -> if (alt != null && rows.isNotEmpty()) alt.second(selected) else return@setOnKeyListener false
                     KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK -> { close(); onClose() }
                     else -> return@setOnKeyListener false
                 }
@@ -225,6 +292,14 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
         rows = emptyList()
     }
 
+    /** Closes the menu for good, dropping its [title] and [art]. */
+    fun release() {
+        close()
+        title = ""
+        art?.recycle()
+        art = null
+    }
+
     /** Adds the invisible window that [nudge] relayouts, so a static screen still yields capture frames. */
     fun beginCapture() {
         if (captureView != null) return
@@ -246,7 +321,7 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
     private companion object {
         val KEYS = setOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER,
-            KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK,
+            KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK,
         )
     }
 }

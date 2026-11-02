@@ -172,7 +172,7 @@ class HelperService : Service() {
         running = false
         capture?.stop()
         closeViewer()
-        menu.close()
+        menu.release()
         menu.endCapture()
         screenshots.unregister()
         io.shutdownNow()
@@ -210,7 +210,7 @@ class HelperService : Service() {
         if (fg == launch?.pkg) return
         finding?.set(true)
         closeViewer()
-        menu.close()
+        menu.release()
         capture?.stop()
     }
 
@@ -226,7 +226,7 @@ class HelperService : Service() {
         if (menu.isOpen) {
             finding?.set(true)
             closeViewer()
-            menu.close()
+            menu.release()
             startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             return
         }
@@ -238,7 +238,12 @@ class HelperService : Service() {
             val (manual, guides) = runCatching { documents(g) }
                 .onFailure { Log.w(TAG, "looking up manual and guides failed", it) }
                 .getOrDefault(null to emptyList())
-            main.post { openMenu(g, name, manual, guides) }
+            val art = runCatching { screenshot(g) }.getOrNull()
+            main.post {
+                menu.title = name
+                menu.art = art
+                openMenu(g, name, manual, guides)
+            }
         }
     }
 
@@ -251,7 +256,7 @@ class HelperService : Service() {
         menu.show(items, { i ->
             when (items[i]) {
                 "Capture" -> {
-                    menu.close()
+                    menu.release()
                     startCapture(g)
                 }
                 "Manual" -> view(manual!!)
@@ -260,7 +265,7 @@ class HelperService : Service() {
                 // Several guides get their own list; B there returns to this menu.
                 else -> if (guides.size == 1) view(guides[0]) else menu.show(guides.map { it.name }, { view(guides[it]) }, back)
             }
-        }) {}
+        }, menu::release)
     }
 
     /**
@@ -269,7 +274,7 @@ class HelperService : Service() {
      */
     private fun quitGame() {
         val pkg = launch?.pkg ?: return
-        menu.close()
+        menu.release()
         io.execute {
             launch = null
             played = null
@@ -334,10 +339,10 @@ class HelperService : Service() {
 
     /** Main thread: runs [save] with progress in the menu, then reopens the menu with the new guide and opens it. */
     private fun saveGuide(g: GameRef, name: String, save: () -> String, cancelled: AtomicBoolean, back: () -> Unit) {
-        menu.show(listOf("Saving…"), {}) {
+        menu.show(listOf("Saving…"), {}, {
             cancelled.set(true)
             back()
-        }
+        })
         thread(name = "guides") {
             val saved = runCatching(save).onFailure { if (it !is CancellationException) Log.w(TAG, "saving a guide failed", it) }
             val docs = saved.getOrNull()?.let { runCatching { documents(g) }.getOrNull() }
@@ -385,6 +390,25 @@ class HelperService : Service() {
             doc(name, id, (path.dropLast(1) + entry).joinToString("/"))
         }
         return manual to guides
+    }
+
+    /**
+     * io thread: the game's screenshot for the menu's art box (PNG, else JPG, as ES-DE looks), or null when it has none.
+     * One larger than the box both ways, like a full-screen capture, is decoded at half size.
+     */
+    private fun screenshot(g: GameRef): Bitmap? {
+        val tree = prefs.esdeTree ?: return null
+        val dir = isDirectory(this, prefs.romsTree!!, "${g.system}/${g.romRelativePath}")
+        for (ext in listOf("png", "jpg")) {
+            val uri = treeChild(tree, (listOf("downloaded_media") + mediaPath(g, prefs.mediaType, ext, dir)).joinToString("/"))
+            fun decode(options: BitmapFactory.Options) =
+                contentResolver.openInputStream(uri)!!.use { BitmapFactory.decodeStream(it, null, options) }
+            val size = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            // Opening a missing file throws.
+            if (runCatching { decode(size) }.isFailure) continue
+            return decode(BitmapFactory.Options().apply { if (size.outWidth > menu.artW && size.outHeight > menu.artH) inSampleSize = 2 })
+        }
+        return null
     }
 
     private fun startCapture(g: GameRef) {
