@@ -89,8 +89,8 @@ private class Rendered(val page: Int, val width: Int, val height: Int, val rect:
  * Full-screen viewer for a manual or guide that works like ES-DE's own manual viewer. PDF, CBZ and
  * PNG/JPG pages are fitted whole and centered; zoomed out, D-pad left/right turn pages and L2/R2 go to
  * the first or last page; zoomed in, the D-pad pans and L2/R2 reset; L1/R1 zoom. Text scrolls. Saved
- * HTML guides scroll in an offline WebView styled like the theme. Only the current page's bitmap is
- * held, and everything is released on [close].
+ * HTML guides scroll in an offline WebView styled like the theme, with their contents on Y. Only the
+ * current page's bitmap is held, and everything is released on [close].
  */
 class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
     private val wm = context.getSystemService(WindowManager::class.java)
@@ -133,11 +133,37 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         when (val ext = name.substringAfterLast('.').lowercase()) {
             "html" -> {
                 val web = web(uri, name, saved, label, onClose)
-                help.text = "✚ SCROLL   L1/R1 ZOOM   L2/R2 SECTION"
+                // Y shows the guide's contents over it; while they're up, the D-pad, A, B and Y work the list.
+                var contentsOpen = false
+                fun showContents(open: Boolean) {
+                    contentsOpen = open
+                    help.text = if (open) "✚ MOVE   A GO   B CLOSE" else "✚ SCROLL   L1/R1 ZOOM   L2/R2 SECTION   Y CONTENTS"
+                }
+                fun closeContents() {
+                    web.evaluateJavascript(CONTENTS_CLOSE, null)
+                    showContents(false)
+                }
+                showContents(false)
                 content = web
-                back = { web.canGoBack().also { if (it) web.goBack() } }
+                back = {
+                    if (contentsOpen) {
+                        closeContents()
+                        true
+                    } else {
+                        web.canGoBack().also { if (it) web.goBack() }
+                    }
+                }
                 keys = { code ->
-                    when (code) {
+                    if (contentsOpen) when (code) {
+                        KeyEvent.KEYCODE_DPAD_UP -> web.evaluateJavascript(CONTENTS_UP, null)
+                        KeyEvent.KEYCODE_DPAD_DOWN -> web.evaluateJavascript(CONTENTS_DOWN, null)
+                        KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER -> {
+                            web.evaluateJavascript(CONTENTS_PICK, null)
+                            showContents(false)
+                        }
+                        KeyEvent.KEYCODE_BUTTON_Y -> closeContents()
+                    } else when (code) {
+                        KeyEvent.KEYCODE_BUTTON_Y -> web.evaluateJavascript(CONTENTS_OPEN) { if (it != "0") showContents(true) }
                         KeyEvent.KEYCODE_DPAD_UP -> web.scrollBy(0, -viewH / 4)
                         KeyEvent.KEYCODE_DPAD_DOWN -> web.scrollBy(0, viewH / 4)
                         KeyEvent.KEYCODE_DPAD_LEFT -> web.pageUp(false)
@@ -392,7 +418,8 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
     /**
      * A WebView for a saved guide that never reaches the network: the page, `guide.css` and the theme's
      * font are served from [uri] and the ES-DE folder, every other request gets a 404, and only `#` links
-     * within the page are followed. JavaScript is on for the viewer's own section lookups; there is no bridge.
+     * within the page are followed. JavaScript is on for the viewer's own section lookups and contents
+     * list; there is no bridge.
      */
     @SuppressLint("SetJavaScriptEnabled")
     private fun web(uri: Uri, name: String, saved: Int, label: TextView, onClose: () -> Unit): WebView {
@@ -483,10 +510,16 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 padding: ${px(barH / 2f)} ${px(screenW / 40f)} ${px(viewH / 2f)}; }
             a { color: ${color(TEXT)}; }
             img { max-width: 100%; height: auto; }
+            figure { margin-left: 0; margin-right: 0; }
             pre { font-family: monospace; font-size: ${px(100f * screenW * 0.95f / mono)}; overflow-x: auto; }
-            #contents ol { list-style: none; padding: 0; }
-            #contents a { display: inline-block; background: ${color(PILL)}; color: ${color(PILL_TEXT)};
-                border-radius: 1em; padding: 0.1em 0.7em; margin: 0.15em 0; text-decoration: none; }
+            #contents { display: none; }
+            #contents.open { display: block; position: fixed; inset: 0; z-index: 9; overflow-y: auto;
+                background: ${color(BACKGROUND)}; padding: ${px(barH / 2f)} ${px(screenW / 40f)}; }
+            #contents.open::before { content: "Contents"; display: block; font-size: 1.4em; padding-left: 0.5em; }
+            #contents ol { list-style: none; padding: 0; margin: 0; }
+            #contents a { display: inline-block; color: ${color(TEXT)}; border-radius: 1em; padding: 0.1em 0.7em;
+                margin: 0.15em 0; text-decoration: none; }
+            #contents .on a { background: ${color(PILL)}; color: ${color(PILL_TEXT)}; }
             footer { color: ${color(VIEWER_TEXT)}; font-size: 0.7em; margin-top: 2em; }
         """.trimIndent()
     }
@@ -537,7 +570,9 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
             KeyEvent.KEYCODE_BUTTON_L2, KeyEvent.KEYCODE_BUTTON_R2,
         )
-        val HTML_KEYS = TEXT_KEYS + setOf(KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_BUTTON_R1)
+        val HTML_KEYS = TEXT_KEYS + setOf(
+            KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_BUTTON_R1, KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER,
+        )
 
         /** A made-up origin, so the guide's relative `guide.css` and `font.otf` resolve to the viewer. */
         const val HOST = "guide.local"
@@ -546,7 +581,23 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         const val SECTIONS = "var s=document.querySelectorAll('section'),n=0;" +
             "for(var i=0;i<s.length;i++)if(s[i].getBoundingClientRect().top<innerHeight/4)n=i+1;"
 
-        /** JavaScript that scrolls [by] sections from the current one; before the first is the contents. */
+        /** JavaScript that scrolls [by] sections from the current one; before the first is the top. */
         fun section(by: Int) = "(function(){$SECTIONS n+=$by;if(n<1)scrollTo(0,0);else if(n<=s.length)s[n-1].scrollIntoView()})()"
+
+        /** JavaScript that shows the contents list with the section in view picked; returns its rows, 0 for none. */
+        const val CONTENTS_OPEN = "(function(){$SECTIONS var c=document.getElementById('contents'),l=c?c.querySelectorAll('li'):[];" +
+            "if(!l.length)return 0;for(var i=0;i<l.length;i++)l[i].classList.toggle('on',i==Math.max(n,1)-1);" +
+            "c.classList.add('open');c.querySelector('.on').scrollIntoView({block:'nearest'});return l.length})()"
+
+        /** JavaScript that moves the contents list's pick to the row before or after it, stopping at the ends. */
+        private fun contentsStep(sibling: String) = "(function(){var o=document.querySelector('#contents .on'),e=o&&o.$sibling;" +
+            "if(e){o.classList.remove('on');e.classList.add('on');e.scrollIntoView({block:'nearest'})}})()"
+        val CONTENTS_UP = contentsStep("previousElementSibling")
+        val CONTENTS_DOWN = contentsStep("nextElementSibling")
+
+        /** JavaScript that hides the contents list and scrolls to the picked section. */
+        const val CONTENTS_PICK = "(function(){var c=document.getElementById('contents'),a=c.querySelector('.on a')," +
+            "t=a&&document.querySelector(a.getAttribute('href'));c.classList.remove('open');if(t)t.scrollIntoView()})()"
+        const val CONTENTS_CLOSE = "document.getElementById('contents').classList.remove('open')"
     }
 }

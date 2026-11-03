@@ -109,8 +109,10 @@ Open **ES-DE Overlay** (ES-DE also lists it under Android Apps) and:
   | B | close | close |
 
   Text guides scroll with the D-pad (left/right by a page) and jump with L2/R2. Saved web guides
-  (`.html`) scroll the same way, L1/R1 change the text size, L2/R2 move between sections, entries in
-  the contents list can be tapped, and **B** first steps back through tapped links, then closes.
+  (`.html`) scroll the same way, L1/R1 change the text size and L2/R2 move between sections. **Y**
+  shows their contents over the guide, with the section in view picked: the D-pad moves, **A** jumps
+  to the section, and **B** or **Y** closes the list. Otherwise **B** first steps back through
+  tapped links, then closes.
 - **Quit Game** (the last row) ends the game's app at once, with no confirmation, and ES-DE comes
   back. It works for any game ES-DE launched, emulator or Android game. It closes without warning:
   your saves are kept, but progress since your last save is lost (RetroArch writes in-game saves
