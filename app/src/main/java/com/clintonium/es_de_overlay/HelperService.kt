@@ -9,6 +9,7 @@ import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -20,7 +21,6 @@ import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
-import android.os.SystemClock
 import android.provider.DocumentsContract
 import android.util.Log
 import android.view.Display
@@ -51,7 +51,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 const val TAG = "ESDEShot"
-const val ESDE_PACKAGE = "org.es_de.frontend"
 private const val CHANNEL = "status"
 private const val ONGOING_ID = 1
 private const val RESULT_ID = 2
@@ -103,7 +102,6 @@ class HelperService : Service() {
     private lateinit var windowContext: Context
     private var projection: MediaProjection? = null
     private var capture: Capture? = null
-    private var guardAt = 0L
     /** Main thread: the cancel flag of the running Find Guides check or save, set when the menu goes away. */
     private var finding: AtomicBoolean? = null
 
@@ -113,8 +111,6 @@ class HelperService : Service() {
     @Volatile private var foreground: String? = null
 
     // io thread only.
-    /** The launched game's package once it has been in front, until ES-DE is back in front. */
-    private var played: String? = null
     private var logOffset = 0L
     private var logHead = ""
     private var eventsSince = 0L
@@ -123,6 +119,7 @@ class HelperService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         prefs = Prefs(this)
         windowContext = overlayContext(this)
         menu = MenuOverlay(windowContext, prefs)
@@ -142,11 +139,6 @@ class HelperService : Service() {
      * memory, it starts the service again with no intent, so without capture consent. Stopping the service ends it for good.
      */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_HOME_GUARD) {
-            Log.i(TAG, "home guard")
-            onHomeGuard()
-            return START_STICKY
-        }
         if (intent?.action == ACTION_OPEN_FAILED) {
             menu.error("Couldn't open ${intent.getStringExtra(EXTRA_NAME)}")
             return START_STICKY
@@ -177,6 +169,7 @@ class HelperService : Service() {
     }
 
     override fun onDestroy() {
+        instance = null
         running = false
         capture?.stop()
         closeViewer()
@@ -200,16 +193,6 @@ class HelperService : Service() {
             foreground = fg
             Log.i(TAG, "foreground: $fg (current game: ${currentGame()})")
         }
-        val pkg = launch?.pkg
-        if (fg == pkg) {
-            played = pkg
-        } else if (fg == ESDE_PACKAGE) {
-            played?.takeIf { it in prefs.closeOnLeave }?.let {
-                launch = null
-                HomeGuardService.forceStop(it)
-            }
-            played = null
-        }
         main.post { onForeground(fg) }
     }
 
@@ -223,10 +206,10 @@ class HelperService : Service() {
     }
 
     /**
-     * Main thread: Retroid's first-Home toast. Stops a recording; with the menu (and any viewer or browser over it) open, goes home
-     * (Home pressed twice); otherwise opens the menu for the game in front, if ES-DE launched one.
+     * Main thread: the controller's Back. Stops a recording; with the menu (and any viewer or browser over it) open, closes
+     * all of it so the game resumes; otherwise opens the menu for the game in front, if ES-DE launched one.
      */
-    private fun onHomeGuard() {
+    private fun onBack() {
         capture?.let {
             it.stop()
             return
@@ -235,13 +218,11 @@ class HelperService : Service() {
             finding?.set(true)
             closeViewer()
             menu.release()
-            startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             return
         }
         val g = currentGame() ?: return
         // ES-DE's name for the game, which Find Guides looks up.
         val name = launch?.name ?: return
-        guardAt = SystemClock.uptimeMillis()
         io.execute {
             val (manual, guides, info) = runCatching { documents(g) }
                 .onFailure { Log.w(TAG, "looking up manual and guides failed", it) }
@@ -334,18 +315,12 @@ class HelperService : Service() {
         }
     }
 
-    /**
-     * Main thread: force-stops the game's app, which then has no chance to save, and goes to ES-DE. Forgetting the
-     * launch keeps ES-DE's return from stopping it a second time.
-     */
+    /** Main thread: force-stops the game's app, which then has no chance to save, and goes to ES-DE. */
     private fun quitGame() {
         val pkg = launch?.pkg ?: return
         menu.release()
-        io.execute {
-            launch = null
-            played = null
-        }
-        HomeGuardService.forceStop(pkg)
+        io.execute { launch = null }
+        ButtonService.forceStop(pkg)
     }
 
     /**
@@ -508,8 +483,7 @@ class HelperService : Service() {
             return
         }
         menu.beginCapture()
-        // Let the closed menu leave the screen before the first frame, and Retroid's toast too: it stays
-        // up about 2.6 s after the Home press.
+        // Let the closed menu leave the screen before the first frame.
         main.postDelayed({
             try {
                 // A screenshot alone stops as soon as its frame is taken, too soon for a usable clip.
@@ -526,7 +500,7 @@ class HelperService : Service() {
                 toast("Capture failed: ${e.message}")
                 notify(this, RESULT_ID, "Capture failed: ${e.message}")
             }
-        }, (guardAt + 3_000 - SystemClock.uptimeMillis()).coerceAtLeast(100))
+        }, 100)
     }
 
     private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
@@ -640,12 +614,23 @@ class HelperService : Service() {
     companion object {
         const val EXTRA_CODE = "code"
         const val EXTRA_DATA = "data"
-        const val ACTION_HOME_GUARD = "com.clintonium.es_de_overlay.HOME_GUARD"
         /** From the viewer's process: opening [EXTRA_NAME] failed, which the menu underneath shows. */
         const val ACTION_OPEN_FAILED = "com.clintonium.es_de_overlay.OPEN_FAILED"
         /** From the viewer's process: the viewer on a guide just saved from the browser has closed, so list the guides again. */
         const val ACTION_GUIDE_SAVED = "com.clintonium.es_de_overlay.GUIDE_SAVED"
         const val EXTRA_NAME = "name"
         var running by mutableStateOf(false)
+
+        // Main thread only; set while the service exists.
+        @SuppressLint("StaticFieldLeak")
+        private var instance: HelperService? = null
+
+        /** Main thread: whether the controller's Back is the overlay's: a capture is running, the menu is open, or ES-DE's game is in front. */
+        fun takesBack(): Boolean = instance?.run { running && (capture != null || menu.isOpen || currentGame() != null) } == true
+
+        /** Main thread: the controller's Back, taken because [takesBack] said so. */
+        fun back() {
+            instance?.onBack()
+        }
     }
 }

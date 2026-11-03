@@ -28,7 +28,7 @@ Device: Retroid Pocket Nova (`kalama`), checked over adb on 2026-10-28.
 | A6 | Verified | One consent at service start covered several captures in a row across app switches. Reinstalling or restarting the service needs a new consent. | Two back-to-back captures, no dialog |
 | A7 | Verified | ES-DE plays the app's H.264 MP4 from `videos/`. | User observation |
 | A8 | Partly | Clips now carry game audio (playback capture): an Easyland clip had AAC 48 kHz stereo, 14.89 s for 14.88 s of video, mean -23.3 dB. Whether the theme plays it in the gamelist is up to ES-DE's video-audio settings. All installed games/emulators have `ALLOW_AUDIO_PLAYBACK_CAPTURE`. | `ffprobe`, `ffmpeg -af volumedetect`, `dumpsys package` |
-| A9 | Superseded | Gamepad combo through an AccessibilityService (PLAN.md Phase 4). The menu now opens on Retroid's Home message instead; see [In-game menu](#in-game-menu). | — |
+| A9 | Superseded | Gamepad combo through an AccessibilityService (PLAN.md Phase 4). The menu opened on Retroid's Home message from 2026-10-29, and since 2026-11-03 opens on the controller's Back through a key filter; see [Back button menu](#back-button-menu). | — |
 
 ## Game resolution
 
@@ -70,10 +70,10 @@ If the path ever can't be read, a unique `<name>` in the system's `gamelist.xml`
 Checked on the Nova on 2026-10-29 with Easyland (`snes/02) Hacks/Easyland.zip`) in RetroArch.
 
 - **Home key.** The Nova's Home button reaches accessibility services as `KEYCODE_MOVE_HOME` from the "Retroid Pocket Controller", not `KEYCODE_HOME`. It doesn't appear in `getevent` on any input device.
-- **Key filtering was dropped.** A key-filtering accessibility service could swallow Home. With it on, RetroArch seemed to ignore the whole controller, but the game turned out to be paused in its save state, so that result is unconfirmed. Either way, Retroid still showed its own message for the swallowed press. The app doesn't filter keys.
-- **Retroid's Home guard.** With *Prevent pressing Home accidentally* on (`prevent_press_home_accidentally=1`), the first Home press in a game shows an `android.widget.Toast` from `com.rp.settings`: "Press the Home button again to return to launcher." A second press while it's up goes to the launcher. In ES-DE, Home shows no message. A listen-only service with only `typeNotificationStateChanged` sees the toast, and the controller keeps working in RetroArch and ES-DE (`dumpsys accessibility`: `capabilities=0`).
-- **Latency.** Toast created to `HelperService` acting: 15 ms (4 ms after the toast's window appeared). The toast stays up about 2.6 s, long enough to land in a capture, so Capture waits until 3 s after the Home press.
-- **Toasts while the menu has focus.** They still arrive, so Home with the menu or a guide open goes to ES-DE (70 ms to ES-DE in front). On a quick double press, Retroid goes home itself and the menu closes when ES-DE comes to the front.
+- **Key filtering was dropped** (taken up again on 2026-11-03, see [Back button menu](#back-button-menu)). A key-filtering accessibility service could swallow Home. With it on, RetroArch seemed to ignore the whole controller, but the game turned out to be paused in its save state, so that result is unconfirmed. Either way, Retroid still showed its own message for the swallowed press.
+- **Retroid's Home guard** (the app no longer uses it since 2026-11-03). With *Prevent pressing Home accidentally* on (`prevent_press_home_accidentally=1`), the first Home press in a game shows an `android.widget.Toast` from `com.rp.settings`: "Press the Home button again to return to launcher." A second press while it's up goes to the launcher. In ES-DE, Home shows no message. A listen-only service with only `typeNotificationStateChanged` sees the toast, and the controller keeps working in RetroArch and ES-DE (`dumpsys accessibility`: `capabilities=0`).
+- **Latency** (Home message trigger, no longer used). Toast created to `HelperService` acting: 15 ms (4 ms after the toast's window appeared). The toast stays up about 2.6 s, long enough to land in a capture, so Capture waits until 3 s after the Home press.
+- **Toasts while the menu has focus** (Home message trigger, no longer used). They still arrive, so Home with the menu or a guide open goes to ES-DE (70 ms to ES-DE in front). On a quick double press, Retroid goes home itself and the menu closes when ES-DE comes to the front.
 - **D-pad.** The D-pad sends `ABS_HAT0X`/`ABS_HAT0Y` and reaches a focused overlay window as `KEYCODE_DPAD_*`. A, B, L1/R1 and L2/R2 arrive as gamepad buttons.
 - **RetroArch pauses** while the menu has focus, and resumes when it closes.
 - **System bars.** A focusable full-screen overlay brings the navigation bar back over the game. Hiding the system bars through the overlay's own `WindowInsetsController` works, with `fitInsetsTypes = 0` so the window covers their area.
@@ -178,3 +178,30 @@ Checked on the Nova on 2026-11-02 with Shantae (`gbc/Shantae.zip`), Easyland and
 
   The 8.5 MB extra while open includes the decoded screenshot; it was gone 10 s after closing. In a process that had just made three captures, opening and closing the menu moved it from 85.7 to 86.7 MB. A fresh process reads about 76 MB on both builds, above the 66–71 MB noted for a long-running one.
 - **A guide saved in the browser.** The viewer that opens the saved guide tells the service when it closes, and the service lists the guides again then; nothing redraws the menu while the viewer is on top.
+
+## Back button menu
+
+Checked on the Nova on 2026-11-03 with a debug build of the `back-button-menu` branch (APK sha256 `9d808a76…84e3`): Easyland and Shantae in RetroArch, Prince of Persia: The Lost Crown in Eden. Retroid's *Prevent pressing Home accidentally* was off (`prevent_press_home_accidentally=0`).
+
+- **The controller's buttons.** "Retroid Pocket Controller" (`Generic.kl`, sources `KEYBOARD | GAMEPAD | JOYSTICK`) sends Back as `KEYCODE_BACK` with source `0x501` (keyboard and gamepad). Home arrives as `KEYCODE_MOVE_HOME`, A/B/X/Y, L1/R1, L2/R2, Start, Select and `BUTTON_C` the same way. The volume rocker is `gpio-keys`, source `0x101` (keyboard only).
+- **What a key filter sees.** Android hands a key-filtering accessibility service only key events, and holds each one until the service answers (AOSP's `KeyEventDispatcher` gives up after 500 ms). The D-pad is hat motion, so it never reaches the filter; it reaches a focused overlay window as `KEYCODE_DPAD_*`. Android's back swipe from the screen edge in RetroArch produced no key event at the filter.
+- **Binding.** With `flagRequestFilterKeyEvents`, `canRequestFilterKeyEvents` and no event types, Android 13 binds the service: `dumpsys accessibility` shows `capabilities=9` (window content and key filtering) and `eventTypes=` empty, with Retroid's Game Assistant still bound.
+- **An update keeps the old service entry.** After `adb install -r` of the build that renamed the service, `enabled_accessibility_services` still listed `.HomeGuardService` and not `.ButtonService`. The settings row now checks for the service itself, so it read *Not enabled* until the new one was turned on.
+- **Back as a toggle.** In a game ES-DE launched, Back opened the menu on Resume and RetroArch's own menu didn't open. A second Back closed the menu from the main menu, the Guides list, Game Info, a guide in the viewer and the browser, and the game went on. B stepped back one level in each screen except the browser, which is used by touch and ignores B (its bar's Back steps back). Back in ES-DE and in Android's Settings went through as before.
+- **Capture without the wait.** Picking Screenshot started capturing 185 ms later (Video: 150 ms); the PNG showed the game without the menu. Back during a 15 s clip stopped it after 3,967 ms and saved a 4.0 s MP4; the menu didn't open.
+- **Home with the guard off.** `KEYCODE_MOVE_HOME` passed through the filter and the firmware started ES-DE's home activity 0.13–0.17 s later: no menu, no message.
+- **Leaving without Close when you leave.** RetroArch's own quit hotkey (`BUTTON_C` here) returned to ES-DE with no App Info page and no force-stop. Quit Game ended RetroArch (four times) and Eden; ES-DE's home activity started 0.44–0.71 s after the pick. After Quit Game, the next RetroArch launch started a new process and opened; after Home, a different RetroArch game's launch made RetroArch exit (`System.exit called, status: 0`) and the next launch opened, as in [RetroArch and a second launch](#find-guides-and-the-html-viewer).
+- **Eden's own menu** opens with a swipe from the left edge, which still works with Back taken by the overlay.
+- **The overlay ended for memory in Eden.** As Prince of Persia loaded, Android ended the overlay (and ES-DE) for memory; the sticky restart brought the service and the filter back 13 s later. Back would have reached Eden in that gap.
+- **Delay.** Debug builds log `key held` (time from the press to the start of the service's `onKeyEvent`) and `key delivered` (time from the press to the menu's key listener), both from `KeyEvent.eventTime`, in whole milliseconds.
+
+  | Measurement | Presses | Median | p90 | p99 | Max |
+  |---|---|---|---|---|---|
+  | Menu, X (passes the filter), `key delivered` | 51 | 3 ms | 4 ms | 6 ms | 6 ms |
+  | Menu, D-pad (doesn't), `key delivered` | 58 | 2 ms | 3 ms | 4 ms | 4 ms |
+  | RetroArch play, about 3.5 min, `key held` | 134 | 1 ms | 1 ms | 2 ms | 2 ms |
+  | Eden play, about 3 min, `key held` | 222 | 1 ms | 2 ms | 4 ms | 4 ms |
+  | Eden play, a second 2.5 min, `key held` | 167 | 1 ms | 3 ms | 4 ms | 5 ms |
+
+  In the menu the filter adds about 1 ms (difference of the medians). The limit set before measuring was more than 1% of in-game presses over 4 ms, or any over 16 ms: one of 523 in-game presses was over 4 ms (5 ms), so the filter stays in the overlay's process. `key held` covers only the way into the service, not its answer; the menu rows cover both. The six volume presses all reached the service 152 ms after they were made, before the overlay did anything with them; the cause wasn't looked into.
+- **Retroid's force-stop.** Read from the firmware while planning, not reproduced here: Retroid's `forceStopPackage` skips packages in the `app_whiteList` system setting (on this Nova: Settings, Play Store, Chrome, Gallery and Baidu OTA) and packages with an enabled accessibility service. RetroArch and Eden aren't on the list.

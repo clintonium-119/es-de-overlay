@@ -87,16 +87,6 @@ class SettingsActivity : ComponentActivity() {
         var clip by remember { mutableStateOf(prefs.clipSeconds.toString()) }
         var overwrite by remember { mutableStateOf(prefs.overwrite) }
         var bootStart by remember { mutableStateOf(prefs.bootStart) }
-        var closeOnLeave by remember { mutableStateOf(prefs.closeOnLeave) }
-        // Every app with an icon, by name; not ES-DE itself or this app.
-        val apps = remember {
-            packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
-                .map { it.activityInfo.applicationInfo }
-                .filter { it.packageName != packageName && it.packageName != ESDE_PACKAGE }
-                .distinctBy { it.packageName }
-                .map { it.packageName to it.loadLabel(packageManager).toString() }
-                .sortedBy { it.second.lowercase() }
-        }
 
         val pickEsde = treePicker { prefs.esdeTree = it }
         val pickRoms = treePicker { prefs.romsTree = it }
@@ -196,11 +186,11 @@ class SettingsActivity : ComponentActivity() {
             Setting("Read screenshots (system screenshot pickup)", granted(Manifest.permission.READ_MEDIA_IMAGES).label, "Grant") {
                 askPermission.launch(Manifest.permission.READ_MEDIA_IMAGES)
             }
-            Setting("Home menu (accessibility service)", if (homeMenuEnabled()) "Enabled" else "Not enabled", "Open") {
+            Setting("Back button menu (accessibility service)", if (menuServiceEnabled()) "Enabled" else "Not enabled", "Open") {
                 openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS, withPackage = false)
             }
             Text(
-                "The menu opens on the toast from Retroid's \"Prevent pressing Home accidentally\", so keep that setting on.",
+                "The menu opens on the controller's Back button during a game ES-DE launched; no Retroid setting is needed.",
                 style = MaterialTheme.typography.bodySmall,
             )
             Setting("Display over other apps (menu and viewer)", Settings.canDrawOverlays(this@SettingsActivity).label, "Open") {
@@ -216,21 +206,6 @@ class SettingsActivity : ComponentActivity() {
             ) {
                 @Suppress("BatteryLife")
                 openSettings(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, withPackage = true)
-            }
-
-            Section("Close when you leave")
-            Text(
-                "Switch on an app to close it completely when you go back to ES-DE from a game ES-DE started in it, as Quit Game does, so its next launch starts fresh. It closes without warning: your saves are kept, but progress since your last save is lost, and an emulator's save-on-exit doesn't run. Android's Settings app shows for a moment while it closes.",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            apps.forEach { (pkg, label) ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(label, Modifier.weight(1f))
-                    Switch(checked = pkg in closeOnLeave, onCheckedChange = { on ->
-                        closeOnLeave = if (on) closeOnLeave + pkg else closeOnLeave - pkg
-                        prefs.closeOnLeave = closeOnLeave
-                    })
-                }
             }
         }
     }
@@ -271,8 +246,10 @@ class SettingsActivity : ComponentActivity() {
     private fun usageAccess() = getSystemService(AppOpsManager::class.java)
         .unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, applicationInfo.uid, packageName) == AppOpsManager.MODE_ALLOWED
 
-    private fun homeMenuEnabled() =
-        Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)?.contains("$packageName/") == true
+    // ButtonService itself: an update keeps the entry of the service's old name, which no longer exists.
+    private fun menuServiceEnabled() =
+        Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty().split(':')
+            .any { ComponentName.unflattenFromString(it) == ComponentName(this, ButtonService::class.java) }
 
     private fun openSettings(action: String, withPackage: Boolean) {
         startActivity(Intent(action).apply { if (withPackage) data = Uri.parse("package:$packageName") })

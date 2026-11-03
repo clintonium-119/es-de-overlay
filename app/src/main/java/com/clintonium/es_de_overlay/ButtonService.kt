@@ -9,19 +9,22 @@ import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
+import android.view.InputDevice
+import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
 /**
- * Listens for Retroid's Home guard: with "Prevent pressing Home accidentally" on, the first Home press
- * in a game shows a `com.rp.settings` toast instead of leaving. That toast opens the menu. No keys are
- * filtered, so the controller reaches the game untouched.
+ * Catches the controller's Back for the menu. Key filtering is on, so Android hands this every key first and waits
+ * for the answer; anything but the controller's Back is passed on at once.
  *
  * Also ends a game's app on request ([forceStop]): Android only lets system apps force-stop another app,
  * so this presses Force stop on the app's App Info page in Settings, then goes home to ES-DE.
  */
-class HomeGuardService : AccessibilityService() {
+class ButtonService : AccessibilityService() {
     private val main = Handler(Looper.getMainLooper())
+    /** Whether the overlay took the Back press in progress, decided on its first down. */
+    private var backTaken = false
 
     override fun onServiceConnected() {
         instance = this
@@ -32,10 +35,18 @@ class HomeGuardService : AccessibilityService() {
         super.onDestroy()
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        if (event.packageName == "com.rp.settings" && event.className == "android.widget.Toast" && HelperService.running) {
-            startService(Intent(this, HelperService::class.java).setAction(HelperService.ACTION_HOME_GUARD))
+    override fun onAccessibilityEvent(event: AccessibilityEvent) {}
+
+    override fun onKeyEvent(event: KeyEvent): Boolean {
+        if (BuildConfig.DEBUG && event.action == KeyEvent.ACTION_DOWN) {
+            Log.d(TAG, "key held ${SystemClock.uptimeMillis() - event.eventTime} ms: ${KeyEvent.keyCodeToString(event.keyCode)} source=0x${event.source.toString(16)}")
         }
+        // The controller's Back only: the back swipe and other apps' Back have no gamepad source.
+        if (event.keyCode != KeyEvent.KEYCODE_BACK || !event.isFromSource(InputDevice.SOURCE_GAMEPAD)) return false
+        // Decide on the first down and keep that answer for repeats and the up, so the app never gets half a press.
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) backTaken = HelperService.takesBack()
+        if (backTaken && event.action == KeyEvent.ACTION_UP) HelperService.back()
+        return backTaken
     }
 
     override fun onInterrupt() {}
@@ -76,7 +87,7 @@ class HomeGuardService : AccessibilityService() {
 
         // Set only while Android has the service connected, and cleared when it's destroyed.
         @SuppressLint("StaticFieldLeak")
-        private var instance: HomeGuardService? = null
+        private var instance: ButtonService? = null
 
         /** Any thread: force-stops [pkg] and returns to ES-DE. Does nothing while the service is off. */
         fun forceStop(pkg: String) {

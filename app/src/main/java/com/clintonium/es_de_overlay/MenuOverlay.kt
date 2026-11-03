@@ -12,6 +12,7 @@ import android.os.SystemClock
 import android.text.SpannableStringBuilder
 import android.text.TextUtils
 import android.text.style.ForegroundColorSpan
+import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
@@ -325,7 +326,12 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
             descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
             isFocusable = true
             isFocusableInTouchMode = true
-            setOnKeyListener { _, code, event -> if (event.action == KeyEvent.ACTION_DOWN) onKey(code) else code in KEYS }
+            setOnKeyListener { _, code, event ->
+                if (BuildConfig.DEBUG && event.action == KeyEvent.ACTION_DOWN) {
+                    Log.d(TAG, "key delivered ${SystemClock.uptimeMillis() - event.eventTime} ms: ${KeyEvent.keyCodeToString(code)}")
+                }
+                if (event.action == KeyEvent.ACTION_DOWN) onKey(code) else code in KEYS
+            }
         }
         wm.addFullScreen(view, PixelFormat.TRANSLUCENT)
         root = view
