@@ -15,6 +15,7 @@ import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
@@ -90,7 +91,7 @@ private class Rendered(val page: Int, val width: Int, val height: Int, val rect:
  * PNG/JPG pages are fitted whole and centered; zoomed out, D-pad left/right turn pages and L2/R2 go to
  * the first or last page; zoomed in, the D-pad pans and L2/R2 reset; L1/R1 zoom. Text scrolls. Saved
  * HTML guides scroll in an offline WebView styled like the theme, with their contents on Y. Only the
- * current page's bitmap is held, and everything is released on [close].
+ * current page's bitmaps are held, and everything is released on [close].
  */
 class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
     private val wm = context.getSystemService(WindowManager::class.java)
@@ -222,14 +223,19 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                     "png", "jpg", "jpeg" -> Doc(1, { RegionPage(resolver.openInputStream(uri)!!.use { BitmapRegionDecoder.newInstance(it)!! }) }) {}
                     else -> throw IllegalArgumentException("unsupported guide format: $name")
                 }
-                val image = ImageView(context).apply {
+                fun layer() = ImageView(context).apply {
                     scaleType = ImageView.ScaleType.MATRIX
                     // Drawn in software: pages uploaded as GPU textures stayed in the renderer's cache
                     // (~70 MB after a big map) once the viewer closed, and nothing trims it in an overlay.
                     setLayerType(View.LAYER_TYPE_SOFTWARE, null)
                 }
-                content = image
-                keys = paged(doc, name, saved, image, label, help)
+                val under = layer()
+                val image = layer()
+                content = FrameLayout(context).apply {
+                    addView(under)
+                    addView(image)
+                }
+                keys = paged(doc, name, saved, under, image, label, help)
             }
         }
         val view = FrameLayout(context).apply {
@@ -261,11 +267,15 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
     }
 
     /**
-     * Shows [doc] in [image] and returns its key handler. Pages open and render on a worker: a PNG region
-     * decode inflates every row above it (about a second on a big map), so zoom and pan move the bitmap
-     * already shown at once and the sharp one replaces it when ready.
+     * Shows [doc] and returns its key handler. Pages open and render on a worker: a PNG region decode
+     * inflates every row down to the region's bottom (half a second on a big map), so zoom and pan move
+     * the bitmaps already shown at once and the sharp one replaces its region when ready. The page's
+     * first render, the whole page at its fit, stays in [under], so what the sharp region in [image]
+     * doesn't cover yet is blurry rather than black.
      */
-    private fun paged(doc: Doc, name: String, start: Int, image: ImageView, label: TextView, help: TextView): (Int) -> Boolean {
+    private fun paged(
+        doc: Doc, name: String, start: Int, under: ImageView, image: ImageView, label: TextView, help: TextView,
+    ): (Int) -> Boolean {
         val worker = Executors.newSingleThreadExecutor()
         // Worker thread only.
         var opened: Page? = null
@@ -281,6 +291,8 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         var bitmap: Bitmap? = null
         var shown = Rect()
         var density = 1f
+        var base: Bitmap? = null
+        var baseDensity = 1f
         var busy = false
         var again = false
         var closed = false
@@ -294,13 +306,20 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 else -> "L1/R1 ZOOM"
             }
         }
+        /** Draws a render of the page from ([left], [top]) at [d] pixels per source unit into the view. */
+        fun matrix(left: Int, top: Int, d: Float) = Matrix().apply {
+            setScale(scale / d, scale / d)
+            postTranslate((left - cx) * scale + screenW / 2f, (top - cy) * scale + viewH / 2f)
+        }
         fun place() {
             if (pw == 0) return
-            val k = scale / density
-            image.imageMatrix = Matrix().apply {
-                setScale(k, k)
-                postTranslate((shown.left - cx) * scale + screenW / 2f, (shown.top - cy) * scale + viewH / 2f)
-            }
+            under.imageMatrix = matrix(0, 0, baseDensity)
+            image.imageMatrix = matrix(shown.left, shown.top, density)
+        }
+        fun dropSharp() {
+            image.setImageDrawable(null)
+            bitmap?.recycle()
+            bitmap = null
         }
         fun render() {
             if (pw > 0) {
@@ -311,6 +330,8 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 place()
             }
             chrome()
+            // Zoomed out, the whole page underneath is the view, so there's nothing sharper to decode.
+            if (base != null && !zoomed()) return dropSharp()
             if (busy) {
                 again = true
                 return
@@ -318,6 +339,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
             busy = true
             val n = page
             val s = scale
+            val asked = SystemClock.uptimeMillis()
             // The view plus a quarter screen on each side, so the next pan step is already sharp. Unknown
             // until the page opens; then the whole page renders at its fit.
             val rect = if (pw == 0) null else Rect(
@@ -339,25 +361,35 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 }.onFailure { Log.w(TAG, "viewer: $name page ${n + 1}", it) }.getOrNull()
                 main.post {
                     busy = false
+                    if (BuildConfig.DEBUG && result != null) {
+                        Log.d(TAG, "viewer: page ${n + 1} ${result.rect.toShortString()} rendered in ${SystemClock.uptimeMillis() - asked} ms")
+                    }
                     when {
                         result == null -> {}
-                        closed || result.page != page -> result.bitmap.recycle()
+                        // Stale: the viewer closed, the page turned (or turned back before a zoomed render landed),
+                        // or the view went back to the base.
+                        closed || result.page != page || (pw == 0 && rect != null) || (base != null && !zoomed()) ->
+                            result.bitmap.recycle()
+                        pw == 0 -> {
+                            pw = result.width
+                            ph = result.height
+                            fit = minOf(screenW.toFloat() / pw, viewH.toFloat() / ph)
+                            scale = fit
+                            cx = pw / 2f
+                            cy = ph / 2f
+                            under.setImageBitmap(result.bitmap)
+                            base = result.bitmap
+                            baseDensity = result.density
+                            place()
+                            chrome()
+                        }
                         else -> {
-                            if (pw == 0) {
-                                pw = result.width
-                                ph = result.height
-                                fit = minOf(screenW.toFloat() / pw, viewH.toFloat() / ph)
-                                scale = fit
-                                cx = pw / 2f
-                                cy = ph / 2f
-                            }
                             image.setImageBitmap(result.bitmap)
                             bitmap?.recycle()
                             bitmap = result.bitmap
                             shown = result.rect
                             density = result.density
                             place()
-                            chrome()
                         }
                     }
                     if (again && !closed) {
@@ -371,9 +403,10 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
             if (n !in 0 until doc.count || n == page) return
             page = n
             pw = 0
-            image.setImageDrawable(null)
-            bitmap?.recycle()
-            bitmap = null
+            dropSharp()
+            under.setImageDrawable(null)
+            base?.recycle()
+            base = null
             render()
         }
         fun zoom(to: Float) {
@@ -385,9 +418,10 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         position = { page }
         release = {
             closed = true
-            image.setImageDrawable(null)
-            bitmap?.recycle()
-            bitmap = null
+            dropSharp()
+            under.setImageDrawable(null)
+            base?.recycle()
+            base = null
             // On the worker, after any render in flight: PdfRenderer isn't thread-safe.
             worker.execute {
                 opened?.close()

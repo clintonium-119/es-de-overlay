@@ -78,7 +78,7 @@ Checked on the Nova on 2026-10-29 with Easyland (`snes/02) Hacks/Easyland.zip`) 
 - **RetroArch pauses** while the menu has focus, and resumes when it closes.
 - **System bars.** A focusable full-screen overlay brings the navigation bar back over the game. Hiding the system bars through the overlay's own `WindowInsetsController` works, with `fitInsetsTypes = 0` so the window covers their area.
 - **SAF file descriptors.** `PdfRenderer` and `Typeface.Builder(FileDescriptor)` (the theme's VAG Rounded font) both work with descriptors from the SD card's external storage provider.
-- **Large PNG maps.** A `BitmapRegionDecoder` region of an 8192x2048 PNG takes about a second, because PNG rows above the region are inflated each time. The viewer moves the bitmap already shown at once, and decodes the sharp region on a worker.
+- **Large PNG maps.** A `BitmapRegionDecoder` region of an 8192x2048 PNG takes about a second, because PNG rows above the region are inflated each time. The viewer moves the bitmap already shown at once, and decodes the sharp region on a worker. The sample size doesn't change that cost: in a headless benchmark on 2026-11-04, Super Metroid's Brinstar map from VGMaps (13568x5440, 4.3 MB) decoded whole in 527–564 ms at 1/8 through 1/64, and a 1920x1440 region at full size took 154 ms at the top left and 529 ms at the bottom right. Since then the whole page at its fit stays under the sharp region, so the part a zoom or pan uncovers is blurry, not black.
 - **GPU cache after closing.** Drawing pages as hardware textures left about 70 MB of "Graphics" memory in the renderer's cache after the viewer closed, and nothing trims it in an overlay-only process. The page view now draws through a software layer.
 
 ### Idle cost
