@@ -37,8 +37,7 @@ class NameResolverTest {
 
     @Test
     fun `overwrite policies`() {
-        val existing = setOf("X.png", "X-1.png")
-        assertEquals("X-2.png", targetName("X.png", Overwrite.SUFFIX, existing::contains))
+        val existing = setOf("X.png")
         assertNull(targetName("X.png", Overwrite.SKIP, existing::contains))
         assertEquals("X.png", targetName("X.png", Overwrite.REPLACE, existing::contains))
         assertEquals("Y.png", targetName("Y.png", Overwrite.SKIP, existing::contains))

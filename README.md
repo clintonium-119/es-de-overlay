@@ -37,25 +37,35 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ## Setup (once)
 
-Open **ES-DE Overlay** (ES-DE also lists it under Android Apps) and:
+Open **ES-DE Overlay** (ES-DE also lists it under Android Apps). Its sections run Service,
+Folders, Capture and Permissions; set it up from Folders down, then start it under Service:
 
-1. **ES-DE data folder → Pick**: open the SD card (or internal storage), choose the `ES-DE`
-   folder, *Use this folder*, *Allow*.
-2. **ROMs folder → Pick**: the same for `ROMs`. Android doesn't allow picking the card's root, so
-   these are two separate picks.
-3. Grant the permission rows: notifications, game sound, read screenshots, display over other
-   apps, usage access, and ignore battery optimization.
-4. **Back button menu (accessibility service) → Open**, then turn on *ES-DE Overlay* in Android's
-   accessibility settings. Android hands it each controller button before the app in front gets
-   it; it keeps only Back, and only during a game ES-DE launched, a capture or the open menu. For
-   Quit Game it presses Force stop on the game's App Info page in Settings. After updating from a
-   version that opened the menu with Home, turn it on again: the row reads *Not enabled* until you
-   do. Retroid's *Prevent pressing Home accidentally* isn't needed.
-5. Optional: screenshot media type folder (default `screenshots`), clip length (default 15 s),
-   what to do when the file exists (Replace / Skip / Keep both), and the boot notification.
-6. **Start service → Start now.** One consent covers every capture until the service stops.
+1. **ES-DE data folder → Set Folder**: the ES-DE folder that holds `downloaded_media`, `gamelists`
+   and `logs`. Open the SD card (or internal storage), choose `ES-DE`, *Use this folder*, *Allow*.
+   The row warns *No ES-DE log here* when the folder has no `logs/es_log.txt`.
+2. **ROMs folder → Set Folder**: the folder that holds your system folders (`snes`, `gbc`…).
+   Android doesn't allow picking the card's root, so these are two separate picks. The row warns
+   *No ES-DE system folders here* when none of its folders is a system in ES-DE's `gamelists`.
+3. Optional, under Capture: **Screenshot media type** lists ES-DE's image types (default
+   Screenshots); pick the one your theme shows in the gamelist, so captures show there and in the
+   menu. **Clip length** runs from 5 to 60 s in 5 s steps (default 15 s). When the media file
+   already exists, **Replace** saves over it and **Skip** keeps it and drops the new capture.
+4. **Enable** the permission rows: notifications, game sound in clips, read screenshots, display
+   over other apps, usage access, and ignore battery optimization. Each row reads *Enabled* or
+   *Disabled*, and its button opens where that changes. When Android no longer shows a
+   permission's dialog, **Enable** opens the app's App Info page instead.
+5. **Back button menu → Enable**, then turn on *ES-DE Overlay* in Android's accessibility
+   settings. Android hands it each controller button before the app in front gets it; it keeps
+   only Back, and only during a game ES-DE launched, a capture or the open menu. For Quit Game it
+   presses Force stop on the game's App Info page in Settings. After updating from a version that
+   opened the menu with Home, turn it on again: the row reads *Disabled* until you do. Retroid's
+   *Prevent pressing Home accidentally* isn't needed.
+6. **Start Service → Start now.** One consent covers every capture until the service stops.
+   Optional: **Offer to start after boot** posts a *Tap to start ES-DE Overlay* notification after
+   a restart.
 7. Optional: **Quick settings tile → Add** puts an *ES-DE Overlay* on/off tile in the swipe-down
-   shade. Turning it on shows the consent dialog and then returns to whatever you were doing.
+   shade, and the row reads *Added* afterwards. Turning the tile on shows the consent dialog and
+   then returns to whatever you were doing.
 
 ## Use
 
@@ -65,10 +75,10 @@ Open **ES-DE Overlay** (ES-DE also lists it under Android Apps) and:
   opened it. **Back** again closes everything the menu has open, a guide or the browser too, and
   returns to the game. Home goes to ES-DE and leaves the game running. A row too long for the list
   scrolls sideways a second after it's selected, as in ES-DE's gamelist.
-- The game's name sits above the rows in the theme's large size, and its ES-DE screenshot (from the
-  screenshot media type folder, PNG or JPG) fills the theme's art box on the right, with pixel art
-  kept sharp. A game with no screenshot shows an outlined box reading `No screenshot`. The menu
-  doesn't play the game's video.
+- The game's name sits above the rows in the theme's large size, and its ES-DE image (the type
+  picked under **Screenshot media type**, PNG or JPG) fills the theme's art box on the right, with
+  pixel art kept sharp. A game with no screenshot shows an outlined box reading `No screenshot`.
+  The menu doesn't play the game's video.
 - **Capture** opens **Screenshot**, **Video** and **Screenshot and Video**, with the cursor on
   Screenshot. Picking one closes the menu, then saves only what you picked: Screenshot takes the
   picture and stops; Video and Screenshot and Video record the clip. Press Back during the clip to
@@ -185,7 +195,7 @@ identified with certainty (the notification shows the raw launch line instead).
   an app press another app's buttons.
 - Clips are recorded at half resolution (640x480 on the Nova); the screenshot is full resolution.
   The Nova's encoder ignores bitrate settings, so size is controlled by resolution.
-- Clips include the game's sound when **Game sound in clips** is granted (Android labels it audio
+- Clips include the game's sound when **Game sound in clips** is enabled (Android labels it audio
   recording; only game playback is captured, never the microphone). Apps can opt out of playback
   capture; every game and emulator on this Nova allows it. Without the permission clips are silent.
 - RetroArch's 120 Hz shader sub-frames (`video_shader_subframes`) put a dark frame between real

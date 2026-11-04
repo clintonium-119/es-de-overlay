@@ -4,7 +4,7 @@ import java.io.InputStream
 
 data class GameRef(val system: String, val romRelativePath: String)
 
-enum class Overwrite { REPLACE, SKIP, SUFFIX }
+enum class Overwrite { REPLACE, SKIP }
 
 /**
  * Resolves [launch] to a game: the ROM path ES-DE logged, else a unique gamelist.xml name match.
@@ -28,11 +28,6 @@ fun mediaPath(game: GameRef, mediaType: String, ext: String, romIsDirectory: Boo
     return listOf(game.system, mediaType) + parts.dropLast(1) + "$base.${ext.lowercase()}"
 }
 
-/** The file name to write under [policy], or null to skip. SUFFIX keeps extras as `name-1.png`, `name-2.png`… */
-fun targetName(name: String, policy: Overwrite, exists: (String) -> Boolean): String? = when {
-    !exists(name) || policy == Overwrite.REPLACE -> name
-    policy == Overwrite.SKIP -> null
-    else -> generateSequence(1) { it + 1 }
-        .map { "${name.substringBeforeLast('.')}-$it.${name.substringAfterLast('.')}" }
-        .first { !exists(it) }
-}
+/** The file name to write under [policy]: [name], or null when it exists and the policy is SKIP. */
+fun targetName(name: String, policy: Overwrite, exists: (String) -> Boolean): String? =
+    if (!exists(name) || policy == Overwrite.REPLACE) name else null

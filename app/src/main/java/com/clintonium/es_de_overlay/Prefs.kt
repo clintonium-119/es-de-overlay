@@ -20,7 +20,11 @@ class Prefs(context: Context) {
         get() = sp.getString("mediaType", "screenshots")!!
         set(v) = sp.edit().putString("mediaType", v).apply()
     var overwrite: Overwrite
-        get() = Overwrite.valueOf(sp.getString("overwrite", Overwrite.REPLACE.name)!!)
+        // A policy an older build stored but this one dropped (Keep both) reads as Skip: it never overwrote either.
+        get() = when (val name = sp.getString("overwrite", null)) {
+            null -> Overwrite.REPLACE
+            else -> Overwrite.entries.firstOrNull { it.name == name } ?: Overwrite.SKIP
+        }
         set(v) = sp.edit().putString("overwrite", v.name).apply()
     var clipSeconds: Int
         get() = sp.getInt("clipSeconds", 15)
@@ -28,6 +32,9 @@ class Prefs(context: Context) {
     var bootStart: Boolean
         get() = sp.getBoolean("bootStart", false)
         set(v) = sp.edit().putBoolean("bootStart", v).apply()
+    var tileAdded: Boolean
+        get() = sp.getBoolean("tileAdded", false)
+        set(v) = sp.edit().putBoolean("tileAdded", v).apply()
 
     /** Where the viewer left a document (a page, or a scroll fraction), keyed by its path below the ES-DE folder. */
     fun position(key: String) = positions.getInt(key, 0)

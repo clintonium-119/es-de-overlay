@@ -6,7 +6,19 @@ import android.service.quicksettings.TileService
 
 /** Quick Settings toggle: on asks for capture consent (it can't be granted headless), off stops the service. */
 class CaptureTile : TileService() {
-    override fun onStartListening() = show(HelperService.running)
+    // Android can't be asked whether the tile is added, so settings reads what these callbacks saw.
+    override fun onTileAdded() {
+        Prefs(this).tileAdded = true
+    }
+
+    override fun onTileRemoved() {
+        Prefs(this).tileAdded = false
+    }
+
+    override fun onStartListening() {
+        Prefs(this).tileAdded = true
+        show(HelperService.running)
+    }
 
     override fun onClick() {
         if (HelperService.running) {
