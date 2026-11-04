@@ -89,6 +89,10 @@ class ButtonService : AccessibilityService() {
         if (BuildConfig.DEBUG && event.action == KeyEvent.ACTION_DOWN) {
             Log.d(TAG, "key held ${SystemClock.uptimeMillis() - event.eventTime} ms: ${KeyEvent.keyCodeToString(event.keyCode)} source=0x${event.source.toString(16)}")
         }
+        // The controller's Home (the Nova sends MOVE_HOME) goes on to Android; the menu closes as it lets go.
+        if (event.keyCode == KeyEvent.KEYCODE_MOVE_HOME && event.action == KeyEvent.ACTION_UP && event.isFromSource(InputDevice.SOURCE_GAMEPAD)) {
+            main.post(HelperService::home)
+        }
         // The controller's Back only: the back swipe and other apps' Back have no gamepad source.
         if (event.keyCode != KeyEvent.KEYCODE_BACK || !event.isFromSource(InputDevice.SOURCE_GAMEPAD)) return false
         // Decide on the first down and keep that answer for repeats and the up, so the app never gets half a press.

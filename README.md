@@ -84,8 +84,9 @@ Folders down, then start it under Service:
   D-pad moves, **A** opens, **B** closes it and returns to the game, as Resume does. The cursor stops
   at the first and last rows. **B** in any screen opened from the menu comes back to the row that
   opened it. **Back** again closes everything the menu has open, a guide or the browser too, and
-  returns to the game. Home goes to ES-DE and leaves the game running. A row too long for the list
-  scrolls sideways a second after it's selected, as in ES-DE's gamelist.
+  returns to the game. Home closes the menu and anything open over it, and goes to ES-DE, leaving
+  the game running. A row too long for the list scrolls sideways a second after it's selected, as
+  in ES-DE's gamelist.
 - The game's name sits above the rows in the theme's large size, and its ES-DE image (the type
   picked under **Screenshot media type**, PNG or JPG) fills the theme's art box on the right, with
   pixel art kept sharp. A game with no screenshot shows an outlined box reading `No screenshot`.

@@ -246,10 +246,15 @@ class HelperService : Service() {
     /** Main thread: when the game is left, close the menu and end a recording. */
     private fun onForeground(fg: String?) {
         if (fg == launch?.pkg) return
+        closeMenu()
+        capture?.stop()
+    }
+
+    /** Main thread: closes the menu and any viewer or browser over it, and cancels a Find Guides check or save. */
+    private fun closeMenu() {
         finding?.set(true)
         closeViewer()
         menu.release()
-        capture?.stop()
     }
 
     /**
@@ -262,9 +267,7 @@ class HelperService : Service() {
             return
         }
         if (menu.isOpen) {
-            finding?.set(true)
-            closeViewer()
-            menu.release()
+            closeMenu()
             return
         }
         val g = currentGame() ?: return
@@ -658,6 +661,11 @@ class HelperService : Service() {
         /** Main thread: the controller's Back, taken because [takesBack] said so. */
         fun back() {
             instance?.onBack()
+        }
+
+        /** Main thread: the controller's Home, which Android still gets. Closes the menu now rather than at the next poll. */
+        fun home() {
+            instance?.closeMenu()
         }
     }
 }
