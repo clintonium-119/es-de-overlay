@@ -199,7 +199,8 @@ identified with certainty (the notification shows the raw launch line instead).
 - Turning the screen off when ES-DE is idle needs ES-DE's *Debug Mode*, which makes ES-DE's log
   much longer; the app reads only the new lines each second. ES-DE's own screensaver timer decides
   what counts as idle, so any input ES-DE sees, D-pad and touch included, restarts it.
-- Games ES-DE launched never get the controller's Back while the overlay runs. Eden's own menu
+- Games ES-DE launched don't get the controller's Back while the overlay runs, except in about
+  their first second: the overlay reads launches from ES-DE's log once a second. Eden's own menu
   still opens with a swipe from the left edge, and Android's back swipe isn't affected.
 - Home leaves the game running in the background. Relaunching the same game resumes it. A RetroArch
   left running closes when ES-DE launches a different RetroArch game, so that launch shows nothing;

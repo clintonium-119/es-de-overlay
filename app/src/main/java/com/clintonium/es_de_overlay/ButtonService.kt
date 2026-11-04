@@ -92,7 +92,11 @@ class ButtonService : AccessibilityService() {
         // The controller's Back only: the back swipe and other apps' Back have no gamepad source.
         if (event.keyCode != KeyEvent.KEYCODE_BACK || !event.isFromSource(InputDevice.SOURCE_GAMEPAD)) return false
         // Decide on the first down and keep that answer for repeats and the up, so the app never gets half a press.
-        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) backTaken = HelperService.takesBack()
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            val start = SystemClock.uptimeMillis()
+            backTaken = HelperService.takesBack()
+            if (BuildConfig.DEBUG) Log.d(TAG, "Back taken=$backTaken, decided in ${SystemClock.uptimeMillis() - start} ms")
+        }
         if (backTaken && event.action == KeyEvent.ACTION_UP) HelperService.back()
         return backTaken
     }

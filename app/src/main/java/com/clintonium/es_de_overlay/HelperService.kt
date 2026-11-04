@@ -105,11 +105,12 @@ class EsLogTail {
     }
 }
 
-/** The package of the most recently resumed activity, tracked incrementally from usage events; one instance per polling thread. */
+/** The package of the most recently resumed activity, tracked incrementally from usage events. */
 class ForegroundApp {
     private var since = 0L
     private var pkg: String? = null
 
+    @Synchronized
     fun read(context: Context): String? {
         val now = System.currentTimeMillis()
         val from = if (since == 0L) now - TimeUnit.DAYS.toMillis(1) else since - 2_000
@@ -155,6 +156,7 @@ class HelperService : Service() {
 
     // io thread only.
     private val log = EsLogTail()
+    // The io thread's poll, and the main thread on Back.
     private val front = ForegroundApp()
 
     override fun onBind(intent: Intent?) = null
@@ -225,8 +227,11 @@ class HelperService : Service() {
 
     private fun audioGranted() = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
-    /** The game to file media under: the last ES-DE launch, only while its package is the app in front. */
-    private fun currentGame(): GameRef? = launch?.takeIf { it.pkg != null && it.pkg == foreground }?.let { game }
+    /** The game to file media under: the last ES-DE launch, only while its package is the app in front ([fg]). */
+    private fun currentGame(fg: String? = foreground): GameRef? = launch?.takeIf { it.pkg != null && it.pkg == fg }?.let { game }
+
+    /** [currentGame] with the app in front read now rather than at the last poll, which can be a second old. */
+    private fun gameInFront(): GameRef? = currentGame(front.read(this))
 
     private fun poll() {
         readLog()
@@ -270,7 +275,13 @@ class HelperService : Service() {
                 .onFailure { Log.w(TAG, "looking up manual and guides failed", it) }
                 .getOrDefault(Triple(null, emptyList(), null))
             val art = runCatching { screenshot(g) }.getOrNull()
+            val inFront = gameInFront() == g
             main.post {
+                // The game may have been left while the lookup ran.
+                if (!inFront) {
+                    art?.recycle()
+                    return@post
+                }
                 menu.title = name
                 menu.art = art
                 openMenu(g, name, manual, guides, info)
@@ -642,7 +653,7 @@ class HelperService : Service() {
         private var instance: HelperService? = null
 
         /** Main thread: whether the controller's Back is the overlay's: a capture is running, the menu is open, or ES-DE's game is in front. */
-        fun takesBack(): Boolean = instance?.run { running && (capture != null || menu.isOpen || currentGame() != null) } == true
+        fun takesBack(): Boolean = instance?.run { running && (capture != null || menu.isOpen || gameInFront() != null) } == true
 
         /** Main thread: the controller's Back, taken because [takesBack] said so. */
         fun back() {
