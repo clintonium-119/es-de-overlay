@@ -16,6 +16,14 @@
         android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- Whether ES-DE is the Home app, which turns Screen off when idle on by default. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
+    </queries>
+
     <application
         android:icon="@android:drawable/ic_menu_camera"
         android:label="ES-DE Overlay">

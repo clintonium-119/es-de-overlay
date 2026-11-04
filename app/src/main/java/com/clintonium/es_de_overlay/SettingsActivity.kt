@@ -47,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.clintonium.es_de_overlay.core.Overwrite
+import com.clintonium.es_de_overlay.core.reportsScreensaver
 
 class SettingsActivity : ComponentActivity() {
     private var refresh by mutableIntStateOf(0)
@@ -95,6 +96,9 @@ class SettingsActivity : ComponentActivity() {
         var clip by remember { mutableIntStateOf(prefs.clipSeconds) }
         var overwrite by remember { mutableStateOf(prefs.overwrite) }
         var bootStart by remember { mutableStateOf(prefs.bootStart) }
+        var sleepWhenIdle by remember { mutableStateOf(prefs.sleepWhenIdle) }
+        var sleepMinutes by remember { mutableIntStateOf(prefs.sleepMinutes) }
+        val screensaverReported = remember(tick, esde) { esde?.let(::esdeReportsScreensaver) }
 
         val pickEsde = treePicker { prefs.esdeTree = it }
         val pickRoms = treePicker { prefs.romsTree = it }
@@ -206,6 +210,30 @@ class SettingsActivity : ComponentActivity() {
                 "ES-DE only shows the file named exactly like the ROM: Replace saves over it, Skip keeps it and drops the new capture.",
                 style = MaterialTheme.typography.bodySmall,
             )
+            Section("Screen")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Turn the screen off when ES-DE is idle")
+                    Text(
+                        "ES-DE keeps the screen on while it's in front, even behind its screensaver. This locks the screen " +
+                            "like the power button once ES-DE's screensaver has run for the time below. Needs the Back " +
+                            "button menu enabled.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (screensaverReported == false) {
+                        Text(
+                            "In ES-DE, turn on Custom Event Scripts and Debug Mode under Other Settings, so it reports its screensaver.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+                Switch(checked = sleepWhenIdle, onCheckedChange = { sleepWhenIdle = it; prefs.sleepWhenIdle = it })
+            }
+            Dropdown("After the screensaver has run for", sleepMinutes, (0..30).toList(), { if (it == 0) "At once" else "$it min" }) {
+                sleepMinutes = it
+                prefs.sleepMinutes = it
+            }
             if (esde != null) {
                 Section("Guides")
                 Setting("Saved guides", "Browse guides by game and delete the ones you no longer need", "Manage Guides") {
@@ -326,6 +354,11 @@ class SettingsActivity : ComponentActivity() {
         if (runCatching { contentResolver.openInputStream(treeChild(esde, "logs/es_log.txt"))!!.close() }.isFailure) {
             "No ES-DE log here; set the ES-DE folder"
         } else null
+
+    // Null when there's no settings file to read, which the folder's own warning covers.
+    private fun esdeReportsScreensaver(esde: Uri) = runCatching {
+        contentResolver.openInputStream(treeChild(esde, "settings/es_settings.xml"))!!.use { reportsScreensaver(it.reader().readText()) }
+    }.getOrNull()
 
     // Skipped while the ES-DE folder has no gamelists, which its own warning already covers.
     private fun romsWarning(esde: Uri, roms: Uri): String? {

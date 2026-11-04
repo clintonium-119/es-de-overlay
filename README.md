@@ -38,8 +38,8 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ## Setup (once)
 
 Open **ES-DE Overlay** (ES-DE also lists it under Android Apps). Its sections run Service,
-Folders, Capture, Guides (once the ES-DE folder is set) and Permissions; set it up from Folders
-down, then start it under Service:
+Folders, Capture, Screen, Guides (once the ES-DE folder is set) and Permissions; set it up from
+Folders down, then start it under Service:
 
 1. **ES-DE data folder → Set Folder**: the ES-DE folder that holds `downloaded_media`, `gamelists`
    and `logs`. Open the SD card (or internal storage), choose `ES-DE`, *Use this folder*, *Allow*.
@@ -51,22 +51,29 @@ down, then start it under Service:
    Screenshots); pick the one your theme shows in the gamelist, so captures show there and in the
    menu. **Clip length** runs from 5 to 60 s in 5 s steps (default 15 s). When the media file
    already exists, **Replace** saves over it and **Skip** keeps it and drops the new capture.
-4. Optional, any time: **Saved guides → Manage Guides** lists the guides you've saved, by game,
+4. Under Screen: **Turn the screen off when ES-DE is idle**. ES-DE keeps the screen on while it's
+   in front, even behind its screensaver, so a handheld left in ES-DE stays lit until the battery
+   runs out. With this on, the app locks the screen like the power button once ES-DE's screensaver
+   has run for **After the screensaver has run for** (At once, then 1 to 30 min; default 9). It's on
+   by default when ES-DE is the Home app. ES-DE has to report its screensaver: in ES-DE's *Other
+   Settings*, turn on *Custom Event Scripts* and *Debug Mode*; the row says so while they're off.
+   It works through the Back button menu (step 7), with or without the service started.
+5. Optional, any time: **Saved guides → Manage Guides** lists the guides you've saved, by game,
    and deletes the ones you no longer need (see [Guides](#guides)).
-5. **Enable** the permission rows: notifications, game sound in clips, read screenshots, display
+6. **Enable** the permission rows: notifications, game sound in clips, read screenshots, display
    over other apps, usage access, and ignore battery optimization. Each row reads *Enabled* or
    *Disabled*, and its button opens where that changes. When Android no longer shows a
    permission's dialog, **Enable** opens the app's App Info page instead.
-6. **Back button menu → Enable**, then turn on *ES-DE Overlay* in Android's accessibility
+7. **Back button menu → Enable**, then turn on *ES-DE Overlay* in Android's accessibility
    settings. Android hands it each controller button before the app in front gets it; it keeps
    only Back, and only during a game ES-DE launched, a capture or the open menu. For Quit Game it
    presses Force stop on the game's App Info page in Settings. After updating from a version that
    opened the menu with Home, turn it on again: the row reads *Disabled* until you do. Retroid's
    *Prevent pressing Home accidentally* isn't needed.
-7. **Start Service → Start now.** One consent covers every capture until the service stops.
+8. **Start Service → Start now.** One consent covers every capture until the service stops.
    Optional: **Offer to start after boot** posts a *Tap to start ES-DE Overlay* notification after
    a restart.
-8. Optional: **Quick settings tile → Add** puts an *ES-DE Overlay* on/off tile in the swipe-down
+9. Optional: **Quick settings tile → Add** puts an *ES-DE Overlay* on/off tile in the swipe-down
    shade, and the row reads *Added* afterwards. Turning the tile on shows the consent dialog and
    then returns to whatever you were doing.
 
@@ -188,6 +195,9 @@ identified with certainty (the notification shows the raw launch line instead).
   an accessibility service catch Back by holding each button until the service answers. On the
   Nova that adds about 1 ms a press (5 ms at most in 523 presses during play in RetroArch and Eden).
   The D-pad and sticks don't pass through it.
+- Turning the screen off when ES-DE is idle needs ES-DE's *Debug Mode*, which makes ES-DE's log
+  much longer; the app reads only the new lines each second. ES-DE's own screensaver timer decides
+  what counts as idle, so any input ES-DE sees, D-pad and touch included, restarts it.
 - Games ES-DE launched never get the controller's Back while the overlay runs. Eden's own menu
   still opens with a swipe from the left edge, and Android's back swipe isn't affected.
 - Home leaves the game running in the background. Relaunching the same game resumes it. A RetroArch

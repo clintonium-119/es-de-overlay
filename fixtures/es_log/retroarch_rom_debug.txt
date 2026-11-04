@@ -1,0 +1,17 @@
+Nov 04 15:09:24 Info:   Launching game "Easyland" from system "Nintendo SNES (Super Nintendo) (snes)"...
+Nov 04 15:09:24 Debug:  FileData::launchGame(): Using default emulator "Snes9x - Current"
+Nov 04 15:09:24 Debug:  FileData::launchGame(): Found emulator package "com.retroarch.aarch64"
+Nov 04 15:09:24 Debug:  Scripting::fireEvent(): game-start "/storage/7BEF-E760/ROMs/snes/02\)\ Hacks/Easyland.zip" "Easyland" "snes" "Nintendo SNES (Super Nintendo)"
+Nov 04 15:09:24 Debug:  Raw emulator launch command:
+Nov 04 15:09:24 Debug:  %EMULATOR_RETROARCH% %EXTRA_CONFIGFILE%=%EXTERNALDATA%/Android/data/%ANDROIDPACKAGE%/files/retroarch.cfg %EXTRA_LIBRETRO%=%INTERNALDATA%/%ANDROIDPACKAGE%/cores/snes9x_libretro_android.so %EXTRA_ROM%=%ROM%
+Nov 04 15:09:24 Info:   Expanded emulator launch arguments:
+Nov 04 15:09:24 Info:   Package: com.retroarch.aarch64
+Nov 04 15:09:24 Info:   Activity: com.retroarch.browser.retroactivity.RetroActivityFuture
+Nov 04 15:09:24 Info:   Extra name: CONFIGFILE
+Nov 04 15:09:24 Info:   Extra value: /storage/emulated/0/Android/data/com.retroarch.aarch64/files/retroarch.cfg
+Nov 04 15:09:24 Info:   Extra name: LIBRETRO
+Nov 04 15:09:24 Info:   Extra value: /data/user/0/com.retroarch.aarch64/cores/snes9x_libretro_android.so
+Nov 04 15:09:24 Info:   Extra name: ROM
+Nov 04 15:09:24 Info:   Extra value: %ROM%
+Nov 04 15:09:24 Info:   %ROM% expanded: /storage/7BEF-E760/ROMs/snes/02) Hacks/Easyland.zip
+Nov 04 15:09:24 Debug:  GamelistFileParser::updateGamelist(): Added/updated 1 entity in "/storage/7BEF-E760/ES-DE/gamelists/snes/gamelist.xml"

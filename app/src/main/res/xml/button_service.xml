@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Filters keys only to catch the controller's Back; reads windows only to press Force stop in Settings. -->
+<!-- Filters keys only to catch the controller's Back; reads windows to press Force stop in Settings and to see
+     whether ES-DE is in front for turning the screen off. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagReportViewIds|flagRequestFilterKeyEvents"

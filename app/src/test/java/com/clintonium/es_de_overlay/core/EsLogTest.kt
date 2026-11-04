@@ -30,6 +30,14 @@ class EsLogTest {
     }
 
     @Test
+    fun `debug mode launch still yields the raw ROM path, not the event line's escaped one`() {
+        val launch = fixture("retroarch_rom_debug.txt")
+        assertEquals("Easyland", launch.name)
+        assertEquals("com.retroarch.aarch64", launch.pkg)
+        assertEquals("02) Hacks/Easyland.zip", romPathHint(launch, roots))
+    }
+
+    @Test
     fun `android app launch has a package but no path`() {
         val launch = fixture("android_app.txt")
         assertEquals("Dead Cells", launch.name)
@@ -85,5 +93,21 @@ class EsLogTest {
             ),
         )
         assertEquals("100%AB.sfc", romPathHint(launch, roots))
+    }
+
+    @Test
+    fun `screensaver start and end lines are recognized, other events are not`() {
+        assertEquals(true, screensaverEvent("""Nov 04 14:30:00 Debug:  Scripting::fireEvent(): screensaver-start "timer" "" "" """""))
+        assertEquals(false, screensaverEvent("""Nov 04 14:31:00 Debug:  Scripting::fireEvent(): screensaver-end "cancel" "" "" """""))
+        assertNull(screensaverEvent("""Nov 04 14:30:10 Debug:  Scripting::fireEvent(): screensaver-game-select "/x.zip" "X" "snes" "Nintendo SNES""""))
+        assertNull(screensaverEvent("""Nov 04 14:30:10 Info:   Launching game "X" from system "Nintendo SNES (snes)"..."""))
+    }
+
+    @Test
+    fun `screensaver is reported only with custom event scripts and debug mode both on`() {
+        val on = """<bool name="CustomEventScripts" value="true" />""" + "\n" + """<bool name="DebugMode" value="true" />"""
+        assertEquals(true, reportsScreensaver(on))
+        assertEquals(false, reportsScreensaver(on.replace("""DebugMode" value="true""", """DebugMode" value="false""")))
+        assertEquals(false, reportsScreensaver(on.replace("CustomEventScripts", "CustomEventScriptsBrowsing")))
     }
 }

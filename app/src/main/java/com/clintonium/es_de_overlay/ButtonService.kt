@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
@@ -13,6 +14,9 @@ import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import com.clintonium.es_de_overlay.core.screensaverEvent
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * Catches the controller's Back for the menu. Key filtering is on, so Android hands this every key first and waits
@@ -20,19 +24,61 @@ import android.view.accessibility.AccessibilityNodeInfo
  *
  * Also ends a game's app on request ([forceStop]): Android only lets system apps force-stop another app,
  * so this presses Force stop on the app's App Info page in Settings, then goes home to ES-DE.
+ *
+ * And turns the screen off when ES-DE has sat idle ([watchIdle]). Android keeps this service running whenever it's
+ * enabled, so that works with the overlay service stopped too.
  */
 class ButtonService : AccessibilityService() {
     private val main = Handler(Looper.getMainLooper())
     /** Whether the overlay took the Back press in progress, decided on its first down. */
     private var backTaken = false
+    private val io = Executors.newSingleThreadScheduledExecutor()
+    private lateinit var prefs: Prefs
+
+    // io thread only.
+    private val log = EsLogTail()
+    /** Uptime the countdown to turning the screen off started at: set while ES-DE's screensaver runs. */
+    private var screensaverSince: Long? = null
 
     override fun onServiceConnected() {
         instance = this
+        prefs = Prefs(this)
+        io.scheduleWithFixedDelay({
+            try {
+                watchIdle()
+            } catch (e: Exception) {
+                Log.w(TAG, "idle check failed", e)
+            }
+        }, 1, 1, TimeUnit.SECONDS)
     }
 
     override fun onDestroy() {
         instance = null
+        io.shutdownNow()
         super.onDestroy()
+    }
+
+    /**
+     * io thread: turns the screen off like the power button once ES-DE's screensaver has run for the set minutes, since
+     * ES-DE keeps the screen on while it's in front. Only time with ES-DE's window active and the screen on counts, so
+     * coming back to ES-DE or waking the device never locks at once; uptime also stops while the device sleeps. The log
+     * is read only then: a screensaver logged meanwhile counts from when ES-DE is back.
+     */
+    private fun watchIdle() {
+        val now = SystemClock.uptimeMillis()
+        if (!getSystemService(PowerManager::class.java).isInteractive || rootInActiveWindow?.packageName != ESDE) {
+            screensaverSince = screensaverSince?.let { now }
+            return
+        }
+        val tree = prefs.esdeTree ?: return
+        for (line in log.read(this, tree) { screensaverSince = null }) {
+            screensaverEvent(line)?.let { screensaverSince = if (it) now else null }
+        }
+        val since = screensaverSince ?: return
+        if (now - since < prefs.sleepMinutes * 60_000L || !prefs.sleepWhenIdle) return
+        Log.i(TAG, "ES-DE idle: turning the screen off")
+        screensaverSince = now
+        main.post { performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN) }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {}
@@ -93,5 +139,6 @@ class ButtonService : AccessibilityService() {
         fun forceStop(pkg: String) {
             Handler(Looper.getMainLooper()).post { instance?.stop(pkg) }
         }
+
     }
 }

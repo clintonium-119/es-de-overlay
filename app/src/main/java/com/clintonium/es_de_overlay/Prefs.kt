@@ -1,10 +1,13 @@
 package com.clintonium.es_de_overlay
 
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import androidx.core.content.edit
 import com.clintonium.es_de_overlay.core.Overwrite
 
-class Prefs(context: Context) {
+class Prefs(private val context: Context) {
     private val sp = context.getSharedPreferences("prefs", Context.MODE_PRIVATE)
     // Written only by the viewer's process: a process writes back its whole cached file, so sharing "prefs"
     // with the settings screen would let one erase the other's changes.
@@ -12,33 +15,46 @@ class Prefs(context: Context) {
 
     var esdeTree: Uri?
         get() = sp.getString("esdeTree", null)?.let(Uri::parse)
-        set(v) = sp.edit().putString("esdeTree", v?.toString()).apply()
+        set(v) = sp.edit { putString("esdeTree", v?.toString()) }
     var romsTree: Uri?
         get() = sp.getString("romsTree", null)?.let(Uri::parse)
-        set(v) = sp.edit().putString("romsTree", v?.toString()).apply()
+        set(v) = sp.edit { putString("romsTree", v?.toString()) }
     var mediaType: String
         get() = sp.getString("mediaType", "screenshots")!!
-        set(v) = sp.edit().putString("mediaType", v).apply()
+        set(v) = sp.edit { putString("mediaType", v) }
     var overwrite: Overwrite
         // A policy an older build stored but this one dropped (Keep both) reads as Skip: it never overwrote either.
         get() = when (val name = sp.getString("overwrite", null)) {
             null -> Overwrite.REPLACE
             else -> Overwrite.entries.firstOrNull { it.name == name } ?: Overwrite.SKIP
         }
-        set(v) = sp.edit().putString("overwrite", v.name).apply()
+        set(v) = sp.edit { putString("overwrite", v.name) }
     var clipSeconds: Int
         get() = sp.getInt("clipSeconds", 15)
-        set(v) = sp.edit().putInt("clipSeconds", v).apply()
+        set(v) = sp.edit { putInt("clipSeconds", v) }
     var bootStart: Boolean
         get() = sp.getBoolean("bootStart", false)
-        set(v) = sp.edit().putBoolean("bootStart", v).apply()
+        set(v) = sp.edit { putBoolean("bootStart", v) }
     var tileAdded: Boolean
         get() = sp.getBoolean("tileAdded", false)
-        set(v) = sp.edit().putBoolean("tileAdded", v).apply()
+        set(v) = sp.edit { putBoolean("tileAdded", v) }
+    // On by default where ES-DE is the Home app, so a handheld left in ES-DE doesn't stay lit until the battery runs out.
+    var sleepWhenIdle: Boolean
+        get() = sp.getBoolean("sleepWhenIdle", esdeIsHome())
+        set(v) = sp.edit { putBoolean("sleepWhenIdle", v) }
+    /** Minutes ES-DE's screensaver runs before the screen goes off. */
+    var sleepMinutes: Int
+        get() = sp.getInt("sleepMinutes", 9)
+        set(v) = sp.edit { putInt("sleepMinutes", v) }
+
+    private fun esdeIsHome() = context.packageManager.resolveActivity(
+        Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
+        PackageManager.MATCH_DEFAULT_ONLY,
+    )?.activityInfo?.packageName == ESDE
 
     /** Where the viewer left a document (a page, or a scroll fraction), keyed by its path below the ES-DE folder. */
     fun position(key: String) = positions.getInt(key, 0)
 
     /** Written at once: the viewer's process ends right after it closes, before an apply() would land. */
-    fun setPosition(key: String, value: Int) = positions.edit().putInt(key, value).commit()
+    fun setPosition(key: String, value: Int) = positions.edit(commit = true) { putInt(key, value) }
 }

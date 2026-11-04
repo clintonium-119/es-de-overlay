@@ -51,6 +51,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 const val TAG = "ESDEShot"
+const val ESDE = "org.es_de.frontend"
 private const val CHANNEL = "status"
 private const val ONGOING_ID = 1
 private const val RESULT_ID = 2
@@ -77,6 +78,32 @@ fun notify(context: Context, id: Int, text: String, grant: Boolean = false, ongo
 /** Document URI for [path] below a SAF tree from the external storage provider (document ids are `volume:dir/sub`). */
 fun treeChild(tree: Uri, path: String): Uri =
     DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree) + "/" + path)
+
+/** Reads the whole lines appended to ES-DE's es_log.txt since the last [read]; one instance per reading thread. */
+class EsLogTail {
+    private var offset = 0L
+    private var head = ""
+
+    /** The new lines below the ES-DE folder [tree]; [onNewLog] runs first when ES-DE started a new log, read from its start. */
+    fun read(context: Context, tree: Uri, onNewLog: () -> Unit): List<String> {
+        context.contentResolver.openFileDescriptor(treeChild(tree, "logs/es_log.txt"), "r")!!.use { pfd ->
+            val ch = FileInputStream(pfd.fileDescriptor).channel
+            val size = ch.size()
+            val first = ByteBuffer.allocate(minOf(size, 64L).toInt()).also { ch.read(it, 0) }.array().decodeToString()
+            if (first != head || size < offset) {
+                head = first
+                offset = 0
+                onNewLog()
+            }
+            if (size == offset) return emptyList()
+            val bytes = ByteBuffer.allocate((size - offset).toInt()).also { ch.read(it, offset) }.array()
+            val end = bytes.lastIndexOf('\n'.code.toByte())
+            if (end < 0) return emptyList()
+            offset += end + 1
+            return bytes.decodeToString(0, end).lines()
+        }
+    }
+}
 
 /** A context for overlay windows on the built-in display. */
 fun overlayContext(context: Context): Context = context.createWindowContext(
@@ -111,8 +138,7 @@ class HelperService : Service() {
     @Volatile private var foreground: String? = null
 
     // io thread only.
-    private var logOffset = 0L
-    private var logHead = ""
+    private val log = EsLogTail()
     private var eventsSince = 0L
 
     override fun onBind(intent: Intent?) = null
@@ -555,31 +581,17 @@ class HelperService : Service() {
         Log.i(TAG, "saved $written for $g")
     }
 
-    /** Reads bytes appended to es_log.txt since the last poll; starts over when ES-DE rotates the log. */
+    /** Folds the lines ES-DE logged since the last poll into its latest launch. */
     private fun readLog() {
         val tree = prefs.esdeTree ?: return
-        contentResolver.openFileDescriptor(treeChild(tree, "logs/es_log.txt"), "r")!!.use { pfd ->
-            val ch = FileInputStream(pfd.fileDescriptor).channel
-            val size = ch.size()
-            val head = ByteBuffer.allocate(minOf(size, 64L).toInt()).also { ch.read(it, 0) }.array().decodeToString()
-            if (head != logHead || size < logOffset) {
-                logHead = head
-                logOffset = 0
-                launch = null
-            }
-            if (size == logOffset) return
-            val bytes = ByteBuffer.allocate((size - logOffset).toInt()).also { ch.read(it, logOffset) }.array()
-            val end = bytes.lastIndexOf('\n'.code.toByte())
-            if (end < 0) return
-            logOffset += end + 1
-            val before = launch
-            var latest = before
-            bytes.decodeToString(0, end).lineSequence().forEach { latest = nextLaunch(latest, it) }
-            if (latest != before && latest != null) {
-                launch = latest
-                game = resolve(latest)
-                Log.i(TAG, "launch: ${latest.name} (${latest.system}) pkg=${latest.pkg} -> $game")
-            }
+        val lines = log.read(this, tree) { launch = null }
+        val before = launch
+        var latest = before
+        lines.forEach { latest = nextLaunch(latest, it) }
+        if (latest != before && latest != null) {
+            launch = latest
+            game = resolve(latest)
+            Log.i(TAG, "launch: ${latest.name} (${latest.system}) pkg=${latest.pkg} -> $game")
         }
     }
 
