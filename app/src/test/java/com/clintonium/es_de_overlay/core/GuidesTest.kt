@@ -75,4 +75,74 @@ class GuidesTest {
     fun `no guides gives an empty list`() {
         assertEquals(emptyList<String>(), guideEntries("Easyland", emptyList(), emptyList()))
     }
+
+    private fun file(path: String, size: Long = 1) = GuideFile(path, size, "tree/$path")
+
+    @Test
+    fun `guides in a game's folder group under its gamelist name and last played`() {
+        val wiki = file("Shantae/StrategyWiki - Shantae.html")
+        val faqs = file("Shantae/GameFAQs - Shantae Walkthrough.html")
+        assertEquals(
+            listOf(GuideGame("gbc", "", "Shantae", "Shantae", "20261102T201500", listOf(faqs, wiki))),
+            guideGames("gbc", listOf(wiki, faqs), listOf(GamelistGame("Shantae.zip", "Shantae", "20261102T201500"))),
+        )
+    }
+
+    @Test
+    fun `a guide file in a ROM subfolder groups under that game`() {
+        val guide = file("02) Hacks/Easyland.pdf")
+        assertEquals(
+            listOf(GuideGame("snes", "02) Hacks", "Easyland", "Easyland", null, listOf(guide))),
+            guideGames("snes", listOf(guide), listOf(GamelistGame("02) Hacks/Easyland.zip", "Easyland", null))),
+        )
+    }
+
+    @Test
+    fun `a guides folder inside a ROM subfolder groups under the game, not the subfolder`() {
+        val base = "Pitfall! - Pitfall Harry's Jungle Adventure"
+        val guide = file("01) All but the Best/$base/GameFAQs - Walkthrough.html")
+        assertEquals(
+            listOf(GuideGame("snes", "01) All but the Best", base, "Pitfall!", null, listOf(guide))),
+            guideGames("snes", listOf(guide), listOf(GamelistGame("01) All but the Best/$base.zip", "Pitfall!", null))),
+        )
+    }
+
+    @Test
+    fun `a directory ROM matches a folder with its whole name`() {
+        val guide = file("dig.scummvm/guide.pdf")
+        assertEquals(
+            listOf(GuideGame("scummvm", "", "dig.scummvm", "The Dig", null, listOf(guide))),
+            guideGames("scummvm", listOf(guide), listOf(GamelistGame("dig.scummvm", "The Dig", null))),
+        )
+    }
+
+    @Test
+    fun `guides matching no game group under their folder or their own name`() {
+        val inFolder = file("Not A Real Game/test.txt")
+        val alone = file("Lonely.pdf")
+        assertEquals(
+            listOf(
+                GuideGame("gbc", "", "Not A Real Game", "Not A Real Game", null, listOf(inFolder)),
+                GuideGame("gbc", "", "Lonely", "Lonely", null, listOf(alone)),
+            ),
+            guideGames("gbc", listOf(inFolder, alone), listOf(GamelistGame("Shantae.zip", "Shantae", null))),
+        )
+    }
+
+    @Test
+    fun `unsupported files are left out and a game's size sums its guides`() {
+        val games = guideGames(
+            "gbc",
+            listOf(file("Shantae/a.html", 100), file("Shantae/b.cbr", 50), file("Shantae/c.nfo", 5), file("Shantae.PDF", 20)),
+            listOf(GamelistGame("Shantae.zip", "Shantae", null)),
+        )
+        assertEquals(listOf("Shantae.PDF", "Shantae/a.html"), games.single().files.map { it.path })
+        assertEquals(120L, games.single().size)
+    }
+
+    @Test
+    fun `two games with the same stem resolve to the first in the gamelist`() {
+        val games = listOf(GamelistGame("Game.zip", "First", null), GamelistGame("Game.7z", "Second", null))
+        assertEquals("First", guideGames("gb", listOf(file("Game.pdf")), games).single().name)
+    }
 }

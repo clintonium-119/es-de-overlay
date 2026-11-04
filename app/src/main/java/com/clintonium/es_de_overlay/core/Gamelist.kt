@@ -1,8 +1,10 @@
 package com.clintonium.es_de_overlay.core
 
 import java.io.InputStream
+import java.io.StringReader
 import javax.xml.parsers.DocumentBuilderFactory
 import org.w3c.dom.Element
+import org.xml.sax.InputSource
 
 /** A game's gamelist.xml metadata; a field is null when its tag is missing or empty. [released] is an ISO date. */
 data class GameInfo(
@@ -15,11 +17,24 @@ data class GameInfo(
 )
 
 private fun games(xml: InputStream): List<Element> {
-    val games = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(xml).getElementsByTagName("game")
+    // A system with an alternative emulator set has an <alternativeEmulator> element before <gameList>: two root
+    // elements, which a strict parser rejects. One wrapping root parses both forms.
+    val body = xml.reader().readText().removePrefix("\uFEFF").replaceFirst(Regex("""^\s*<\?xml[^?]*\?>"""), "")
+    val games = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+        .parse(InputSource(StringReader("<root>$body</root>"))).getElementsByTagName("game")
     return (0 until games.length).map { games.item(it) as Element }
 }
 
 private fun Element.text(tag: String) = getElementsByTagName(tag).item(0)?.textContent?.trim()
+
+/** A gamelist.xml game: [path] without "./", [name], and the raw `YYYYMMDDTHHMMSS` [lastPlayed]; null when missing. */
+data class GamelistGame(val path: String, val name: String?, val lastPlayed: String?)
+
+/** Every gamelist.xml game that has a <path>, in gamelist order. */
+fun gamelistGames(xml: InputStream): List<GamelistGame> = games(xml).mapNotNull { game ->
+    fun field(tag: String) = game.text(tag)?.takeIf { it.isNotEmpty() }
+    field("path")?.let { GamelistGame(it.removePrefix("./"), field("name"), field("lastplayed")) }
+}
 
 /** ROM-relative paths (without the leading "./") of the gamelist.xml games whose <name> is [name]. */
 fun gamelistPaths(xml: InputStream, name: String): List<String> =

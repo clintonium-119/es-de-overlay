@@ -206,6 +206,12 @@ class SettingsActivity : ComponentActivity() {
                 "ES-DE only shows the file named exactly like the ROM: Replace saves over it, Skip keeps it and drops the new capture.",
                 style = MaterialTheme.typography.bodySmall,
             )
+            if (esde != null) {
+                Section("Guides")
+                Setting("Saved guides", "Browse guides by game and delete the ones you no longer need", "Manage Guides") {
+                    startActivity(Intent(this@SettingsActivity, GuidesActivity::class.java))
+                }
+            }
             Section("Permissions")
             for ((title, permission, description) in listOf(
                 Triple("Notifications", Manifest.permission.POST_NOTIFICATIONS, "Shows capture results and the offer to start after boot."),

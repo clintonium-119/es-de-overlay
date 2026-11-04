@@ -38,7 +38,8 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ## Setup (once)
 
 Open **ES-DE Overlay** (ES-DE also lists it under Android Apps). Its sections run Service,
-Folders, Capture and Permissions; set it up from Folders down, then start it under Service:
+Folders, Capture, Guides (once the ES-DE folder is set) and Permissions; set it up from Folders
+down, then start it under Service:
 
 1. **ES-DE data folder → Set Folder**: the ES-DE folder that holds `downloaded_media`, `gamelists`
    and `logs`. Open the SD card (or internal storage), choose `ES-DE`, *Use this folder*, *Allow*.
@@ -50,20 +51,22 @@ Folders, Capture and Permissions; set it up from Folders down, then start it und
    Screenshots); pick the one your theme shows in the gamelist, so captures show there and in the
    menu. **Clip length** runs from 5 to 60 s in 5 s steps (default 15 s). When the media file
    already exists, **Replace** saves over it and **Skip** keeps it and drops the new capture.
-4. **Enable** the permission rows: notifications, game sound in clips, read screenshots, display
+4. Optional, any time: **Saved guides → Manage Guides** lists the guides you've saved, by game,
+   and deletes the ones you no longer need (see [Guides](#guides)).
+5. **Enable** the permission rows: notifications, game sound in clips, read screenshots, display
    over other apps, usage access, and ignore battery optimization. Each row reads *Enabled* or
    *Disabled*, and its button opens where that changes. When Android no longer shows a
    permission's dialog, **Enable** opens the app's App Info page instead.
-5. **Back button menu → Enable**, then turn on *ES-DE Overlay* in Android's accessibility
+6. **Back button menu → Enable**, then turn on *ES-DE Overlay* in Android's accessibility
    settings. Android hands it each controller button before the app in front gets it; it keeps
    only Back, and only during a game ES-DE launched, a capture or the open menu. For Quit Game it
    presses Force stop on the game's App Info page in Settings. After updating from a version that
    opened the menu with Home, turn it on again: the row reads *Disabled* until you do. Retroid's
    *Prevent pressing Home accidentally* isn't needed.
-6. **Start Service → Start now.** One consent covers every capture until the service stops.
+7. **Start Service → Start now.** One consent covers every capture until the service stops.
    Optional: **Offer to start after boot** posts a *Tap to start ES-DE Overlay* notification after
    a restart.
-7. Optional: **Quick settings tile → Add** puts an *ES-DE Overlay* on/off tile in the swipe-down
+8. Optional: **Quick settings tile → Add** puts an *ES-DE Overlay* on/off tile in the swipe-down
    shade, and the row reads *Added* afterwards. Turning the tile on shows the consent dialog and
    then returns to whatever you were doing.
 
@@ -162,6 +165,15 @@ author. These guides belong to their authors; save them for your own reading. Th
 saved guides offline in the theme's colours and font; opened anywhere else they are plain web
 pages.
 
+**Saved guides → Manage Guides** in settings lists every saved guide by game, under the game's
+ES-DE name with its system, guide count, size and last played date, and the total on top. Search
+finds a game by name (**✕** clears it). **Size** (largest first), **Last Played** (oldest first,
+never played before that) and **Name** sort the list. A game whose ROM is no longer in the ROMs
+folder reads *ROM missing*. Open a game to see its guides and their sizes: **Delete** removes one
+guide and **Delete All** removes all of the game's guides, each after a confirm (**Keep** leaves
+them). Deleting a game's last guide also removes its emptied `<ROM name>/` folder. The screen
+reads the guides from `downloaded_media` each time it opens.
+
 ## How it finds the game
 
 It reads `ES-DE/logs/es_log.txt`. Each launch logs the game name, system, and the app package.
@@ -207,6 +219,8 @@ identified with certainty (the notification shows the raw launch line instead).
 - Reinstalling or stopping the service (including from the tile) needs a new consent.
 - Emulators that hand off to a different app package after launch would block captures and the
   menu (not seen so far).
+- Typing in Manage Guides' search needs touch: the controller's A doesn't open the keyboard there.
+  The D-pad and A work everywhere else on the screen.
 - Find Guides matches the game's ES-DE name exactly (ignoring case, punctuation, region tags and a
   trailing ", The"), so some games aren't found even when a site has them; it never picks a
   different game. GameFAQs and Neoseeker are searched in the browser, where you pick the game.

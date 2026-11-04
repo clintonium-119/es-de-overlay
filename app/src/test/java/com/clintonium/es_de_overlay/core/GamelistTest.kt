@@ -39,6 +39,7 @@ class GamelistTest {
         		<genre>Platform</genre>
         		<players>1</players>
         		<playcount>29</playcount>
+        		<lastplayed>20261102T201500</lastplayed>
         	</game>
         </gameList>
     """.trimIndent()
@@ -76,6 +77,40 @@ class GamelistTest {
     fun `an entry without metadata gives nulls and an unknown path gives null`() {
         assertEquals(GameInfo(null, null, null, null, null, null), gamelistInfo(xml.byteInputStream(), "Dead Cells.app"))
         assertNull(gamelistInfo(xml.byteInputStream(), "Super Metroid.sfc"))
+    }
+
+    @Test
+    fun `games list paths without the dot-slash with names and last played`() {
+        val games = gamelistGames(xml.byteInputStream())
+        assertEquals(5, games.size)
+        assertEquals(GamelistGame("TMNT Shredder's Revenge.app", "TMNT Shredder's Revenge", null), games[1])
+        assertEquals(GamelistGame("Shantae.zip", "Shantae", "20261102T201500"), games[4])
+    }
+
+    @Test
+    fun `a game without a name gives null and one without a path is left out`() {
+        val xml = "<gameList><game><path>./Untitled.zip</path><name></name></game><game><name>No Path</name></game></gameList>"
+        assertEquals(listOf(GamelistGame("Untitled.zip", null, null)), gamelistGames(xml.byteInputStream()))
+    }
+
+    @Test
+    fun `a gamelist after an alternative emulator block still parses`() {
+        // As ES-DE writes it once a system's alternative emulator is set (the Nova's nes gamelist).
+        val xml = """
+            <?xml version="1.0"?>
+            <alternativeEmulator>
+            	<label>Nestopia UE</label>
+            </alternativeEmulator>
+            <gameList>
+            	<game>
+            		<path>./Dragon Warrior.nes</path>
+            		<name>Dragon Warrior</name>
+            		<lastplayed>20261031T141608</lastplayed>
+            	</game>
+            </gameList>
+        """.trimIndent()
+        assertEquals(listOf(GamelistGame("Dragon Warrior.nes", "Dragon Warrior", "20261031T141608")), gamelistGames(xml.byteInputStream()))
+        assertEquals(listOf("Dragon Warrior.nes"), gamelistPaths(xml.byteInputStream(), "Dragon Warrior"))
     }
 
     @Test
