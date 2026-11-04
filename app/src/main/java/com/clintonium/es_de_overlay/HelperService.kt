@@ -148,6 +148,10 @@ class HelperService : Service() {
     private var capture: Capture? = null
     /** Main thread: the cancel flag of the running Find Guides check or save, set when the menu goes away. */
     private var finding: AtomicBoolean? = null
+    /** Main thread: set while the menu's lookup runs; the menu opens only if it's still the same one when the lookup ends. */
+    private var opening: Any? = null
+    /** Main thread: whether a capture is waiting for the closed menu to leave the screen. */
+    private var starting = false
 
     // Written on the io thread, read on main.
     @Volatile private var launch: Launch? = null
@@ -250,29 +254,33 @@ class HelperService : Service() {
         capture?.stop()
     }
 
-    /** Main thread: closes the menu and any viewer or browser over it, and cancels a Find Guides check or save. */
+    /** Main thread: closes the menu and any viewer or browser over it, and cancels its opening or a Find Guides check or save. */
     private fun closeMenu() {
+        opening = null
         finding?.set(true)
         closeViewer()
         menu.release()
     }
 
     /**
-     * Main thread: the controller's Back. Stops a recording; with the menu (and any viewer or browser over it) open, closes
-     * all of it so the game resumes; otherwise opens the menu for the game in front, if ES-DE launched one.
+     * Main thread: the controller's Back. Stops a recording; with the menu (and any viewer or browser over it) open, or
+     * still being looked up, closes all of it so the game resumes; otherwise opens the menu for the game in front, if
+     * ES-DE launched one. Does nothing while a capture starts.
      */
     private fun onBack() {
         capture?.let {
             it.stop()
             return
         }
-        if (menu.isOpen) {
+        if (starting) return
+        if (menu.isOpen || opening != null) {
             closeMenu()
             return
         }
-        val g = currentGame() ?: return
+        val g = gameInFront() ?: return
         // ES-DE's name for the game, which Find Guides looks up.
         val name = launch?.name ?: return
+        val token = Any().also { opening = it }
         io.execute {
             val (manual, guides, info) = runCatching { documents(g) }
                 .onFailure { Log.w(TAG, "looking up manual and guides failed", it) }
@@ -280,11 +288,12 @@ class HelperService : Service() {
             val art = runCatching { screenshot(g) }.getOrNull()
             val inFront = gameInFront() == g
             main.post {
-                // The game may have been left while the lookup ran.
-                if (!inFront) {
+                // The game may have been left, or Back pressed again, while the lookup ran.
+                if (!inFront || opening !== token) {
                     art?.recycle()
                     return@post
                 }
+                opening = null
                 menu.title = name
                 menu.art = art
                 openMenu(g, name, manual, guides, info)
@@ -347,7 +356,7 @@ class HelperService : Service() {
             io.execute {
                 val deleted = runCatching { deleteGuide(g, doc) }.onFailure { Log.w(TAG, "deleting ${doc.key} failed", it) }
                 main.post {
-                    if (deleted.getOrDefault(false)) relist(g, name, at) else menu.show(listOf("Couldn't delete ${doc.name}"), {}, keep)
+                    if (deleted.getOrDefault(false)) relist(g, name, at) else if (menu.isOpen) menu.show(listOf("Couldn't delete ${doc.name}"), {}, keep)
                 }
             }
         }, keep)
@@ -539,8 +548,10 @@ class HelperService : Service() {
             return
         }
         menu.beginCapture()
+        starting = true
         // Let the closed menu leave the screen before the first frame.
         main.postDelayed({
+            starting = false
             try {
                 // A screenshot alone stops as soon as its frame is taken, too soon for a usable clip.
                 val onRecording = { if (!keepVideo) capture?.stop() }

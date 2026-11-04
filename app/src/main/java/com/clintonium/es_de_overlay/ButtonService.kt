@@ -101,8 +101,13 @@ class ButtonService : AccessibilityService() {
             backTaken = HelperService.takesBack()
             if (BuildConfig.DEBUG) Log.d(TAG, "Back taken=$backTaken, decided in ${SystemClock.uptimeMillis() - start} ms")
         }
-        if (backTaken && event.action == KeyEvent.ACTION_UP) HelperService.back()
-        return backTaken
+        val taken = backTaken
+        if (event.action == KeyEvent.ACTION_UP) {
+            backTaken = false
+            // A cancelled press is still kept from the app, as its down was, but does nothing.
+            if (taken && !event.isCanceled) main.post(HelperService::back)
+        }
+        return taken
     }
 
     override fun onInterrupt() {}
