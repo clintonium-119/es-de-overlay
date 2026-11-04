@@ -217,7 +217,7 @@ class SettingsActivity : ComponentActivity() {
                     Text(
                         "ES-DE keeps the screen on while it's in front, even behind its screensaver. This locks the screen " +
                             "like the power button once ES-DE's screensaver has run for the time below. Needs the Back " +
-                            "button menu enabled.",
+                            "button menu and usage access enabled.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

@@ -57,7 +57,8 @@ Folders down, then start it under Service:
    has run for **After the screensaver has run for** (At once, then 1 to 30 min; default 9). It's on
    by default when ES-DE is the Home app. ES-DE has to report its screensaver: in ES-DE's *Other
    Settings*, turn on *Custom Event Scripts* and *Debug Mode*; the row says so while they're off.
-   It works through the Back button menu (step 7), with or without the service started.
+   It works through the Back button menu (step 7) and needs usage access (step 6), with or without
+   the service started.
 5. Optional, any time: **Saved guides → Manage Guides** lists the guides you've saved, by game,
    and deletes the ones you no longer need (see [Guides](#guides)).
 6. **Enable** the permission rows: notifications, game sound in clips, read screenshots, display

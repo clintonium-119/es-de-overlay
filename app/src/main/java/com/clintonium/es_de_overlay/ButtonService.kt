@@ -37,6 +37,7 @@ class ButtonService : AccessibilityService() {
 
     // io thread only.
     private val log = EsLogTail()
+    private val front = ForegroundApp()
     /** Uptime the countdown to turning the screen off started at: set while ES-DE's screensaver runs. */
     private var screensaverSince: Long? = null
 
@@ -60,13 +61,14 @@ class ButtonService : AccessibilityService() {
 
     /**
      * io thread: turns the screen off like the power button once ES-DE's screensaver has run for the set minutes, since
-     * ES-DE keeps the screen on while it's in front. Only time with ES-DE's window active and the screen on counts, so
-     * coming back to ES-DE or waking the device never locks at once; uptime also stops while the device sleeps. The log
-     * is read only then: a screensaver logged meanwhile counts from when ES-DE is back.
+     * ES-DE keeps the screen on while it's in front. Only time with ES-DE in front and the screen on counts, so coming
+     * back to ES-DE or waking the device never locks at once; uptime also stops while the device sleeps. The log is
+     * read only then: a screensaver logged meanwhile counts from when ES-DE is back. The app in front comes from usage
+     * events, as rootInActiveWindow stays null after a game when no service tracks windows.
      */
     private fun watchIdle() {
         val now = SystemClock.uptimeMillis()
-        if (!getSystemService(PowerManager::class.java).isInteractive || rootInActiveWindow?.packageName != ESDE) {
+        if (!getSystemService(PowerManager::class.java).isInteractive || front.read(this) != ESDE) {
             screensaverSince = screensaverSince?.let { now }
             return
         }

@@ -105,6 +105,22 @@ class EsLogTail {
     }
 }
 
+/** The package of the most recently resumed activity, tracked incrementally from usage events; one instance per polling thread. */
+class ForegroundApp {
+    private var since = 0L
+    private var pkg: String? = null
+
+    fun read(context: Context): String? {
+        val now = System.currentTimeMillis()
+        val from = if (since == 0L) now - TimeUnit.DAYS.toMillis(1) else since - 2_000
+        val events = context.getSystemService(UsageStatsManager::class.java).queryEvents(from, now)
+        val e = UsageEvents.Event()
+        while (events.getNextEvent(e)) if (e.eventType == UsageEvents.Event.ACTIVITY_RESUMED) pkg = e.packageName
+        since = now
+        return pkg
+    }
+}
+
 /** A context for overlay windows on the built-in display. */
 fun overlayContext(context: Context): Context = context.createWindowContext(
     context.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY),
@@ -139,7 +155,7 @@ class HelperService : Service() {
 
     // io thread only.
     private val log = EsLogTail()
-    private var eventsSince = 0L
+    private val front = ForegroundApp()
 
     override fun onBind(intent: Intent?) = null
 
@@ -214,7 +230,7 @@ class HelperService : Service() {
 
     private fun poll() {
         readLog()
-        val fg = foregroundPackage()
+        val fg = front.read(this)
         if (fg != foreground) {
             foreground = fg
             Log.i(TAG, "foreground: $fg (current game: ${currentGame()})")
@@ -601,18 +617,6 @@ class HelperService : Service() {
         return resolveGame(l, romRoots(roms)) {
             runCatching { contentResolver.openInputStream(treeChild(esde, "gamelists/${l.system}/gamelist.xml")) }.getOrNull()
         }
-    }
-
-    /** Package of the most recently resumed activity, tracked incrementally from usage events. */
-    private fun foregroundPackage(): String? {
-        val now = System.currentTimeMillis()
-        val from = if (eventsSince == 0L) now - TimeUnit.DAYS.toMillis(1) else eventsSince - 2_000
-        val events = getSystemService(UsageStatsManager::class.java).queryEvents(from, now)
-        val e = UsageEvents.Event()
-        var fg = foreground
-        while (events.getNextEvent(e)) if (e.eventType == UsageEvents.Event.ACTIVITY_RESUMED) fg = e.packageName
-        eventsSince = now
-        return fg
     }
 
     private inner class ProjectionLost : MediaProjection.Callback() {
