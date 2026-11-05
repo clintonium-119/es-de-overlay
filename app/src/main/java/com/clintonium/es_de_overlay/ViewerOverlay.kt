@@ -169,6 +169,9 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 lateinit var web: WebView
                 // Zoomed past 100 %, a text guide's lines run off the right edge, and D-pad left/right pan to them.
                 fun zoomed() = web.settings.textZoom > 100
+                // Scrolled by the page, which stops at its edges: the view's own scrollBy ran past the right edge,
+                // so the first press back left only made up the overshoot.
+                fun pan(by: Int) = web.evaluateJavascript("scrollBy(${by / context.resources.displayMetrics.density},0)", null)
                 fun chrome() {
                     help.text = if (contentsOpen) "✚ MOVE   A GO   B CLOSE"
                     else (if (zoomed()) "✚ PAN" else "✚ SCROLL") + "   L1/R1 ZOOM   L2/R2 SECTION   Y CONTENTS" +
@@ -257,8 +260,8 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                         }
                         KeyEvent.KEYCODE_DPAD_UP -> web.scrollBy(0, -viewH / 4)
                         KeyEvent.KEYCODE_DPAD_DOWN -> web.scrollBy(0, viewH / 4)
-                        KeyEvent.KEYCODE_DPAD_LEFT -> if (zoomed()) web.scrollBy(-screenW / 4, 0) else web.pageUp(false)
-                        KeyEvent.KEYCODE_DPAD_RIGHT -> if (zoomed()) web.scrollBy(screenW / 4, 0) else web.pageDown(false)
+                        KeyEvent.KEYCODE_DPAD_LEFT -> if (zoomed()) pan(-screenW / 4) else web.pageUp(false)
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> if (zoomed()) pan(screenW / 4) else web.pageDown(false)
                         KeyEvent.KEYCODE_BUTTON_L1 -> {
                             web.settings.textZoom = (web.settings.textZoom - 25).coerceAtLeast(50)
                             chrome()
