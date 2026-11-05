@@ -106,6 +106,69 @@ fun helpPill(context: Context, font: Typeface, textPx: Float, vararg entries: Pa
     background = GradientDrawable().apply { setColor(HELP_BG); cornerRadius = textPx }
 }
 
+/**
+ * The theme's list for a screen [screenH] pixels tall: a row per item, the selected one in a pill with its capitals
+ * centred, starting on [start]. A row too wide for the list scrolls sideways while selected.
+ */
+class PillList(context: Context, font: Typeface, screenH: Int, items: List<String>, start: Int) {
+    private val textPx = screenH * LIST_FONT
+    private val rowPx = (textPx * LIST_SPACING).toInt()
+    // Measured from ES-DE's gamelist with this theme: the pill fills 6/7 of a row, text inset 0.7 em.
+    private val pillInset = rowPx / 14
+    private val textInset = (textPx * 0.7f).toInt()
+    private val capShift = (2 * textPx * capCentring(font)).toInt()
+    val rows = items.map { label ->
+        TextView(context).apply {
+            text = label
+            typeface = font
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, textPx)
+            gravity = Gravity.CENTER_VERTICAL
+            // Centre the line (ascent to descent) so capCentring's shift puts the capitals mid-pill.
+            includeFontPadding = false
+            // Like a long name in ES-DE's gamelist.
+            isSingleLine = true
+            ellipsize = TextUtils.TruncateAt.MARQUEE
+            marqueeRepeatLimit = -1
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, rowPx)
+        }
+    }
+    val view = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        rows.forEach(::addView)
+    }
+    var selected = 0
+        private set
+
+    init {
+        select(start.coerceIn(0, (rows.size - 1).coerceAtLeast(0)))
+    }
+
+    /** Moves the pill [by] rows, stopping at the ends. */
+    fun move(by: Int) = select((selected + by).coerceIn(0, (rows.size - 1).coerceAtLeast(0)))
+
+    /** Puts the pill on row [i] and scrolls it into view. */
+    fun select(i: Int) {
+        selected = i
+        rows.forEachIndexed { n, row ->
+            row.isSelected = false
+            row.setTextColor(if (n == i) PILL_TEXT else TEXT)
+            row.background = if (n == i) {
+                InsetDrawable(GradientDrawable().apply { setColor(PILL); cornerRadius = rowPx / 2f }, 0, pillInset, 0, pillInset)
+            } else {
+                null
+            }
+            // A background with padding replaces the view's own, so set it back. Padding on top only moves
+            // the centred text down by half of it.
+            row.setPadding(textInset, capShift, textInset, 0)
+        }
+        rows.getOrNull(i)?.let {
+            it.requestRectangleOnScreen(Rect(0, 0, it.width, it.height))
+            // The theme's textHorizontalScrollDelay: a long row starts scrolling a second after it's selected.
+            it.postDelayed({ it.isSelected = selected == i }, 1_000)
+        }
+    }
+}
+
 /** Text in ES-DE's viewer bar, sized for a bar [barH] pixels tall: its own condensed face, grey, upper case. */
 fun barText(context: Context, barH: Int, gravity: Int) = TextView(context).apply {
     typeface = Typeface.create("sans-serif-condensed", Typeface.NORMAL)
@@ -161,62 +224,17 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
         close()
         reshow = { show(items, onPick, onClose, alt, start) }
         val font = themeFont(context, prefs)
-        val textPx = screenH * LIST_FONT
-        val rowPx = (textPx * LIST_SPACING).toInt()
-        // Measured from ES-DE's gamelist with this theme: the pill fills 6/7 of a row, text inset 0.7 em.
-        val pillInset = rowPx / 14
-        val textInset = (textPx * 0.7f).toInt()
-        val capShift = (2 * textPx * capCentring(font)).toInt()
-        val rows = items.map { label ->
-            TextView(context).apply {
-                text = label
-                typeface = font
-                setTextSize(TypedValue.COMPLEX_UNIT_PX, textPx)
-                gravity = Gravity.CENTER_VERTICAL
-                // Centre the line (ascent to descent) so capCentring's shift puts the capitals mid-pill.
-                includeFontPadding = false
-                // A row too wide for the list scrolls sideways while selected, like a long name in ES-DE's gamelist.
-                isSingleLine = true
-                ellipsize = TextUtils.TruncateAt.MARQUEE
-                marqueeRepeatLimit = -1
-                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, rowPx)
-            }
-        }
-        var selected = 0
-        fun select(i: Int) {
-            selected = i
-            rows.forEachIndexed { n, row ->
-                row.isSelected = false
-                row.setTextColor(if (n == i) PILL_TEXT else TEXT)
-                row.background = if (n == i) {
-                    InsetDrawable(GradientDrawable().apply { setColor(PILL); cornerRadius = rowPx / 2f }, 0, pillInset, 0, pillInset)
-                } else {
-                    null
-                }
-                // A background with padding replaces the view's own, so set it back. Padding on top only moves
-                // the centred text down by half of it.
-                row.setPadding(textInset, capShift, textInset, 0)
-            }
-            rows.getOrNull(i)?.let {
-                it.requestRectangleOnScreen(Rect(0, 0, it.width, it.height))
-                // The theme's textHorizontalScrollDelay: a long row starts scrolling a second after it's selected.
-                it.postDelayed({ it.isSelected = selected == i }, 1_000)
-            }
-        }
-        select(start.coerceIn(0, (rows.size - 1).coerceAtLeast(0)))
-        val list = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            rows.forEach(::addView)
-        }
+        val list = PillList(context, font, screenH, items, start)
+        val rows = list.rows
         val help = listOfNotNull("A" to "Open", alt?.let { "X" to it.first }, "B" to "Back")
-        open(font, ScrollView(context).apply { addView(list) }, help) { code ->
+        open(font, ScrollView(context).apply { addView(list.view) }, help) { code ->
             when (code) {
-                KeyEvent.KEYCODE_DPAD_UP -> select((selected - 1).coerceAtLeast(0))
-                KeyEvent.KEYCODE_DPAD_DOWN -> select((selected + 1).coerceAtMost(rows.lastIndex))
+                KeyEvent.KEYCODE_DPAD_UP -> list.move(-1)
+                KeyEvent.KEYCODE_DPAD_DOWN -> list.move(1)
                 KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER ->
-                    if (rows.isNotEmpty()) onPick(selected)
+                    if (rows.isNotEmpty()) onPick(list.selected)
                 // Always used: Android's gamepad key map turns an unused X into DPAD_CENTER, which would pick the row.
-                KeyEvent.KEYCODE_BUTTON_X -> if (alt != null && rows.isNotEmpty()) alt.second(selected)
+                KeyEvent.KEYCODE_BUTTON_X -> if (alt != null && rows.isNotEmpty()) alt.second(list.selected)
                 KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK -> { close(); onClose() }
                 else -> return@open false
             }

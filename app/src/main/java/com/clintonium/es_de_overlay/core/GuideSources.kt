@@ -138,22 +138,40 @@ val VGMAPS_SYSTEMS = mapOf(
 fun vgmapsUrl(folder: String) = "https://www.vgmaps.com/Atlas/$folder/index.htm"
 
 private val MAPS_HEADING = Regex(">([^<>]*?) Maps\\s*<", RegexOption.IGNORE_CASE)
-private val MAP_HREF = Regex("href=\"([^\"]+\\.(?:png|gif|jpe?g))\"", RegexOption.IGNORE_CASE)
+private val MAP_LINK = Regex(
+    "href=\"([^\"]+\\.(?:png|gif|jpe?g))\"[^>]*>(.*?)</a>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
+)
+private val ROW = Regex("<tr\\b", RegexOption.IGNORE_CASE)
+private val FIRST_CELL = Regex("<td\\b[^>]*>(.*?)</td>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+
+/** A map on a VGMaps atlas page: its image `href` as written (relative to the page) and its name there. */
+data class VgMap(val href: String, val name: String)
 
 /**
- * The map images (`href`s as written, relative to the atlas page) of [gameName]'s section on a VGMaps atlas
- * page, in page order. A section runs from its "<Game> Maps" heading to the next one. Empty when no
- * heading names the game.
+ * The maps of [gameName]'s section on a VGMaps atlas page, in page order. A section runs from its "<Game> Maps"
+ * heading to the next one. A map is named by its link text, after its row's group (the first column, "Start"
+ * for Shantae's "Part 1") when the link text doesn't already say it. Empty when no heading names the game.
  */
-fun vgmapsMaps(atlasHtml: String, gameName: String): List<String> {
+fun vgmapsMaps(atlasHtml: String, gameName: String): List<VgMap> {
     val key = matchKey(cleanName(gameName))
     if (key.isEmpty()) return emptyList()
     val headings = MAPS_HEADING.scan(atlasHtml)
     val i = headings.indexOfFirst { matchKey(cleanName(it.group(1))) == key }
     if (i < 0) return emptyList()
-    val end = headings.getOrNull(i + 1)?.start() ?: atlasHtml.length
-    return MAP_HREF.scan(atlasHtml.substring(headings[i].end(), end)).map { it.group(1) }.distinct()
+    val section = atlasHtml.substring(headings[i].end(), headings.getOrNull(i + 1)?.start() ?: atlasHtml.length)
+    val starts = listOf(0) + ROW.scan(section).map { it.start() } + section.length
+    return starts.zipWithNext { a, b -> section.substring(a, b) }.flatMap { row ->
+        val group = FIRST_CELL.find(row)?.let { htmlText(it.groupValues[1]) }.orEmpty()
+        MAP_LINK.scan(row).map { link ->
+            val href = link.group(1)
+            val text = htmlText(link.group(2)).ifEmpty { href.substringAfterLast('/').substringBeforeLast('.') }
+            VgMap(href, if (matchKey(group) in matchKey(text)) text else "$group - $text")
+        }
+    }.distinctBy { it.href }
 }
+
+/** [html]'s text: tags dropped, character references decoded, white space collapsed. */
+private fun htmlText(html: String) = unescapeHtml(html.replace(Regex("<[^>]*>"), " ")).replace(Regex("\\s+"), " ").trim()
 
 /** StrategyWiki's API for one page's rendered HTML. Its `index.php` pages sit behind a bot check; the API doesn't. */
 fun strategyWikiParseUrl(page: String) = "https://strategywiki.org/w/api.php?action=parse&page=" +

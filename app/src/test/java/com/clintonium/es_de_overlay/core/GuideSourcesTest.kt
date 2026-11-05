@@ -14,7 +14,7 @@ class GuideSourcesTest {
     @Test
     fun `Shantae's section gives its 56 maps in page order`() {
         assertEquals("GB-GBC", VGMAPS_SYSTEMS["gbc"])
-        val maps = vgmapsMaps(atlas, "Shantae")
+        val maps = vgmapsMaps(atlas, "Shantae").map { it.href }
         assertEquals(56, maps.size)
         assertEquals(listOf("Shantae-Info.png", "Shantae-Overworld.png"), maps.take(2))
         assertTrue(maps.all { it.startsWith("Shantae-") })
@@ -22,26 +22,45 @@ class GuideSourcesTest {
 
     @Test
     fun `neighbouring sections keep their own maps`() {
-        val before = vgmapsMaps(atlas, "Sea-Doo HydroCross")
-        val after = vgmapsMaps(atlas, "Skate Or Die : Tour De Thrash")
+        val before = vgmapsMaps(atlas, "Sea-Doo HydroCross").map { it.href }
+        val after = vgmapsMaps(atlas, "Skate Or Die : Tour De Thrash").map { it.href }
         assertTrue(before.isNotEmpty() && after.isNotEmpty())
         assertTrue((before + after).none { it.startsWith("Shantae-") })
-        assertTrue(vgmapsMaps(atlas, "Shantae").none { it in before || it in after })
+        assertTrue(vgmapsMaps(atlas, "Shantae").none { it.href in before || it.href in after })
     }
 
     @Test
     fun `a game not on the page has no maps`() {
-        assertEquals(emptyList<String>(), vgmapsMaps(atlas, "Super Metroid"))
-        assertEquals(emptyList<String>(), vgmapsMaps(atlas, "(USA)"))
+        assertEquals(emptyList<VgMap>(), vgmapsMaps(atlas, "Super Metroid"))
+        assertEquals(emptyList<VgMap>(), vgmapsMaps(atlas, "(USA)"))
     }
 
     @Test
     fun `only the exact Link's Awakening matches`() {
-        val dx = vgmapsMaps(atlas, "The Legend of Zelda : Link's Awakening DX")
-        val original = vgmapsMaps(atlas, "Legend of Zelda : Link's Awakening, The (USA)")
+        val dx = vgmapsMaps(atlas, "The Legend of Zelda : Link's Awakening DX").map { it.href }
+        val original = vgmapsMaps(atlas, "Legend of Zelda : Link's Awakening, The (USA)").map { it.href }
         assertEquals("LegendOfZelda-Link'sAwakeningDX-Koholint.png", dx.first())
         assertEquals("LegendOfZelda-Link'sAwakening-Koholint.png", original.first())
         assertTrue(dx.none { it in original })
+    }
+
+    @Test
+    fun `maps are named by their link text, after a group the text doesn't say`() {
+        val shantae = vgmapsMaps(atlas, "Shantae").map { it.name }
+        assertEquals(listOf("Info", "Overworld", "Start - Part 1", "Start - Part 2"), shantae.take(4))
+        assertTrue("L1: Dribble Fountain Labyrinth" in shantae)
+        assertTrue("Mini Games: Dance Parlor & Gecko Match" in shantae)
+        assertEquals("T4: Rain Storm (Day)", shantae[shantae.indexOf("L4: Twinkle Palace Labyrinth") + 1])
+        val links = vgmapsMaps(atlas, "Legend of Zelda : Link's Awakening, The (USA)").map { it.name }
+        assertEquals(listOf("Koholint", "Tail Cave", "Bottle Grotto", "Key Cavern", "Angler's Tunnel"), links.take(5))
+        assertEquals("Koholint (In-Game Map)", vgmapsMaps(atlas, "The Legend of Zelda : Link's Awakening DX")[1].name)
+        assertEquals("American Circuit - Niagara Falls", vgmapsMaps(atlas, "Sea-Doo HydroCross").first().name)
+    }
+
+    @Test
+    fun `character references decode`() {
+        assertEquals("Dance & Gecko's <\"Match\"> é", unescapeHtml("Dance &amp; Gecko&#39;s &lt;&quot;Match&quot;&gt; &#xE9;"))
+        assertEquals("&copy; &#xZZ;", unescapeHtml("&copy; &#xZZ;"))
     }
 
     @Test

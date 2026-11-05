@@ -6,6 +6,7 @@ import com.clintonium.es_de_overlay.core.GuideImage
 import com.clintonium.es_de_overlay.core.GuideSection
 import com.clintonium.es_de_overlay.core.Overwrite
 import com.clintonium.es_de_overlay.core.VGMAPS_SYSTEMS
+import com.clintonium.es_de_overlay.core.VgMap
 import com.clintonium.es_de_overlay.core.cleanName
 import com.clintonium.es_de_overlay.core.fileName
 import com.clintonium.es_de_overlay.core.guidePages
@@ -90,29 +91,31 @@ fun saveStrategyWiki(
     }
 }
 
-/** The map images VGMaps has for [name] on [system]'s atlas page; empty when it has none or no atlas. */
-fun vgmaps(system: String, name: String): List<String> {
+/** The maps VGMaps has for [name] on [system]'s atlas page; empty when it has none or no atlas. */
+fun vgmaps(system: String, name: String): List<VgMap> {
     val folder = VGMAPS_SYSTEMS[system] ?: return emptyList()
     return vgmapsMaps(String(get(vgmapsUrl(folder)), Charset.forName("windows-1252")), name)
 }
 
 /**
- * Saves [maps] (atlas `href`s) as `VGMaps - <name>.cbz` in [game]'s guides folder, one stored entry per map
- * in atlas order. Returns the path written below the tree.
+ * Saves [maps] as `VGMaps - <name>.cbz` in [game]'s guides folder, one stored entry per map in atlas order,
+ * named `NNN <map name>.<ext>`. Returns the path written below the tree.
  */
 fun saveVgmaps(
-    writer: MediaWriter, cache: File, game: GameRef, romIsDirectory: Boolean, name: String, maps: List<String>,
+    writer: MediaWriter, cache: File, game: GameRef, romIsDirectory: Boolean, name: String, maps: List<VgMap>,
     progress: (String) -> Unit, cancelled: () -> Boolean,
 ): String {
     val folder = VGMAPS_SYSTEMS.getValue(game.system)
     return saveVia(writer, cache, game, romIsDirectory, "VGMaps - ${fileName(cleanName(name))}.cbz", "application/octet-stream", cancelled) { file ->
         ZipOutputStream(file.outputStream().buffered()).use { zip ->
-            maps.forEachIndexed { i, href ->
+            maps.forEachIndexed { i, map ->
                 if (cancelled()) throw CancellationException()
                 progress("Saving map ${i + 1} of ${maps.size}")
-                val path = href.replace("&amp;", "&")
+                val path = map.href.replace("&amp;", "&")
                 val bytes = get(if (path.startsWith("http")) path else URI("https", "www.vgmaps.com", "/Atlas/$folder/$path", null).toASCIIString())
-                zip.putNextEntry(ZipEntry("%03d %s".format(i + 1, path.substringAfterLast('/'))).apply {
+                // A slash would make a folder in the zip.
+                val entry = "%03d %s.%s".format(i + 1, map.name.replace(Regex("[/\\\\]"), "_"), path.substringAfterLast('.'))
+                zip.putNextEntry(ZipEntry(entry).apply {
                     method = ZipEntry.STORED
                     size = bytes.size.toLong()
                     compressedSize = size

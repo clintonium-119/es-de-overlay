@@ -15,6 +15,20 @@ fun textSection(title: String, text: String) = GuideSection(title, "<pre>${escap
 fun escapeHtml(text: String): String =
     text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
 
+/** [text] with numeric character references and the common named ones decoded; others are left as written. */
+fun unescapeHtml(text: String): String = ENTITY.replaceEach(text) { m ->
+    val ref = m.group(1)
+    val code = when {
+        ref.startsWith("#x", ignoreCase = true) -> ref.drop(2).toIntOrNull(16)
+        ref.startsWith("#") -> ref.drop(1).toIntOrNull()
+        else -> null
+    }
+    code?.let { runCatching { String(Character.toChars(it)) }.getOrNull() } ?: NAMED_ENTITIES[ref] ?: m.group()
+}
+
+private val ENTITY = Regex("&(#[xX]?[0-9a-fA-F]+|[a-zA-Z]+);")
+private val NAMED_ENTITIES = mapOf("amp" to "&", "lt" to "<", "gt" to ">", "quot" to "\"", "apos" to "'", "nbsp" to " ")
+
 private val IMG = Regex("<img\\b[^>]*>", RegexOption.IGNORE_CASE)
 private val IMG_SRC = Regex("\\s(src|srcset)\\s*=\\s*(\"[^\"]*\"|'[^']*'|[^\\s>]+)", RegexOption.IGNORE_CASE)
 

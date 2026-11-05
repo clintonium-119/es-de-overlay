@@ -16,6 +16,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.text.TextUtils
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
@@ -30,8 +31,10 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.core.view.doOnLayout
 import java.io.ByteArrayInputStream
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
@@ -81,15 +84,16 @@ private class PdfPage(private val page: PdfRenderer.Page) : Page {
     override fun close() = page.close()
 }
 
-/** [count] pages; [open] gives page n on the worker thread; [close] releases the file. */
-private class Doc(val count: Int, val open: (Int) -> Page, val close: () -> Unit)
+/** [count] pages; [open] gives page n on the worker thread; [names], if any, name them; [close] releases the file. */
+private class Doc(val count: Int, val open: (Int) -> Page, val names: List<String> = emptyList(), val close: () -> Unit)
 
 private class Rendered(val page: Int, val width: Int, val height: Int, val rect: Rect, val bitmap: Bitmap, val density: Float)
 
 /**
  * Full-screen viewer for a manual or guide that works like ES-DE's own manual viewer. PDF, CBZ and
  * PNG/JPG pages are fitted whole and centered; zoomed out, D-pad left/right turn pages and L2/R2 go to
- * the first or last page; zoomed in, the D-pad pans and L2/R2 reset; L1/R1 zoom. Text scrolls. Saved
+ * the first or last page; zoomed in, the D-pad pans and L2/R2 reset; L1/R1 zoom; Y lists a CBZ's maps by
+ * name. Text scrolls. Saved
  * HTML guides scroll in an offline WebView styled like the theme, with their contents on Y. Only the
  * current page's bitmaps are held, and everything is released on [close].
  */
@@ -109,6 +113,8 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
     private var position: () -> Int = { 0 }
     /** Its zoom, and a page's centre, or null at the fit. Saved with [position]. */
     private var view: () -> List<Float>? = { null }
+    /** B steps back (through a guide's links, or out of a list) before it closes; false when there's nothing to step back from. */
+    private var back: () -> Boolean = { false }
     private var key: String? = null
 
     /**
@@ -131,8 +137,6 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         val help = barText(context, barH, Gravity.CENTER)
         val content: View
         val keys: (Int) -> Boolean
-        // B steps back through a guide's links before it closes.
-        var back = { false }
         when (val ext = name.substringAfterLast('.').lowercase()) {
             "html" -> {
                 val web = web(uri, name, saved, savedView, label, onClose)
@@ -233,11 +237,12 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 }
                 val under = layer()
                 val image = layer()
-                content = FrameLayout(context).apply {
+                val frame = FrameLayout(context).apply {
                     addView(under)
                     addView(image)
                 }
-                keys = paged(doc, name, saved, savedView, under, image, label, help)
+                content = frame
+                keys = paged(doc, name, saved, savedView, frame, under, image, label, help)
             }
         }
         val view = FrameLayout(context).apply {
@@ -275,10 +280,12 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
      * first render, the whole page at its fit, stays in [under], so what the sharp region in [image]
      * doesn't cover yet is blurry rather than black. A big image's top quarter, which decodes in about a
      * quarter of the time, shows there first. A [startView] saved zoomed in (zoom over the fit, centre over
-     * the page size) is restored once the start page opens; turning the page goes back to the fit.
+     * the page size) is restored once the start page opens; turning the page goes back to the fit. Named
+     * pages list in [frame] on Y.
      */
     private fun paged(
-        doc: Doc, name: String, start: Int, startView: List<Float>?, under: ImageView, image: ImageView, label: TextView, help: TextView,
+        doc: Doc, name: String, start: Int, startView: List<Float>?,
+        frame: FrameLayout, under: ImageView, image: ImageView, label: TextView, help: TextView,
     ): (Int) -> Boolean {
         val worker = Executors.newSingleThreadExecutor()
         // Worker thread only.
@@ -301,15 +308,31 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         var again = false
         var closed = false
         var restore = startView?.takeIf { it.size == 3 }
+        val named = doc.count > 1 && doc.names.size == doc.count
+        var list: PillList? = null
+        var listView: View? = null
 
         fun zoomed() = pw > 0 && scale > fit * 1.01f
         fun maxScale() = maxOf(fit * 4, 2f)
         fun chrome() {
-            label.text = if (doc.count > 1) "PAGE ${page + 1} OF ${doc.count}" else name
+            val y = if (named) "   Y MAPS" else ""
+            label.text = when {
+                // The number first, so a long name is what gets cut.
+                named -> "${page + 1} OF ${doc.count}   ${doc.names[page]}"
+                doc.count > 1 -> "PAGE ${page + 1} OF ${doc.count}"
+                else -> name
+            }
             help.text = when {
-                zoomed() -> "✚ PAN   L2/R2 RESET   L1/R1 ZOOM"
-                doc.count > 1 -> "✚ BROWSE   L2 FIRST   R2 LAST   L1/R1 ZOOM"
+                list != null -> "✚ MOVE   A GO   B CLOSE"
+                zoomed() -> "✚ PAN   L2/R2 RESET   L1/R1 ZOOM$y"
+                doc.count > 1 -> "✚ BROWSE   L2 FIRST   R2 LAST   L1/R1 ZOOM$y"
                 else -> "L1/R1 ZOOM"
+            }
+            if (named) {
+                // A name needs the room: the help moves right and the name stops short of it.
+                help.gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                label.ellipsize = TextUtils.TruncateAt.END
+                label.setPadding(barH / 4, 0, help.paint.measureText(help.text.toString()).toInt() + barH, 0)
             }
         }
         /** Draws a render of the page from ([left], [top]) at [d] pixels per source unit into the view. */
@@ -445,8 +468,43 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
             scale = to.coerceIn(fit, maxScale())
             render()
         }
+        /** Lists the pages by name over the page, the current one picked, like a guide's contents. */
+        fun openList() {
+            val font = themeFont(context, prefs)
+            val textPx = screenH * LIST_FONT
+            val l = PillList(context, font, screenH, doc.names, page)
+            val v = ScrollView(context).apply {
+                isVerticalScrollBarEnabled = false
+                setBackgroundColor(BACKGROUND)
+                addView(LinearLayout(context).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(screenW / 40, barH / 2, screenW / 40, barH / 2)
+                    addView(TextView(context).apply {
+                        text = "Maps"
+                        typeface = font
+                        setTextColor(TEXT)
+                        setTextSize(TypedValue.COMPLEX_UNIT_PX, textPx * 1.4f)
+                        setPadding((textPx * 0.7f).toInt(), 0, 0, 0)
+                    })
+                    addView(l.view)
+                })
+            }
+            frame.addView(v)
+            // Scrolls the picked row into view once there's a layout to scroll.
+            v.doOnLayout { l.select(l.selected) }
+            list = l
+            listView = v
+            chrome()
+        }
+        fun closeList() {
+            frame.removeView(listView)
+            list = null
+            listView = null
+            chrome()
+        }
 
         position = { page }
+        back = { (list != null).also { if (it) closeList() } }
         // Before the page opens, the view it was asked to open at.
         view = { if (zoomed()) listOf(scale / fit, cx / pw, cy / ph) else restore }
         release = {
@@ -466,8 +524,21 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         render()
 
         return handler@{ code ->
+            list?.let {
+                when (code) {
+                    KeyEvent.KEYCODE_DPAD_UP -> it.move(-1)
+                    KeyEvent.KEYCODE_DPAD_DOWN -> it.move(1)
+                    KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER -> {
+                        closeList()
+                        turnTo(it.selected)
+                    }
+                    KeyEvent.KEYCODE_BUTTON_Y -> closeList()
+                }
+                return@handler code in HTML_KEYS
+            }
             val step = screenW / scale / 4
             when (code) {
+                KeyEvent.KEYCODE_BUTTON_Y -> if (named) openList() else return@handler false
                 KeyEvent.KEYCODE_DPAD_LEFT -> if (zoomed()) { cx -= step; render() } else turnTo(page - 1)
                 KeyEvent.KEYCODE_DPAD_RIGHT -> if (zoomed()) { cx += step; render() } else turnTo(page + 1)
                 KeyEvent.KEYCODE_DPAD_UP -> if (zoomed()) { cy -= step; render() } else return@handler false
@@ -615,10 +686,12 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 .sortedWith(String.CASE_INSENSITIVE_ORDER)
                 .toList()
         }
+        // `003 Tail Cave.png` → Tail Cave. Maps saved before they had names show their file name, `Shantae-DribbleFountain`.
+        val names = entries.map { it.substringAfterLast('/').substringBeforeLast('.').replace(Regex("^\\d+ "), "") }
         return Doc(entries.size, { n ->
             val bytes = zip(uri) { z -> generateSequence { z.nextEntry }.first { it.name == entries[n] }; z.readBytes() }
             RegionPage(BitmapRegionDecoder.newInstance(bytes, 0, bytes.size)!!)
-        }) {}
+        }, names) {}
     }
 
     fun close() {
@@ -626,6 +699,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         key = null
         position = { 0 }
         view = { null }
+        back = { false }
         release()
         release = {}
         root?.let(wm::removeView)
