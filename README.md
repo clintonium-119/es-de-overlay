@@ -124,10 +124,12 @@ Folders down, then start it under Service:
   nothing. When it's done, the browser closes and the guide opens; closing it shows the Guides list
   with the new guide. Closing the browser without saving returns to the Find Guides list.
 - On any other site, **Save guide** shows on pages Firefox's Reader View would offer to read, and
-  saves the page's main content with its images. When the page links to more pages of the same
-  guide (numbered pages, chapters below or beside it, or a Next link), it first lists them, all
-  ticked: untick any to leave out and tap **Save guide** again, or **Back** to return to the page.
-  Next links are followed page by page, up to 50 pages.
+  saves the page's main content with its images; a page that is mostly pictures, such as a page
+  of maps, keeps them with their captions. When the page links to more pages of the same guide
+  (numbered pages, pages below it anywhere on the page, chapters beside it, or a Next link), it
+  first lists them, ticked but for ones that look like the site's own (contributors, edit, log
+  in): untick or tick any and tap **Save guide** again, or **Back** to return to the page. Next
+  links are followed page by page, up to 50 pages.
 - The viewer works like ES-DE's own manual viewer:
 
   | | Zoomed out | Zoomed in |
