@@ -271,7 +271,8 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
      * inflates every row down to the region's bottom (half a second on a big map), so zoom and pan move
      * the bitmaps already shown at once and the sharp one replaces its region when ready. The page's
      * first render, the whole page at its fit, stays in [under], so what the sharp region in [image]
-     * doesn't cover yet is blurry rather than black.
+     * doesn't cover yet is blurry rather than black. A big image's top quarter, which decodes in about a
+     * quarter of the time, shows there first.
      */
     private fun paged(
         doc: Doc, name: String, start: Int, under: ImageView, image: ImageView, label: TextView, help: TextView,
@@ -321,6 +322,23 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
             bitmap?.recycle()
             bitmap = null
         }
+        /** Shows [result], a render from the page's top-left corner at its fit, under the sharp region. */
+        fun showBase(result: Rendered) {
+            if (pw == 0) {
+                pw = result.width
+                ph = result.height
+                fit = minOf(screenW.toFloat() / pw, viewH.toFloat() / ph)
+                scale = fit
+                cx = pw / 2f
+                cy = ph / 2f
+            }
+            under.setImageBitmap(result.bitmap)
+            base?.recycle()
+            base = result.bitmap
+            baseDensity = result.density
+            place()
+            chrome()
+        }
         fun render() {
             if (pw > 0) {
                 val vw = screenW / scale
@@ -356,7 +374,18 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                     }
                     val p = opened!!
                     val r = rect ?: Rect(0, 0, p.width, p.height)
-                    val (b, d) = p.render(r, if (rect == null) minOf(screenW.toFloat() / p.width, viewH.toFloat() / p.height) else s)
+                    val fitScale = minOf(screenW.toFloat() / p.width, viewH.toFloat() / p.height)
+                    // ponytail: the quarter, then the whole page, on one decoder, so the whole page lands a quarter
+                    // later than alone; a second decoder in parallel avoids that at the cost of a second copy of the file.
+                    if (rect == null && p is RegionPage && p.width.toLong() * p.height > PREVIEW_PIXELS) {
+                        val band = Rect(0, 0, p.width, p.height / 4)
+                        val top = p.render(band, fitScale).let { (b, d) -> Rendered(n, p.width, p.height, band, b, d) }
+                        main.post {
+                            if (BuildConfig.DEBUG) Log.d(TAG, "viewer: page ${n + 1} top quarter in ${SystemClock.uptimeMillis() - asked} ms")
+                            if (closed || page != n || pw > 0) top.bitmap.recycle() else showBase(top)
+                        }
+                    }
+                    val (b, d) = p.render(r, if (rect == null) fitScale else s)
                     Rendered(n, p.width, p.height, r, b, d)
                 }.onFailure { Log.w(TAG, "viewer: $name page ${n + 1}", it) }.getOrNull()
                 main.post {
@@ -366,23 +395,11 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                     }
                     when {
                         result == null -> {}
-                        // Stale: the viewer closed, the page turned (or turned back before a zoomed render landed),
-                        // or the view went back to the base.
-                        closed || result.page != page || (pw == 0 && rect != null) || (base != null && !zoomed()) ->
-                            result.bitmap.recycle()
-                        pw == 0 -> {
-                            pw = result.width
-                            ph = result.height
-                            fit = minOf(screenW.toFloat() / pw, viewH.toFloat() / ph)
-                            scale = fit
-                            cx = pw / 2f
-                            cy = ph / 2f
-                            under.setImageBitmap(result.bitmap)
-                            base = result.bitmap
-                            baseDensity = result.density
-                            place()
-                            chrome()
-                        }
+                        // Stale: the viewer closed, or the page turned (or turned back before a zoomed render landed).
+                        closed || result.page != page || (pw == 0 && rect != null) -> result.bitmap.recycle()
+                        rect == null -> showBase(result)
+                        // The view went back to the base meanwhile.
+                        !zoomed() -> result.bitmap.recycle()
                         else -> {
                             image.setImageBitmap(result.bitmap)
                             bitmap?.recycle()
@@ -599,6 +616,9 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
 
         /** The offset into [range] for a saved [fraction], clamped to the range. */
         fun unfraction(fraction: Int, range: Int) = (fraction.coerceIn(0, 10_000) * range.coerceAtLeast(0).toLong() / 10_000).toInt()
+
+        /** Images larger than this (about 0.2 s to decode whole on the Nova) show their top quarter first. */
+        const val PREVIEW_PIXELS = 16_000_000L
 
         val TEXT_KEYS = setOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
