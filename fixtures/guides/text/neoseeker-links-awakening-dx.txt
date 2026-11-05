@@ -1,0 +1,1793 @@
+      _____ _            _                              _          __
+     |_   _| |__   ___  | |    ___  __ _  ___ _ __   __| |   ___  / _|
+       | | | '_ \ / _ \ | |   / _ \/ _` |/ _ \ '_ \ / _` |  / _ \| |_
+       | | | | | |  __/ | |__|  __/ (_| |  __/ | | | (_| | | (_) |  _|
+       |_| |_| |_|\___| |_____\___|\__, |\___|_| |_|\__,_|  \___/|_|
+                                   |___/
+                       _____    _     _
+                      |__  /___| | __| | __ _
+                        / // _ \ |/ _` |/ _` |   o
+                       / /|  __/ | (_| | (_| |   o
+                      /____\___|_|\__,_|\__,_|
+     
+      ,         .    /          ,.             .
+      )   . ,-. | ,    ,-.     / |   . , , ,-. | , ,-. ,-. . ,-. ,-.
+     /    | | | |<     `-.    /~~|-. |/|/  ,-| |<  |-' | | | | | | |
+     `--' ' ' ' ' `    `-'  ,'   `-' ' '   `-^ ' ` `-' ' ' ' ' ' `-|
+                                                                  ,|
+                                                                  `'
+
+
+The Legend of Zelda: Link's Awakening (Game Boy): VinnyVideo's FAQ/Walkthrough
+
+
+
+
+===============================================================================
+Table of Contents
+===============================================================================
+[INTRO] Introduction
+[BASIC] The Basics
+[WALKT] The Walkthrough
+[ENEMY] Bestiary
+[HEART] Pieces of Heart
+[SHELL] Secret Seashells
+[CHEAT] Glitches and Tricks
+[REFER] References to Other Games
+[QUEST] Frequently Asked Questions
+[VERSN] Version History
+[COPYR] Copyright
+[CONTC] Contact Information
+
+Navigation tip: Use the Find feature (Ctrl-F) to find what you're looking for.
+For example, search for [SHELL] to jump to the section with the list of Secret
+Seashells.
+
+
+
+
+===============================================================================
+Introduction                                                         [INTRO]
+===============================================================================
+It took almost a year, but my guide for Link's Awakening is finally finished!
+The Legend of Zelda: Link's Awakening is a truly excellent game. This was the
+first Zelda game I ever played, and I still think it's one of the three or four
+best games in a really great series. The graphics, music, and sound are all
+good despite the Game Boy's limited capabilities. The play control is among the
+best I've seen in any game (Game Boy or otherwise), although being limited to
+two buttons for items is sometimes annoying. The storyline contrasts greatly
+from other Zelda games; both the plot and characters are surreal and slightly
+absurd in a "Lost" or "Myst" kind of way. Link's Awakening does have its
+critics who don't like the constant Mario references, but I think they're neat.
+There's a good number of dungeons (I won't say how many), and they're just
+(…)
+
+
+===============================================================================
+The Basics                                                           [BASIC]
+===============================================================================
+Link's Awakening has simple but very effective play control. It shouldn't take
+much explanation to learn how to play, but I'll include the controls just in
+(…)
+
+
+===============================================================================
+The Walkthrough                                                      [WALKT]
+===============================================================================
+Here's the exciting part.
+
+-------------------------------------------------------------------------------
+Getting Started
+-------------------------------------------------------------------------------
+First, turn on your Game Boy and watch the opening sequence. Begin a save file
+and give your character a name (many people, but not all, pick "Link").
+(…)
+do next.
+
+-------------------------------------------------------------------------------
+The Wooden Sword
+-------------------------------------------------------------------------------
+Your first objective is to go down to the shores and retrieve your trusty
+sword. To get down there, go to the library and head as far south as you can,
+(…)
+A-button item.
+
+-------------------------------------------------------------------------------
+Mabe Village Sidequests
+-------------------------------------------------------------------------------
+Now that you have your sword, you can advance quite a bit farther into the
+game. Cut some tall grass just north of the library and jump off the cliff into
+(…)
+at least 20-40 Rupees. If you catch one of the two big fish, you'll get 20
+Rupees and a Piece of Heart. A turbo button makes it a bit easier to reel it
+in. You'll probably have to catch a couple of the smaller fish before you can
+get the big one to bite. In the grassy field in eastern Mabe Village, chop the
+grass with your sword until you find a Secret Seashell. If you collect a lot of
+(…)
+shield is only useful if it gets eaten by a Like Like.
+
+-------------------------------------------------------------------------------
+The Mysterious Woods
+-------------------------------------------------------------------------------
+The Mysterious Woods are, well, mysterious! This area is located to the north
+of Mabe Village. Chop the bush at the northwest corner of Mabe Village to enter
+(…)
+figure it out by yourself, check the next paragraph.
+
+-------------------------------------------------------------------------------
+Magic Powder
+-------------------------------------------------------------------------------
+Enter the cave in the central part of the Mysterious Woods (also known as the
+Mysterious Forest). Defeat the Keese (bats), bash the crystals with your sword,
+(…)
+return to the entrance of the cave and follow the trail leading from the
+northeast part of the Mysterious Woods. Go south and east to find the Witch's
+Hut. Use the Sleepy Mushroom in front of the witch to get some Magic Powder.
+This item has sundry applications, such as lighting lamps, burning enemies (a
+cumbersome attack strategy), and even irritating noses. In real life, it's
+generally wise to limit your contact with strange forest mushrooms and witches.
+
+-------------------------------------------------------------------------------
+Tail Key
+-------------------------------------------------------------------------------
+To get the Tail Key, find the raccoon in the western part of the forest and
+sprinkle some Magic Powder on him. He'll have an allergic reaction and you'll
+(…)
+gain entry into the first dungeon.
+
+-------------------------------------------------------------------------------
+Tail Cave
+-------------------------------------------------------------------------------
+Now that you have the Tail Key, you can access the Tail Cave. The Tail Cave is
+located southeast of Mabe Village; simply head east from the screen south of
+(…)
+Nightmare Door to the north and face the Nightmare!
+
+----------------------------------------
+King of Worms MOLDORM
+----------------------------------------
+I couldn't resist trying to give the Link's Awakening bosses cool subtitles
+like the Ocarina of Time bosses (such as Bio-Electric Anemone BARINADE or Evil
+(…)
+
+                              [24]
+                                |
+     [12]-[10]-[11]           [23]
+           ||                   |
+[15]      [ 9]-[18]=[17] [20] [22]
+ |          |         |    |    |
+[14] [ A]o[ 7]-[ 8]-[16]=[19]=[21]
+  |         |         ^
+[13]      [ 6]-[ 4]-[ 5]
+                 |
+     [ 3]-[ 2]-[ 1]
+
+(…)
+Nightmare: 23
+
+-------------------------------------------------------------------------------
+One More Goodie
+-------------------------------------------------------------------------------
+In Room 7, you'll find a Mini-Moldorm. Defeat him to win a treasure chest with
+20 Rupees if you haven't done so already. If you've found some bombs on your
+(…)
+can also buy some at the item shop once you've purchased the Shovel.
+
+-------------------------------------------------------------------------------
+After the Dungeon
+-------------------------------------------------------------------------------
+After you obtain the first instrument, a message appears. "...SWAMP... A path
+opens... in the blooms..." it reads. The owl will talk to you and will tell you
+(…)
+You can't do any more trading for a while, though.
+
+-------------------------------------------------------------------------------
+The Shovel
+-------------------------------------------------------------------------------
+By now, you may have enough money to buy yourself a Deluxe Shovel at the shop
+in Mabe Village. If so, you should. You might also want to buy some more Bombs.
+(…)
+everyone will start calling you THIEF).
+
+-------------------------------------------------------------------------------
+Heartfelt Advice
+-------------------------------------------------------------------------------
+If you're lucky, you've found two heart pieces so far. One more can be found in
+Koholint Prairie (east of the woods, just up the trail from the witch). Hop
+(…)
+will come in handy very, very soon.
+
+-------------------------------------------------------------------------------
+The Moblins
+-------------------------------------------------------------------------------
+When you're ready to face the Moblins, go north from where you got the Heart
+Piece around the holes, or take the long way by going north through the
+(…)
+most enemies.
+
+-------------------------------------------------------------------------------
+Mucho Dinero
+-------------------------------------------------------------------------------
+Exit the cave, listen to the owl, and go west and south to the Mysterious
+Woods. At the northwest exit lives a strange man named Mr. Write. He is a
+(…)
+cave. This is the entrance to the Bottle Grotto.
+
+-------------------------------------------------------------------------------
+Bottle Grotto
+-------------------------------------------------------------------------------
+The Bottle Grotto is the second dungeon. BowWow is happy to eat the Goponga
+Flowers that block off the entrance to the Bottle Grotto dungeon.
+(…)
+east from Room 5), although you could use bombs from that side of the room). Be
+patient, and only hit crystals needed to get past the blocks that are in your
+way. After getting your key (you should have two in your inventory), use it in
+Room 11 to open a door. Ignore the Spiked Beetles. Room 12 requires you to push
+the two blocks together to reveal a staircase.
+(…)
+
+This is Hinox, a Cyclops kind of guy who tosses an endless stream of bombs at
+you. When he stops throwing, he'll charge at you and try to throw you, WWE-
+style. Avoid standing on the unsteady parts of the floor. Use a few Whirling
+Blade Attacks on Hinox and you'll win quickly, revealing the warp portal to the
+(…)
+
+Room 15 has some stairs that take you to Room 22, although you can't reach them
+yet. For your reference, they lead to a connecting tunnel full of Piranha
+Plants. Go north to Room 16, which has a unique enemy called an Eye Vacuum.
+While it's active, it sucks enemies - and you - toward it. Wait for it to stop,
+(…)
+the Nightmare.
+
+----------------------------------------
+Phantom Bottle Being GENIE
+----------------------------------------
+Looks more like some psychotic clown or a baby with a bib. Dodge his fireballs
+by running left to right. When he starts pursuing you, slash him and throw his
+(…)
+
+[18]=[17]-[19]-[20]-[21]=[23]
+       |              |
+     [16]           [22]
+       |
+[14]-[15]           [26]-[25]
+  ^                        |
+[13]                     [24]
+
+[ 8]                     [12]
+  |                       ||
+[ 7]-[ 2]-[ 3]-[ 5]-[10]-[11]
+       |   ||    |    |
+     [ 1] [ 4] [ 6]-[ 9]
+
+(…)
+Stairs: 12-13, 23-24, 15-22
+
+-------------------------------------------------------------------------------
+A Truckload of Sidequests
+-------------------------------------------------------------------------------
+You'll see a message reading "...PRAIRIE... ...PRAIRIE... The Prairie is
+waiting..." However, before we get to that, there's a lot to be done outside
+(…)
+this will not happen later on in the game. Go through the Keese-infested tunnel
+and head through the cave exit, where you'll find a chest with 50 Rupees. From
+Mt. Tamaranch, I recommend that you go east and explore the Tal Tal Heights
+region. Make sure to find the Warp Hole. Climb the steps and fall into the hole
+to activate it. It's not useful yet, but when you find some more Warp Holes,
+(…)
+Slash it to find a Secret Seashell.
+
+-------------------------------------------------------------------------------
+Kanalet Castle
+-------------------------------------------------------------------------------
+Richard lives in the southern part of Ukuku Prairie. Talk to him and he'll ask
+you to find his five Golden Leaves at Kanalet Castle. Go north along the trail
+(…)
+castle walls, you can start looking for leaves.
+
+1. On the west part of the castle, throw a rock at the suspicious crow and
+he'll fly at you. Slash him twice to defeat him and win your first Golden Leaf.
+
+2. The other outdoor leaf is guarded a bomb-tossing enemy known as Mad Bomber.
+Look on the eastern courtyard. Keep slashing him when he pops out of the
+ground, avoiding the bombs he throws (sort of like Whack-A-Mole or Zelda 64's
+(…)
+for the remaining three.
+
+3. In the second room inside the castle, you must defeat all the enemies. Watch
+out for the irksome Bubble, which can optionally be defeated. The Kanalet
+Soldier enemies aren't incredibly dangerous; they're identical to Moblins and
+(…)
+the switch to open the gate outside.
+
+4. On the first room in the second floor, bomb the left crack to reveal a
+Kanalet knight. Crunch him for another Golden Leaf.
+
+5. Follow the walkway until you're back outside on the upper level. Go through
+the other door and you'll be in an odd room. Throw a pot at the door to open it
+(someone on a GameFAQs "Top Ten" feature said this was one of the ten toughest
+(…)
+Chain Soldier, you get the last Golden Leaf.
+
+-------------------------------------------------------------------------------
+Slime Key
+-------------------------------------------------------------------------------
+After collecting all five of the Golden Leaves, go back to Richard and give
+them to him. He'll move over, allowing access to an underground tunnel. Watch
+(…)
+and dig to excavate the Slime Key.
+
+-------------------------------------------------------------------------------
+Key Cavern
+-------------------------------------------------------------------------------
+Key Cavern, the third dungeon, is located near the lake on the prairie. Go
+north and slightly west from Richard's to get to the keyhole. However, once you
+(…)
+the Shrouded Stalfoses. Then began dashing with the Pegasus Boots, and use
+Roc's Feather just as you reach the gap. If done properly, you'll clear the
+gap. This technique is used fairly often later in the game. After making the
+leap, climb the steps and cross the gaps (use a normal Roc's Feather jump).
+Open the chest for the Nightmare's Key. If you have four Small Keys and the
+(…)
+Nightmare's Lair!
+
+----------------------------------------
+Evil Optic Receptor SLIME EYES
+----------------------------------------
+Open the Nightmare's Lair and you'll be faced with a few Zols. Ignore them and
+dash into the wall to knock down a giant eyeball. Keep slashing the eye until
+(…)
+
+[17]-[24]o[23]-[22]
+ ^|              |
+[16] [18]=[20]-[21]
+ ^|   ||   ||    o
+[15]-[14]-[13]o[25]           [ 7]
+            |                  ||
+     [ 5] [12]           [ 9]=[ 6]=[11]
+       |                       ||
+     [ 4]                     [10]
+       |
+     [ 3]-[ 8]                [29]
+       |                        |
+     [ 2]                     [28]
+       |                        |
+     [ 1]-[19]                [27]-[26]
+
+(…)
+Nightmare: 28
+
+-------------------------------------------------------------------------------
+Post-Dungeon Sidequests
+-------------------------------------------------------------------------------
+You've found the first three instruments, but things aren't getting easier. The
+Owl will give you a message and instruct you on where to go next. I'll cover
+(…)
+Seashell.
+
+-------------------------------------------------------------------------------
+The Ocarina
+-------------------------------------------------------------------------------
+Warp to Mabe Village and talk to everybody (as usual). While you're in the
+area, go one screen west of the Tail Cave and use the Pegasus Boots to ram into
+(…)
+get out of your way.
+
+-------------------------------------------------------------------------------
+The Angler's Key
+-------------------------------------------------------------------------------
+You can then enter the Yarna Desert. Look out for the Pokeys and Leevers that
+inhabit this barren, parched land. Pick up the rock to the east and you'll find
+(…)
+preferably using the Warp Hole.
+
+-------------------------------------------------------------------------------
+Tal Tal Mountain
+-------------------------------------------------------------------------------
+If you haven't activated the Warp Hole in Tal Tal Heights yet, please do so.
+This way, you can reach Mabe Village and Animal Village from here with ease.
+(…)
+Key, this area was full of impassible deep water). Now go inside the dungeon!
+
+-------------------------------------------------------------------------------
+Angler's Tunnel
+-------------------------------------------------------------------------------
+The Angler's Tunnel dungeon is very, very wet! I suppose it's designed to look
+like a fish. 
+(…)
+treasure chest for your Stone Slab. Then go north along the high path until you
+reach a chest. Open it for the Map! Pegasus jump across the huge pit to Room
+10. Here we have a wonderful combination of Bubble and Peahat. Bomb the cracked
+rock and push the other block to access a chest. It holds a Small Key. Go north
+twice to Room 12 and bomb the cracked block. Open the chest for another Small
+(…)
+the stairs to face him underwater.
+
+----------------------------------------
+Gargantuan Masked Fish ANGLER FISH
+----------------------------------------
+So I ripped the boss's subtitle straight out of Majora's Mask. What's wrong
+with that? Float above Angler Fish and use your sword to attack him rapidly.
+(…)
+
+          [22]-[21]
+            |    |
+[28]      [23] [20]      [12]
+  |         |   ||         |
+[27] [18]-[19]-[14]-[ 9] [11]
+  |    |         |   ||    |
+[26]-[17] [24]-[ 7]-[ 8]-[10]
+       |   ||    |    |
+     [16]-[15]-[ 6] [13]
+       |    |    |   ||
+     [25]-[ 2]-[ 3]=[ 5]
+            |    |
+          [ 1] [ 4]
+
+(…)
+Nightmare: 27
+
+-------------------------------------------------------------------------------
+Manbo's Mambo and Fun with the Flippers
+-------------------------------------------------------------------------------
+Those Flippers are great. They facilitate access to a lot of important things.
+Your first priority is one screen west of the previous dungeon, where there's a
+(…)
+found in the moat of Kanalet Castle, near the southwest corner.
+
+-------------------------------------------------------------------------------
+The Ghost
+-------------------------------------------------------------------------------
+Chances are, you're going to get haunted by a ghost soon. He's a little
+annoying, and he prevents you from entering dungeons. To get him off your back,
+(…)
+Toronbo Shores. I've always though this scene was kind of pitiful... Then take
+him to the cemetery. His grave is the lone tombstone just west of the Witch's
+Hut. After you get him out of your way, you'll get a message from a certain
+nocturnal bird of prey. He'll tell you to go to Martha's Bay. First, try
+sprinkling a little Magic Powder on the ghost's grave. Lastly, don't forget to
+(…)
+it.
+
+-------------------------------------------------------------------------------
+More Stuff to Do
+-------------------------------------------------------------------------------
+In Ukuku Prairie, in the pond next to the third dungeon, there's a lone piece
+of grass. Slash it to reveal a Secret Seashell. If it lands in the water, just
+(…)
+if he finds out who she really is. That's another reason why you have to be
+careful when meeting Internet friends in real life! Curiously, the real-life
+Mr. Wright says he likes buying "funny things off the Internet, like uranium"
+and relics from the Soviet space program. But that's beside the point.
+
+(…)
+bomb capacity the last time you saw him.
+
+-------------------------------------------------------------------------------
+The L-2 Sword
+-------------------------------------------------------------------------------
+Have you been paying attention? If so, you should now have 20 Secret Seashells.
+Go to the Seashell Mansion in Ukuku Prairie for a big surprise! It's the Level-
+(…)
+missed.
+
+-------------------------------------------------------------------------------
+Catfish's Maw
+-------------------------------------------------------------------------------
+To get to the fifth dungeon, swim to the center of Martha's Bay. At the west
+end of the dungeon, near the rocks, press B to dive, where you'll be taken to a
+(…)
+Small Key! Go back to Room 3 and open the locked door with it. Go west and beat
+the Iron Masks to open the door. Watch out for the Razor Traps. Go west to Room
+8. Inside, dispose of the twin Iron Masks using the pots and you'll make a
+chest appear. Open it for the Map. Now that you have the Map and Compass, life
+gets a little easier.
+(…)
+the door to the Nightmare's Lair.
+
+----------------------------------------
+Giant Masked Insect SLIME EEL
+----------------------------------------
+OK, I came up with another recycled subtitle. Equip the Sword and Hookshot.
+Your goal is to shoot your Hook Shot into the Nightmare's mouth. When you pull
+(…)
+
+[19]-[ 5] [34] [18]-[17]
+            |         |
+          [33] [31] [16]-[15]
+            |         |    |
+[26]-[27]-[28]=[32] [30] [14]-[25]
+                      |    |
+                    [29]-[12]-[13]
+                           |
+          [24]=[23] [10]-[11]
+                 |    |
+     [22]-[21]-[20] [ 9]
+                 |    |
+          [ 8]-[ 7]-[ 6]
+                     ||
+               [ 4]-[ 3]-[ 2]-[ 1]
+
+(…)
+Nightmare: 33
+
+-------------------------------------------------------------------------------
+The Magnifying Lens and Other Goodies
+-------------------------------------------------------------------------------
+After completing the fifth dungeon, you'll receive a message. "...SHRINE... An
+island secret in the shrine..." Your next destination is the Face Shrine. But
+(…)
+Pick them up and go inside. Use your Hookshot to reach the chest.
+
+-------------------------------------------------------------------------------
+The Frog's Song of Soul
+-------------------------------------------------------------------------------
+If you have at least 300 Rupees, make sure to do this necessary side quest
+(although you can wait until after getting the sixth instrument). Exit Mabe
+(…)
+twice, but it's very important.
+
+-------------------------------------------------------------------------------
+Adventures in the Mountains
+-------------------------------------------------------------------------------
+I recommend that you go to the Tal Tal Mountains if you need more Rupees or
+Secret Seashells. Go through the cave next to Mt. Tamaranch. In the third
+(…)
+thing left to upgrade will be Magic Powder.
+
+-------------------------------------------------------------------------------
+Rapids Ride
+-------------------------------------------------------------------------------
+It's possible to play through the entire game without going to the Rapids Ride.
+In fact, you won't miss anything great if you don't go here. However, this is
+(…)
+or go through the nearby cave to return to Tal Tal Heights.
+
+-------------------------------------------------------------------------------
+The Face Key
+-------------------------------------------------------------------------------
+Head on over to the Face Shrine area, which is north of Animal Village. The
+Face Shrine area on the map is not the same as the Face Shrine dungeon (Level
+(…)
+speak to you and tell you to go to the north shrine.
+
+-------------------------------------------------------------------------------
+Face Shrine
+-------------------------------------------------------------------------------
+Like the past few dungeons, the Face Shrine is hard to access. Swim east
+through the river into the Face Shrine area and you'll come to an island with
+(…)
+lamps won't shoot flames at you. Then bomb the upper wall to reveal Room 25.
+Inside is a boss, Smasher. Throw his little black ball back at him to defeat
+him. If you're good, you can throw the orb at him several times without giving
+him a chance to pick it up again. Four hits will beat the boss, creating the
+warp portal. 
+(…)
+the Nightmare's Lair.
+
+----------------------------------------
+Face of Evil FACADE
+----------------------------------------
+This is the only boss that you don't use the corresponding dungeon prize
+against. When the battle starts, you'll be faced with a barrage of floor tiles
+(…)
+Triangle.
+
+[18]                               [30]
+  |                                  |
+[10]-[11]      [14] [40]      [34] [29]
+  |    |         |    |    |    |    |
+[ 8]-[ 9]-[12]-[13] [39] [26] [33] [28]
+  |    |        ||    |    |   ||    |
+[ 7]-[ 6]o[15] [27] [38] [25] [32]-[31]
+       |         |    |    o    |
+     [ 5]-[ 4] [36]-[37] [24] [35]
+       ^    |             ||    |
+     [17] [ 3]           [21]-[22]
+       |    |              |    |
+     [16] [ 2]-[ 1]-[19]-[20] [23]
+
+50 Rupees: 3, 22
+(…)
+Nightmare: 39
+
+-------------------------------------------------------------------------------
+Reviving the Flying Rooster
+-------------------------------------------------------------------------------
+After beating the sixth Nightmare, you'll receive a message (again). Then the
+Owl will talk to you and tell you what to do next (sort of). Your next stop is
+(…)
+Seashell is your reward).
+
+-------------------------------------------------------------------------------
+The Bird Key
+-------------------------------------------------------------------------------
+The owl will give you a message when you approach the cave that leads to the
+main Tal Tal Mountain area. On the same screen as the Hen House, go in the
+(…)
+air, but this one is.
+
+-------------------------------------------------------------------------------
+Eagle's Tower
+-------------------------------------------------------------------------------
+The seventh dungeon is located east of the waterfall above Angler's Tunnel. Go
+through a series of caves (use your Hookshot to cross the gap, and make sure to
+(…)
+
+In Room 7, push the block and go west through Room 11 and then north into Room
+12. Slash the weird Three of a Kind guys so the card suits are the same, and
+you'll win the Compass. Usually, you're in good shape now, but you actually
+need patience, hours, and a strategy guide.
+(…)
+for the Stone Slab. Take the staircase in this room up to Room 20. Go down to
+Room 21 and you'll find the bomb-tossing meanie, Hinox. Defeat him for a Small
+Key. Two arrows end the fight really quickly. The flames from the torches make
+it a little tougher, but not much. 
+
+(…)
+If you don't want to enter every room in the dungeon, go south and jump down
+from the high walkway. Head north to the staircase, which returns you to Room
+20. Go south and east twice to the familiar Room 9. Shoot an arrow at the
+crystal and go up the stairs.
+
+(…)
+room. Go around and climb the staircase.
+
+----------------------------------------
+Giant Bird of Prey EVIL EAGLE
+----------------------------------------
+You'll find the same guy who saw earlier in Room 34, but this time Grim
+Creeper's got a new henchman, a giant eagle. I think this is the hardest boss
+(…)
+F1                          F2                          F3
+[30]-[29]-[28]-[27]              [12] [10]                   [40]-[41]
+  |    |         |                 |    |                      |
+[16]-[15]-[14]-[26]         [23]-[11]-[ 7]-[ 6]         [38]-[39] [42] [34]
+  |    |    |    |            ^    o    |    |           ||   ||    |    |
+[17] [19]-[13]-[ 4]         [20]-[24] [ 8]-[ 5]         [37]-[36]-[32]-[33]
+  |         |   ||            |    o    |    |                 |    |
+[18]-[ 1]-[ 2]-[ 3]         [21]-[22]-[ 9]=[25]              [35]-[31]
+(…)
+the map because it disappears after crushing the four pillars.
+
+-------------------------------------------------------------------------------
+Opening the Final Dungeon
+-------------------------------------------------------------------------------
+You've now collected seven Instruments of the Sirens, but you still need one
+more. You'll receive a message (as usual). It says "...OCARINA... The music of
+(…)
+dungeon!
+
+-------------------------------------------------------------------------------
+Turtle Rock
+-------------------------------------------------------------------------------
+The Turtle Rock dungeon is big and eventful, boasting seven keys, six breakable
+walls, and six bosses. Lava also abounds, and falling in makes you lose half a
+(…)
+boss, Smasher. Pick up the black ball and give him a taste of his own medicine.
+In Room 8 to the north, you can read the Stone Slab and take a shortcut to Room
+12. For now, though, take the western door to Room 9, where there's a rolling
+rock. Steer it in a zig-zag pattern so it covers all the holes and you'll win a
+Small Key. This isn't the last time you'll be practicing this maneuver in this
+(…)
+
+Head back to Room 4 (with the rolling rock) and ascend the staircase nearest
+you. Now that you have the Fire Rod (this is the name I use for the rest of the
+guide), you can dissolve the ice blocking your way in the 2-D section. On the
+second screen, melt only the top layer of ice; you need the bottom layer to
+(…)
+you'll be in a new part of Room 29. Go up and open the door to the Nightmare!
+
+----------------------------------------
+Infernal Rock Monster HOT HEAD
+----------------------------------------
+I find this Nightmare to be extremely easy. Watch out for the lava he splashes
+everywhere and simply blast him with a barrage of fireballs. Stand near the
+(…)
+Drum in a hurry.
+
+               [46] [23]
+                 |    |
+[44]           [45] [24]           [40]
+  |              |    |              |
+[43]=[31]-[30]-[29]=[28]-[27]-[26] [41]
+            |                   |
+     [34]-[32]o[39]=[38]=[37]o[25]
+       |    |         o         ^
+     [42] [33]-[ 5]-[20]-[21]=[22]
+       |         o   ||    |
+[19] [15]-[14] [ 3]-[ 4]-[35]o[36] [ 8]
+  |    |    |    |    |    |    o    |
+[17]-[16] [13]-[ 2]-[11]-[10]-[ 9]-[ 7]
+  |              |    |              |
+[18]           [ 1] [12]           [ 6]
+
+20 Rupees: 15, 24
+(…)
+Nightmare: 45
+
+-------------------------------------------------------------------------------
+The Wind Fish's Egg
+-------------------------------------------------------------------------------
+You'll receive one more message now. "...EGG... The egg at the mountain calls."
+Your final destination is Mt. Tamaranch. Before you can battle the final
+(…)
+and the Boomerang, although most of them require sword attacks.
+
+-------------------------------------------------------------------------------
+The Final Nightmare
+-------------------------------------------------------------------------------
+The final fight occurs in six stages, as follows:
+
+(…)
+
+
+===============================================================================
+Bestiary                                                             [ENEMY]
+===============================================================================
+Link's Awakening has a LOT of enemies. It's conceivable that I might have
+missed a meanie or two, so please tell me if I did. I do not include inanimate
+(…)
+Smasher, and Turtle Rock. Check my guide for tips on defeating those.
+
+------------------------------
+Anti-Kirby
+------------------------------
+Found: Eagle's Tower
+
+(…)
+or bombs to defeat it.
+
+------------------------------
+Arm-Mimic
+------------------------------
+Found: Dream Shrine, Turtle Rock
+
+These enemies move opposite your direction. If you move left, it moves right!
+If you go up, it goes down. The Whirling Blade Attack is the best way to defeat
+it. If there are large groups of them, the Pegasus Boots may be of assistance.
+
+------------------------------
+Armos Statue
+------------------------------
+Found: Face Shrine Area
+
+(…)
+the sword. Or, if possible, don't activate them in the first place.
+
+------------------------------
+Ball and Chain Soldier
+------------------------------
+Found: Kanalet Castle
+
+(…)
+KO'd. 
+
+------------------------------
+Beamos
+------------------------------
+Found: Face Shrine, Eagle's Tower, Turtle Rock
+
+(…)
+There's no way to defeat Beamos.
+
+------------------------------
+Beetle
+------------------------------
+Found: Ukuku Prairie
+
+(…)
+Enemy, it can be defeated with your sword or almost anything else.
+
+------------------------------
+Blooper
+------------------------------
+Found: Catfish's Maw
+
+(…)
+floor, however.
+
+------------------------------
+Bob-omb
+------------------------------
+Found: Key Cavern
+
+(…)
+up, so stay away.
+
+------------------------------
+Bomber
+------------------------------
+Found: Ukuku Prairie, Martha's Bay, Tal Tal Heights, Face Shrine Area
+
+(…)
+Boomerang, so it's best just to ignore or avoid them.
+
+------------------------------
+Boo Buddy
+------------------------------
+Found: Bottle Grotto
+
+(…)
+really don't look that much like the Mario Boo Buddies.
+
+------------------------------
+Bubble
+------------------------------
+Found: Kanalet Castle, Angler's Tunnel, Face Shrine, Eagle's Tower
+
+(…)
+subtract from your Magic Meter like in other Zelda games.
+
+------------------------------
+Buzz Blob
+------------------------------
+Found: Koholint Prairie, Ukuku Prairie, Martha's Bay
+
+(…)
+Cukeman.
+
+------------------------------
+Cheep-Cheep
+------------------------------
+Found: Angler's Tunnel, Catfish's Maw, caves
+
+(…)
+harasses you during the fourth Big Boss.
+
+------------------------------
+Crow
+------------------------------
+Found: Tabahl Wasteland, Kanalet Castle
+
+(…)
+then defeat it before it leaves the screen for a Golden Leaf.
+
+------------------------------
+Cuccoo
+------------------------------
+Found: Mabe Village
+
+(…)
+building, however.
+
+------------------------------
+Cukeman
+------------------------------
+Found: By sprinkling Magic Powder on a Buzz Blob
+
+(…)
+the beginning stages of development under the name Ultra 64.
+
+------------------------------
+Eye Vacuum
+------------------------------
+Found: Bottle Grotto, Key Cavern, Turtle Rock
+
+(…)
+things in, bash it with your sword.
+
+------------------------------
+Flying Octorok
+------------------------------
+Found: Ukuku Prairie
+
+(…)
+avoid attack. They would be called Para-Octoroks in a Mario game.
+
+------------------------------
+Gel
+------------------------------
+Found: Tail Cave, Bottle Grotto, Key Cavern; by hitting most Zols
+
+(…)
+Mario Bros. 3.
+
+------------------------------
+Ghini
+------------------------------
+Found: Cemetery
+
+(…)
+usually drop a nice item like bombs, arrows, or a fairy.
+
+------------------------------
+Giant Bubble
+------------------------------
+Found: Face Shrine
+
+(…)
+like that of an overgrown Spark.
+
+------------------------------
+Giant Ghini
+------------------------------
+Found: Cemetery
+
+(…)
+a certain grave in the northeast part of the Cemetery.
+
+------------------------------
+Giant Goponga Flower
+------------------------------
+Found: Goponga Swamp
+
+The same as Goponga Flowers, only bigger.
+
+------------------------------
+Gibdo
+------------------------------
+Found: Eagle's Tower, Turtle Rock
+
+(…)
+Gibdo's bandages off and turn it into a Stalfos.
+
+------------------------------
+Goomba
+------------------------------
+Found: Many dungeon 2-D sequences, Kanalet Castle underground, Eagle's Tower
+
+(…)
+since it will always yield a Recovery Heart.
+
+------------------------------
+Goponga Flower
+------------------------------
+Found: Goponga Swamp
+
+(…)
+Hookshot, Fire Rod, or your L-2 Sword.
+
+------------------------------
+Gordo
+------------------------------
+Found: Toronbo Shores
+
+(…)
+supposed to be the urchins from Kirby's Dream Land.
+
+------------------------------
+Hardhat Beetle
+------------------------------
+Found: Caves, Tail Cave, Bottle Grotto
+
+(…)
+your way.
+
+------------------------------
+Iron Mask
+------------------------------
+Found: Catfish's Maw
+
+(…)
+masks. Bomb Arrows also work well.
+
+------------------------------
+Kanalet Soldier
+------------------------------
+Found: Kanalet Castle
+
+Identical to Moblins.
+
+------------------------------
+Keese
+------------------------------
+Found: Tail Cave, Bottle Grotto, Key Cavern, most caves
+
+(…)
+very easy to beat using the sword or almost any other weapon.
+
+------------------------------
+Leever
+------------------------------
+Found: Toronbo Shores, Yarna Desert, Tal Tal Mountain Range
+
+(…)
+problems.
+
+------------------------------
+Like Like
+------------------------------
+Found: Goponga Swamp, Tal Tal Heights, Eagle's Tower
+
+(…)
+Likes on purpose. I enjoyed buying shields at the Item Shop!
+
+------------------------------
+Mini-Moldorm
+------------------------------
+Found: Tail Cave, Face Shrine, caves
+
+(…)
+quick circular paths and take two hits with the L-1 sword.
+
+------------------------------
+Moblin
+------------------------------
+Found: Mysterious Woods, Ukuku Prairie, Tal Tal Heights
+
+(…)
+Tal Heights and Ukuku Prairie areas, but they behave identically.
+
+------------------------------
+Monkey
+------------------------------
+Found: Toronbo Shores
+
+(…)
+slashed with your sword - a good source of Rupees.
+
+------------------------------
+Mutt
+------------------------------
+Found: Mabe Village
+
+(…)
+very nice.
+
+------------------------------
+Octorok
+------------------------------
+Found: Toronbo Shores
+
+(…)
+One slash with the sword will put an Octorok down for the count.
+
+------------------------------
+Pairodd
+------------------------------
+Found: Key Cavern
+
+(…)
+before they have a chance to teleport across the room.
+
+------------------------------
+Peahat
+------------------------------
+Found: Angler's Tunnel
+
+(…)
+moving.
+
+------------------------------
+Pincer
+------------------------------
+Found: Ukuku Prairie, one cave in Yarna Desert
+
+(…)
+move away.
+
+------------------------------
+Piranha Plant
+------------------------------
+Found: Bottle Grotto
+
+(…)
+next to their pipes.
+
+------------------------------
+Podoboo 
+------------------------------
+Found: Turtle Rock
+
+(…)
+them with relative ease.
+
+------------------------------
+Pokey
+------------------------------
+Found: Yarna Desert
+
+(…)
+Pokey, one of its segments will go bouncing around the area.
+
+------------------------------
+Pols Voice
+------------------------------
+Found: Bottle Grotto, Face Shrine
+
+(…)
+play the Ballad of the Wind Fish using your Ocarina.
+
+------------------------------
+Raven
+------------------------------
+Found: Tal Tal Mountain Range
+
+(…)
+slightly different and is only found around Turtle Rock.
+
+------------------------------
+Rope
+------------------------------
+Found: Eagle's Tower, Turtle Rock
+
+(…)
+snakes will never poison you.
+
+------------------------------
+Sand Crab
+------------------------------
+Found: Toronbo Shores
+
+These weak enemies are found exclusively in the Toronbo Shores area.
+
+------------------------------
+Shrouded Stalfos
+------------------------------
+Found: Tail Cave, Bottle Grotto, Key Cavern, Tal Tal Mountain Range
+
+These are just like Kanalet Soldiers or Moblins.
+
+------------------------------
+Shy-Guy
+------------------------------
+Found: Bottle Grotto, Face Shrine
+
+(…)
+their unprotected backsides. Arrows and bombs are also effective.
+
+------------------------------
+Spark
+------------------------------
+Found: Tail Cave, Bottle Grotto, Face Shrine, Eagle's Tower, Turtle Rock
+
+(…)
+them.
+
+------------------------------
+Spiked Beetle
+------------------------------
+Found: Tail Cave, Bottle Grotto, Angler's Tunnel
+
+(…)
+they're lying on their backs.
+
+------------------------------
+Spiny Beetle
+------------------------------
+Found: Caves, Martha's Bay
+
+(…)
+them.
+
+------------------------------
+Stalfos
+------------------------------
+Found: Tail Cave, Bottle Grotto, Key Cavern, Catfish's Maw
+
+(…)
+weapons also work well.
+
+------------------------------
+Star
+------------------------------
+Found: Angler's Tunnel, Catfish's Maw, Face Shrine
+
+(…)
+can be defeated with a sword attack.
+
+------------------------------
+Tektite
+------------------------------
+Found: Tal Tal Heights, Face Shrine Area
+
+(…)
+to beat using your sword.
+
+------------------------------
+Three of a Kind
+------------------------------
+Found: Tail Cave, Eagle's Tower
+
+(…)
+up Rupees; on hearts, they leave behind recovery hearts.
+
+------------------------------
+Thwimp
+------------------------------
+Found: Face Shrine
+
+(…)
+Awakening, Thwimps are simply smaller versions of Thwomps.
+
+------------------------------
+Thwomp
+------------------------------
+Found: Key Cavern, Angler's Tunnel
+
+(…)
+jump onto its top.
+
+------------------------------
+Vire
+------------------------------
+Found: Turtle Rock
+
+(…)
+speed, but those are easy to beat with your sword.
+
+------------------------------
+Water Tektite
+------------------------------
+Found: Angler's Tunnel, Catfish's Maw, Face Shrine
+
+(…)
+Mario Sunshine, although those work a little differently).
+
+------------------------------
+Wizzrobe
+------------------------------
+Found: Face Shrine, Eagle's Tower
+
+(…)
+can defeat a Wizzrobe using four arrows. Best is to use a Bomb Arrow.
+
+------------------------------
+Zol
+------------------------------
+Found: Caves, Mysterious Woods, most dungeons (especially Key Cavern)
+
+(…)
+When you hit some Zols with a standard sword, they'll turn into Gels.
+
+------------------------------
+Zola
+------------------------------
+Found: Koholint Prairie, Martha's Bay
+
+(…)
+Martha's Bay where Zolas are everywhere.
+
+------------------------------
+Zombie
+------------------------------
+Found: Graveyard
+
+(…)
+
+
+===============================================================================
+Pieces of Heart                                                      [HEART]
+===============================================================================
+Like every other Zelda game, this one has several Pieces of Heart for players
+to find and collect. Collect four of them to get a new Heart Container.
+
+-----------------------------------------------------
+1. Mabe Village Fishing Game
+-----------------------------------------------------
+Required Items: Sword
+
+(…)
+play. Catch one of the big fish to earn a Piece of Heart. It's easiest if you
+catch the highest small fish first, and then aim for the big one directly below
+you. A turbo controller helps when reeling a fish in.
+
+-----------------------------------------------------
+2. Mabe Village
+-----------------------------------------------------
+Required Items: Sword
+
+(…)
+the ledge into it. You'll land near a Piece of Heart.
+
+-----------------------------------------------------
+3. Koholint Prairie
+-----------------------------------------------------
+Required Items: Roc's Feather
+
+(…)
+Roc's Feather to jump over the holes and reach it.
+
+-----------------------------------------------------
+4. Koholint Prairie
+-----------------------------------------------------
+Required Items: Roc's Feather
+
+(…)
+supposed to not be able to get this Heart Piece until you owned the Hookshot.
+
+-----------------------------------------------------
+5. Mysterious Woods
+-----------------------------------------------------
+Required Items: Power Bracelet
+
+(…)
+skulls using the Power Bracelet to gain access to the Heart Piece.
+
+-----------------------------------------------------
+6. Ukuku Prairie
+-----------------------------------------------------
+Required Items: Pegasus Boots, Bombs
+
+(…)
+tunnel! Go through to find a Piece of Heart.
+
+-----------------------------------------------------
+7. Yarna Desert
+-----------------------------------------------------
+Required Items: Marin must open Yarna Desert
+
+(…)
+western screen to find it.
+
+-----------------------------------------------------
+8. Tal Tal Heights
+-----------------------------------------------------
+Required Items: Flippers
+
+(…)
+middle of the screen to find it.
+
+-----------------------------------------------------
+9. Kanalet Castle
+-----------------------------------------------------
+Required Items: Flippers
+
+Dive near the southwest corner of the moat until you find the Piece of Heart.
+
+-----------------------------------------------------
+10. Animal Village
+-----------------------------------------------------
+Required Items: Hookshot, Bombs
+
+(…)
+to the rock, and collect the Piece of Heart.
+
+-----------------------------------------------------
+11. Tal Tal Mountain Range
+-----------------------------------------------------
+Required Items: Hookshot, Bombs
+
+(…)
+leads to the Heart Piece you could see but couldn't get to.
+
+-----------------------------------------------------
+12. Tal Tal Mountain Range (near Turtle Rock dungeon)
+-----------------------------------------------------
+Required Items: Access to Turtle Rock, several Small Keys
+
+(…)
+
+
+===============================================================================
+Secret Seashells                                                     [SHELL]
+===============================================================================
+Yes, if you collect enough of these (20), something good really will happen.
+
+-----------------------------------------------------
+1. Mabe Village
+-----------------------------------------------------
+Required Items: Sword
+
+Slash through the grassy field to find your first Secret Seashell.
+
+-----------------------------------------------------
+2. Tail Cave
+-----------------------------------------------------
+Required Items: Tail Key, Bombs
+
+(…)
+dungeon's "eyes," which has a Secret Seashell. 
+
+-----------------------------------------------------
+3. Mabe Village
+-----------------------------------------------------
+Required Items: Shovel
+
+(…)
+shell.
+
+-----------------------------------------------------
+4. Koholint Prairie
+-----------------------------------------------------
+Required Items: Shovel, Power Bracelet
+
+(…)
+reveal a Secret Seashell.
+
+-----------------------------------------------------
+5. Mysterious Woods
+-----------------------------------------------------
+Required Items: Power Bracelet
+Near the entrance from Mabe Village, pick up the boulder and open the chest for
+a Secret Seashell.
+
+-----------------------------------------------------
+6. Ukuku Prairie 
+-----------------------------------------------------
+Required Items: Power Bracelet, 5 Secret Seashells
+
+(…)
+able to get this one. 
+
+-----------------------------------------------------
+7. Ukuku Prairie
+-----------------------------------------------------
+Required Items: Power Bracelet
+
+(…)
+spot surrounded by grass on each side. Dig at the center to find the shell.
+
+-----------------------------------------------------
+8. Ukuku Prairie
+-----------------------------------------------------
+Required Items: Power Bracelet
+
+East of Seashell Mansion. Simply chop the bushes.
+
+-----------------------------------------------------
+9. Ukuku Prairie (Richard's Villa)
+-----------------------------------------------------
+Required Items: 5 Golden Leaves
+
+(…)
+into the hole to get to the chest.
+
+-----------------------------------------------------
+10. Ukuku Prairie
+-----------------------------------------------------
+Required Items: Power Bracelet
+
+Under a rock in the maze that connects Ukuku Prairie with Martha's Bay.
+
+-----------------------------------------------------
+11. Ukuku Prairie
+-----------------------------------------------------
+Required Items: 10 Secret Seashells
+
+(…)
+freebie.
+
+-----------------------------------------------------
+12. Ukuku Prairie
+-----------------------------------------------------
+Required Items: Power Bracelet, Shovel, Bombs
+
+(…)
+the passageway. Then go outside and dig near the owl statue.
+
+-----------------------------------------------------
+13. Martha's Bay
+-----------------------------------------------------
+Required Items: Power Bracelet
+
+An isolated piece of grass in south-central Martha's Bay.
+
+-----------------------------------------------------
+14. Ukuku Prairie
+-----------------------------------------------------
+Required Items: Pegasus Boots
+
+(…)
+Prairie.
+
+-----------------------------------------------------
+15. South of the Village
+-----------------------------------------------------
+Required Items: Pegasus Boots
+
+(…)
+and knock down a Secret Seashell. Very easy to miss.
+
+-----------------------------------------------------
+16. Martha's Bay
+-----------------------------------------------------
+Required Items: Pegasus Boots
+
+(…)
+bridge. Dig to the left of the owl statue to uncover a Secret Seashell.
+
+-----------------------------------------------------
+17. Yarna Desert
+-----------------------------------------------------
+Required Items: Marin must open Yarna Desert
+
+(…)
+you reach two rocks. Lift one up to reveal a Secret Seashell.
+
+-----------------------------------------------------
+18. Toronbo Shores
+-----------------------------------------------------
+Required Items: Flippers
+
+(…)
+until you've finished the ghost sidequest.
+
+-----------------------------------------------------
+19. Ukuku Prairie
+-----------------------------------------------------
+Required Items: Flippers
+
+(…)
+worry. Just leave the screen and it'll be back.
+
+-----------------------------------------------------
+20. Martha's Bay
+-----------------------------------------------------
+Required Items: Flippers
+
+(…)
+the single bush. Slash it for a Secret Seashell.
+
+-----------------------------------------------------
+21. Tal Tal Mountain Range
+-----------------------------------------------------
+Required Items: Flippers
+
+(…)
+Seashell.
+
+-----------------------------------------------------
+22. Tal Tal Mountain Range
+-----------------------------------------------------
+Required Items: Flippers
+
+(…)
+with the movable boulders and go outside to find the chest with the shell.
+
+-----------------------------------------------------
+23. Face Shrine Area
+-----------------------------------------------------
+Required Items: Pegasus Boots
+
+(…)
+cave with nothing but a chest containing a Secret Seashell.
+
+-----------------------------------------------------
+24. Rapids Ride (connected to Face Shrine dungeon)
+-----------------------------------------------------
+Required Items: L-2 Power Bracelet
+
+(…)
+you can get a shell from the treasure chest.
+
+-----------------------------------------------------
+25. Kanalet Castle
+-----------------------------------------------------
+Required Items: Flying Rooster
+
+(…)
+to the staircase. It leads to a chest containing a Secret Seashell.
+
+-----------------------------------------------------
+26. Eagle's Tower
+-----------------------------------------------------
+Required Items: Eagle Key
+
+(…)
+
+
+===============================================================================
+Glitches and Tricks                                                  [CHEAT]
+===============================================================================
+For purposes of being complete and comprehensive, I feel obliged to inform my
+readers of the two main glitches of Link's Awakening. Be warned: Using these
+(…)
+files. Use them at your own risk.
+
+-----------------------------------------------------
+The Select Glitch
+-----------------------------------------------------
+Sometimes known as the Screen Warp Trick or other names. This is so much fun!
+Press the SELECT button during a room transition - immediately before you leave
+(…)
+the things you can do with this trick.
+
+-----------------------------------------------------
+The Secret Doghouse World
+-----------------------------------------------------
+This glitch is riskier than the Select Glitch. First go to screen B-11 (Madam
+MeowMeow's House). Walk to the right side of the house (the back of the
+(…)
+Jelly Soup's excellent Glitch FAQ explains this much more thoroughly.
+
+-----------------------------------------------------
+Dungeon Sequence Breaking
+-----------------------------------------------------
+At certain points in the game, you can complete dungeons out of order. For
+example, you can complete Turtle Rock before even entering the seventh dungeon
+(…)
+
+
+===============================================================================
+References to Other Games                                            [REFER]
+===============================================================================
+
+  *** WARNING ***
+(…)
+the game.
+
+----------------------------------------
+Characters
+----------------------------------------
+Hen House man    = Ingo (Ocarina of Time)
+Grandma Ulrira   = Sahasrahla's wife (A Link to the Past)
+(…)
+Madam MeowMeow   = Mamamu Yan (Ocarina of Time)
+Marin            = Malon (Ocarina of Time), Zelda (various)
+Mr. Write        = Dr. Wright (SimCity), Dr. Left (Minish Cap)
+Owl              = Kaepora Gebora (Ocarina of Time)
+Tarin            = Talon (Ocarina of Time)
+(…)
+(Super Mario Bros. 2)
+
+----------------------------------------
+Enemies
+----------------------------------------
+Blooper, Boo Buddy, Cheep-Cheep, Goomba, Piranha Plant, Podoboo, Pokey, Shy-
+Guy, Spark, Thwimp, and Thwomp all appear in Mario games.
+(…)
+Gordo is from Kirby's Dream Land.
+
+----------------------------------------
+Items
+----------------------------------------
+Bomb arrows appear in Twilight Princess.
+
+(…)
+Ocarina       = Fairy Ocarina/Ocarina of Time (Ocarina of Time)
+
+----------------------------------------
+The World Map
+----------------------------------------
+The world map is very similar to that of The Legend of Zelda: A Link to the
+Past, although some people might argue that Pothole Field refers to Lon Lon
+(…)
+Mabe Village     = Kakariko Village
+Martha's Bay     = Lake Hylia
+Mt. Tamaranch    = Death Mountain
+Mysterious Woods = Lost Woods
+Rapids Ride      = Zora's Domain
+(…)
+Yarna Desert     = Desert of Mystery
+
+----------------------------------------
+Other Stuff
+----------------------------------------
+ * Blaino (a boxer in Oracle of Seasons)
+ * BowWow (an SMB3-style Chain Chomp)
+(…)
+
+
+===============================================================================
+Frequently Asked Questions                                           [QUEST]
+===============================================================================
+Q: Are there any items I have only chance to collect?
+A: Yes. One Secret Seashell near Kanalet Castle, which can only be earned while
+(…)
+greater depth:
+
+  1. Go to the Trendy Game and win the Yoshi Doll.
+
+  2. Give the Yoshi Doll to the Quadruplets' Mother in Mabe Village. She gives
+you a Ribbon.
+
+  3. Go to Madam MeowMeow's House in Mabe Village and enter the doghouse in the
+side. Talk to the little Chomp and trade the Ribbon for Dog Food.
+
+  4. Visit Sale's House o' Bananas at the beach and give the alligator the Dog
+Food. He'll give you Bananas.
+
+  5. At Kanalet Castle, give Kiki the monkey the Bananas and he'll construct a
+bridge and leave a Stick behind. Take it!
+
+  6. In Ukuku Prairie, you'll spot Tarin fooling with a beehive. Give him the
+Stick and he'll leave a Honeycomb behind.
+
+  7. In Animal Village, talk to Chef Bear and swap the Honeycomb for a
+Pineapple.
+
+  8. In the Tal Tal Mountain Range area, just east of Mt. Tamaranch, talk to
+Papahl and exchange your Pineapple for a Hibiscus. To get here, go through the
+cave east of Mt. Tamaranch to the damp outdoor path. Then make your way through
+the nearest cave on the damp outdoor trail to reach him.
+
+  9. Go to the third house from the left in Animal Village. The goat will trade
+a Hibiscus for a Letter.
+
+ 10. Go to Mr. Write's house near the Mysterious Woods and Goponga Swamp. Give
+him his letter from that less-than-snazzy gal pal and he'll reward you with a
+Broom.
+
+ 11. Give the broom to Grandpa Ulrira's wife and you'll receive a Fishing Hook.
+Depending on the number of dungeons you've completed, she may be found in Mabe
+Village or Animal Village.
+
+ 12. Dive down to the right of the bridge in south-central Martha's Bay to find
+a hidden scene with a fisherman on a boat. Speak with him and exchange the
+Fishing Hook for the Necklace.
+
+ 13. Talk to Martha, the mermaid who's floating around in Martha's Bay. Give
+her back her missing necklace and she'll let you take a scale from her tail.
+
+ 14. Take the scale to the mermaid statue, which can be accessed by using your
+Hookshot to cross a gap just south of the bridge at the south end of Martha's
+Bay. After inserting the scale, you'll be able to push the statue, revealing a
+staircase! Inside, go forward to the pedestal with the Magnifying Lens.
+
+(…)
+A: You'll play your song, but nothing will happen. Each time you get a new
+Instrument, the song will sound a little different when played in front of the
+Egg. Try it every time you get a new instrument.
+
+
+(…)
+Boy Color in a new version called Link's Awakening DX. This adds an optional
+bonus dungeon and a way to collect photographs of certain game events. Also,
+the chests in dungeons have slightly different contents (the huge numbers of
+Secret Medicine chests make the game marginally easier), and Stone Slabs are
+now called Stone Beaks. If you're playing Link's Awakening DX, I recommend
+(…)
+
+
+===============================================================================
+Version History                                                      [VERSN]
+===============================================================================
+Oh great, the version history! As if anybody actually cared...
+
+0.1    Began original guide on 7/30/00.
+1.0    Did a lot of work from approximately 12/30/01 (when I finally found the
+       last Piece of Heart in Ukuku Prairie) to 1/4/02.
+1.15   Scanned in the first half of the old guide I wrote and began my second
+       edition 1/7/08. Thanks, ABBYY FineReader Sprint Plus (an OCR program)!
+       (41 KB)
+1.3    Scanned in the second half of my original guide and made more progress.
+       (1/8/08) (70 KB)
+1.34   Did some stuff. (1/9/08) (72 KB)
+1.38   Focused on enemies. (1/10/08) (74 KB)
+1.45   Basic framework is close to completion. (1/11/08) (76 KB)
+1.47   Did very little. I've mostly been working on the Madden '96 guide
+       lately. (1/16/08) (77 KB)
+1.48   Worked on the Enemy List, but I'm still focusing on my Madden '97 guide.
+       (1/24/08) (79 KB)
+1.5    Did very little. With the Madden guides done, I'll be doing a lot more.
+       (1/25/08) (82 KB)
+1.51   Changed name of Urchin to Gordo. (1/28/08) (83 KB)
+1.52   Did a little more stuff. (2/15/08) (84 KB)
+1.54   Verified Tail Cave data. (2/24/08) (88 KB)
+1.55   Did just a little. (2/28/08) (89 KB)
+1.56   Did very little. (3/2/08) (90 KB)
+1.58   Finished enemy list. (5/5/08) (95 KB)
+1.6    Finalized formatting. (7/19/08) (97 KB)
+1.61   Did a little. (8/25/08) (100 KB)
+1.63   Processed numerous notes and such. (9/3/08) (102 KB)
+1.66   Verified Bottle Grotto data. (11/25/08) (108 KB)
+1.68   Verified most pre-Kanalet Castle sidequests. (11/26/08) (111 KB)
+1.71   Completed most of Key Cavern. (11/27/08) (116 KB)
+1.77   Reviewed Key Cavern and Angler's Tunnel. (11/28/08) (125 KB)
+1.79   Finished pre-Catfish's Maw sidequests. (11/29/08) (129 KB)
+1.82   Verified Catfish's Maw. (11/30/08) (133 KB)
+1.83   Did most pre-Face Shrine sidequests. (12/1/08) (135 KB)
+1.86   Completed Face Shrine and some of Eagle's Tower. (12/2/08) (140 KB)
+1.88   Did most of Eagle's Tower. (12/3/08) (142 KB)
+1.92   Verified Eagle's Tower and Turtle Rock. (12/4/08) (150 KB)
+1.94   Proofread guide and processed notes. (12/5/08) (154 KB)
+1.96   Kept proofreading and formatting. (12/6/08) (157 KB)
+1.97   Almost complete. (12/7/08) (160 KB)
+1.98   Did just a little. (12/8/08) (160 KB)
+2.0    Finished things up and submitted guide. (12/9/08) (163 KB)
+2.1    Made a few little changes after completing my guide for Link's Awakening
+       DX. (12/20/08) (166 KB)
+2.15   Added a pointless note about MOYSE. (9/22/10) (167 KB)
+2.2    Made a few updates, improving the formatting and adding some notes about
+       the Switch version. (3/10/20) (171 KB)
+
+(…)
+
+
+===============================================================================
+Copyright                                                            [COPYR]
+===============================================================================
+(c) 2008-2020 VinnyVideo. All rights reserved.
+
+All trademarks and copyrights mentioned in this guide are property of their
+(…)
+
+
+===============================================================================
+Contact Information                                                  [CONTC]
+===============================================================================
+If you have any questions or comments about this guide, please send an e-mail
+to (contact removed). That's zero-zero-two, by the way. Please follow
+(…)

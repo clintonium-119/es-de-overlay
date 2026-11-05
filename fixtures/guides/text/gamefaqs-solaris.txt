@@ -1,0 +1,268 @@
+                                Solaris                                 
+                                v 1.3
+                                8-6-03
+                      author:  Dimetric Houston
+                      e-mail:  (contact removed)
+
+CONTENTS:  
+  Introduction
+  Updates
+  Story  
+  Controls 
+  Main Screen Description
+  Map Screen Description
+  Quadrants, Sectors, and Space
+  Warping
+  Allies
+  Enemies
+  Red Zone 
+  Walkthrough
+  Tips, Tricks and Secrets
+  Credits
+
+-------------------------------------------------------------------------
+INTRODUCTION:
+
+Hello all.  This FAQ covers the game Solaris for the Atari 2600.
+It is a cool space-action game.  
+
+I am not going to bother with the copyright stuff.  If you are low enough
+to try to bank a profit off of this, or you decide to plagiarize it, that's 
+your wretched morality.
+
+The newest version of this FAQ can be found at the following sites:
+
+GameFAQs (www.gamefaqs.com)
+
+---------------------------------------------------------------------------
+UPDATES:  
+  v 0.5  7-30-00
+     -Preliminary edition.      
+  v 1.0  8-1-00
+     -updated Walkthrough section    
+     -updated Tips, Tricks, and Secrets section
+     -other minor changes
+  v 1.1  8-3-00
+     -minor formatting changes
+     -updated Main Screen Description section
+     -updated Tips, Tricks, and Secrets section
+     -other minor changes
+  v 1.2  5-31-03
+     -various corrections and additions in Walkthrough
+     -finished final part of Walkthrough (path to Solaris verified)
+     -updated Credits section
+  v 1.3  8-6-06
+     -updated Tips, Tricks, and Secrets section
+     -updated Credits section
+
+--------------------------------------------------------------------------
+STORY 
+
+The Zylons (of Star Raiders fame) have returned to wreak havoc upon the
+cosmos.  It's up to you to destroy them.  While doing this, you are also on
+(…)
+stranded there.
+
+---------------------------------------------------------------------------
+CONTROLS
+
+(…)
+use this feature as it will save time.
+
+------------------------------------------------------------------------
+MAIN SCREEN DESCRIPTION
+
+(…)
+       look at your map screen and get to that Federation Planet!
+
+------------------------------------------------------------------------
+MAP SCREEN DESCRIPTION
+
+(…)
+       joystick (if you have one plugged into the second slot).
+
+------------------------------------------------------------------------
+QUADRANTS, SECTORS, AND SPACE
+
+(…)
+
+Different objects reside in a sector:  star clusters, allies, enemies, and 
+you.  Multiple objects can be in a sector together (except for star clusters
+which are always by themselves), and you will notice this by the symbols
+alternating in the sector to show what is there.
+
+
+------------------------------------------------------------------------
+WARPING
+
+(…)
+when you warp.
+
+------------------------------------------------------------------------
+ALLIES
+
+(…)
+
+   o
+  \|/
+   |
+  / \
+
+
+(…)
+         planet blows up and the quadrant becomes a Red Zone.
+
+ --------
+|--------|
+|  ----  |
+ --------
+
+Wormholes--these will send you to some other sector in the quadrant, 
+(…)
+       focus so you don't lose fuel.
+
+--------------------------------------------------------------------------
+ENEMIES
+
+(…)
+                    Pirates.
+
+-
+---------
+/_/     /
+
+
+(…)
+
+  o
+-- --
+\/ \/
+
+
+(…)
+               Dodge and shoot as needed.
+
+   |--|
+|\      /|
+| \    / |
+| /    \ |
+|/      \|
+   |--|
+  
+
+(…)
+                        kamikaze attacks.  Be careful.
+
+-          -
+|___|--|___|
+|   |--|   |
+-          -
+
+
+(…)
+           Distractors.  They can be rather difficult to hit sometimes.
+
+ ---/-\---
+-----------
+ ---\_/--- 
+ 
+
+(…)
+             will mostly be annoying to you.
+
+     / \
+    /
+   /\
+  /  \
+
+
+(…)
+               they can.
+
+\         /
+ \___ ___/
+  ___O___
+ /       \
+/         \   
+
+
+(…)
+                 Fed Planet, you will have to face another wave of GS.
+
+------------------------------------------------------------------------
+RED ZONE
+
+(…)
+Federation Planet in that quadrant was destroyed before you got there.
+
+-------------------------------------------------------------------------
+WALKTHROUGH
+
+(…)
+
+                                         Q10---Q11**
+                                          |     |
+                                          |     |
+                                         Q9    Q7***
+                                          |     
+                                          |     
+                                c        Q8----Q7*
+                                |               |      
+                                |               |
+                            b--Q5--------------Q6---d
+                                |
+                                |        Q2----Q1---a
+                                |        |
+                                |        |
+                                |        |
+                               Q4--------Q3
+
+(…)
+     left exit, so you'll have to fight them.
+
+     a.  Enter Q2 here to find a Zylon Planet right above you.  Get that
+         extra life!
+
+(…)
+     you will have to destroy the Fed Planet to get out!!
+
+     b.  Destroying the enemy in front of the left exit in Q5 will put you at
+         the right exit of Q3.  There is a Zylon Planet you can get at the
+         bottom.  Do NOT enter the wormhole!  It will warp you to the right
+(…)
+            you will be able to get to, though. . .
+
+     c.  Destroying the KSP at the north exit in Q5 leads to another
+         quadrant.  There is a Zylon Planet to the left.
+
+(…)
+     and deal with the GS.
+
+     d.  Destroying the corridor in Q6 lands you in another quadrant.  Just
+         leave at the exit below you.
+
+(…)
+Get to Solaris and you win!  Now do the funky dance with the cadets.
+
+--------------------------------------------------------------------------
+TIPS, TRICKS, AND SECRETS (some from the manual)
+
+(…)
+                    can tell what is what by the dot color.
+          Stage 2:  Mid-size.  Here you can slightly make out what is what
+                    (ex. you can see the moving parts of Mechnoids).  Can be
+                    hit.
+          Stage 3:  Full size.  All details are visible and the enemy assumes
+(…)
+quadrant right before it. And that cuts off a lot of difficulty."
+
+--------------------------------------------------------------------------
+CREDITS
+
+(…)
+
+I hope you have enjoyed this FAQ.  If there are any corrections, additions,
+etc. that you see that need to be put here, please e-mail me and let me know.
+Thanks for reading.
+
+(…)

@@ -35,7 +35,13 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.view.doOnLayout
+import com.clintonium.es_de_overlay.core.isOneTextSection
+import com.clintonium.es_de_overlay.core.splitTextGuide
+import com.clintonium.es_de_overlay.core.textSections
+import com.clintonium.es_de_overlay.core.writeHtmlGuide
 import java.io.ByteArrayInputStream
+import java.io.InputStream
+import java.io.StringWriter
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -93,8 +99,9 @@ private class Rendered(val page: Int, val width: Int, val height: Int, val rect:
  * Full-screen viewer for a manual or guide that works like ES-DE's own manual viewer. PDF, CBZ and
  * PNG/JPG pages are fitted whole and centered; zoomed out, D-pad left/right turn pages and L2/R2 go to
  * the first or last page; zoomed in, the D-pad pans and L2/R2 reset; L1/R1 zoom; Y lists a CBZ's maps by
- * name. Text scrolls. Saved
- * HTML guides scroll in an offline WebView styled like the theme, with their contents on Y. Only the
+ * name. Saved HTML guides
+ * scroll in an offline WebView styled like the theme, with their contents on Y; text guides show the same
+ * way, split into sections at their headings. Only the
  * current page's bitmaps are held, and everything is released on [close].
  */
 class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
@@ -138,8 +145,8 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         val content: View
         val keys: (Int) -> Boolean
         when (val ext = name.substringAfterLast('.').lowercase()) {
-            "html" -> {
-                val web = web(uri, name, saved, savedView, label, onClose)
+            "html", "txt" -> {
+                val web = web(guidePage(uri, ext, name), name, saved, savedView, label, onClose)
                 // Y shows the guide's contents over it; while they're up, the D-pad, A, B and Y work the list.
                 var contentsOpen = false
                 fun showContents(open: Boolean) {
@@ -181,45 +188,6 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                         KeyEvent.KEYCODE_BUTTON_R2 -> web.evaluateJavascript(section(1), null)
                     }
                     code in HTML_KEYS
-                }
-            }
-            "txt" -> {
-                // Invalid UTF-8 shows as replacement characters rather than failing.
-                val text = resolver.openInputStream(uri)!!.use { String(it.readBytes(), Charsets.UTF_8) }
-                val scroll = ScrollView(context).apply {
-                    isVerticalScrollBarEnabled = false
-                    addView(TextView(context).apply {
-                        this.text = text
-                        typeface = Typeface.MONOSPACE
-                        setTextColor(TEXT)
-                        // 80 columns across the screen, so ASCII guides keep their layout.
-                        setTextSize(TypedValue.COMPLEX_UNIT_PX, 100f)
-                        setTextSize(TypedValue.COMPLEX_UNIT_PX, 100f * screenW * 0.95f / paint.measureText("M".repeat(80)))
-                        setPadding(screenW / 40, barH / 2, screenW / 40, viewH / 2)
-                    })
-                }
-                fun range() = scroll.getChildAt(0).height - scroll.height
-                var restored = false
-                scroll.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                    if (!restored) {
-                        restored = true
-                        scroll.scrollTo(0, unfraction(saved, range()))
-                    }
-                }
-                position = { fraction(scroll.scrollY, range()) }
-                label.text = name
-                help.text = "✚ SCROLL   L2 TOP   R2 BOTTOM"
-                content = scroll
-                keys = { code ->
-                    when (code) {
-                        KeyEvent.KEYCODE_DPAD_UP -> scroll.smoothScrollBy(0, -viewH / 4)
-                        KeyEvent.KEYCODE_DPAD_DOWN -> scroll.smoothScrollBy(0, viewH / 4)
-                        KeyEvent.KEYCODE_DPAD_LEFT -> scroll.pageScroll(View.FOCUS_UP)
-                        KeyEvent.KEYCODE_DPAD_RIGHT -> scroll.pageScroll(View.FOCUS_DOWN)
-                        KeyEvent.KEYCODE_BUTTON_L2 -> scroll.fullScroll(View.FOCUS_UP)
-                        KeyEvent.KEYCODE_BUTTON_R2 -> scroll.fullScroll(View.FOCUS_DOWN)
-                    }
-                    code in TEXT_KEYS
                 }
             }
             else -> {
@@ -554,13 +522,31 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
     }
 
     /**
-     * A WebView for a saved guide that never reaches the network: the page, `guide.css` and the theme's
-     * font are served from [uri] and the ES-DE folder, every other request gets a 404, and only `#` links
+     * The page to show for the guide at [uri]: a text file as a guide split at its headings, a guide saved as
+     * one text section (before text guides were split) split the same way, and anything else as it is.
+     */
+    private fun guidePage(uri: Uri, ext: String, name: String): () -> InputStream {
+        // Invalid UTF-8 shows as replacement characters rather than failing.
+        fun read(limit: Int = Int.MAX_VALUE) = resolver.openInputStream(uri)!!.use { String(it.readNBytes(limit), Charsets.UTF_8) }
+        val html = when {
+            ext == "txt" -> name.substringBeforeLast('.').let { title ->
+                StringWriter().also { writeHtmlGuide(it, title, textSections(title, read()), emptyMap(), "") }.toString()
+            }
+            isOneTextSection(read(4096)) -> splitTextGuide(read())
+            else -> null
+        }
+        val bytes = html?.toByteArray() ?: return { resolver.openInputStream(uri)!! }
+        return { ByteArrayInputStream(bytes) }
+    }
+
+    /**
+     * A WebView for a saved guide that never reaches the network: the [page], `guide.css` and the theme's
+     * font are served from it and the ES-DE folder, every other request gets a 404, and only `#` links
      * within the page are followed. JavaScript is on for the viewer's own section lookups and contents
      * list; there is no bridge.
      */
     @SuppressLint("SetJavaScriptEnabled")
-    private fun web(uri: Uri, name: String, saved: Int, savedView: List<Float>?, label: TextView, onClose: () -> Unit): WebView {
+    private fun web(page: () -> InputStream, name: String, saved: Int, savedView: List<Float>?, label: TextView, onClose: () -> Unit): WebView {
         val css = css().toByteArray()
         val refused = ConcurrentHashMap.newKeySet<String>()
         val web = WebView(context)
@@ -591,7 +577,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 val url = request.url
                 if (url.host == HOST) {
                     when (url.path) {
-                        "/guide.html" -> return WebResourceResponse("text/html", "utf-8", resolver.openInputStream(uri))
+                        "/guide.html" -> return WebResourceResponse("text/html", "utf-8", page())
                         "/guide.css" -> return WebResourceResponse("text/css", "utf-8", ByteArrayInputStream(css))
                         "/font.otf" -> prefs.esdeTree?.let { runCatching { resolver.openInputStream(treeChild(it, FONT)) }.getOrNull() }
                             ?.let { return WebResourceResponse("font/otf", null, it) }
@@ -656,6 +642,8 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
             img { max-width: 100%; height: auto; }
             figure { margin-left: 0; margin-right: 0; }
             pre { font-family: monospace; font-size: ${px(100f * screenW * 0.95f / mono)}; overflow-x: auto; }
+            /* A text guide's sections, which carry their own headings, read on as one text. */
+            section > pre:only-child { margin: 0; }
             #contents { display: none; }
             #contents.open { display: block; position: fixed; inset: 0; z-index: 9; overflow-y: auto;
                 background: ${color(BACKGROUND)}; padding: ${px(barH / 2f)} ${px(screenW / 40f)}; }
@@ -712,18 +700,13 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         /** [offset] into a scroll [range] as parts per 10,000, so the position survives a zoom or font change. */
         fun fraction(offset: Int, range: Int) = if (range > 0) (offset * 10_000L / range).toInt().coerceIn(0, 10_000) else 0
 
-        /** The offset into [range] for a saved [fraction], clamped to the range. */
-        fun unfraction(fraction: Int, range: Int) = (fraction.coerceIn(0, 10_000) * range.coerceAtLeast(0).toLong() / 10_000).toInt()
-
         /** Images larger than this (about 0.2 s to decode whole on the Nova) show their top quarter first. */
         const val PREVIEW_PIXELS = 16_000_000L
 
-        val TEXT_KEYS = setOf(
+        val HTML_KEYS = setOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
-            KeyEvent.KEYCODE_BUTTON_L2, KeyEvent.KEYCODE_BUTTON_R2,
-        )
-        val HTML_KEYS = TEXT_KEYS + setOf(
-            KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_BUTTON_R1, KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER,
+            KeyEvent.KEYCODE_BUTTON_L2, KeyEvent.KEYCODE_BUTTON_R2, KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_BUTTON_R1,
+            KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER,
         )
 
         /** A made-up origin, so the guide's relative `guide.css` and `font.otf` resolve to the viewer. */

@@ -1,0 +1,145 @@
+×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•
+                          P  I  T  F  A  L  L
+×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•×•
+
+PITFALL, By Activision, for the Atari 2600
+Walkthrough/FAQ version 0.74
+Author: The BMC
+Created on January 19, 2001
+©2001
+E-Mail: (contact removed)
+
+
+×•×•×•×•×•×•
+CONTENTS
+×•×•×•×•×•×•
+1. Notes
+2. Game Information
+3. Walkthrough
+4. Tips
+5. Disclaimer
+
+×•×•×•×•×•×•×•×•×•×•×•×•
+1. NOTES
+×•×•×•×•×•×•×•×•×•×•×•×•
+
+This document will provide you with everything you need to know in order 
+to officially win the game of Pitfall. Some believe that the object is 
+to get as many points as you can in the 20 alotted minutes, without 
+losing all your lives. I was once one of them. Then I discovered that 
+the object is to find ALL the treasure in the jungle, in the 20 minutes 
+allowed. At first I thought it was impossible, and it really is quite 
+difficult. If and when you do win the game, there will not be much more 
+than one minute remaining on the clock.
+
+One more thing I'd like to add before I get started. This is not my 
+favorite Atari game, in fact, I think it's rather overrated. But I can 
+beat this game, and not many people can do so. I just wanted to be able 
+to win this game, but I could not find any help. So I made a numbered 
+list from 1 to 256 and wrote down all the treasures, shortcuts, and 
+traps throughout the game. This info does not do much good just sitting 
+in my notebook, so I'm doing this for anyone that's interested.
+
+×•×•×•×•×•×•×•×•×•×•×•×•
+2. Game Information
+×•×•×•×•×•×•×•×•×•×•×•×•
+
+Controls:
+
+Up: Climbs up a ladder
+Down: Climbs down a ladder, jumps off a vine
+Left: Runs to the left, jumps off a ladder to left
+Right: Runs to the right, jumps off a ladder to right
+Fire: Jumps
+
+Enemies:
+
+Touching any of the following enemies will cause you to lose a life.
+Fire
+Rattlesnake
+Scorpions
+
+The following will also cause you to lose a life:
+(…)
+Money Bag: 2000 points
+
+×•×•×•×•×•×•×•×•×•×•×•×•
+3. Walkthrough
+×•×•×•×•×•×•×•×•×•×•×•×•
+
+There are 256 total screens in the game. The starting screen will be 
+(…)
+treasure. I just post them to show progress.
+
+1. On the starting screen (#1), go down the ladder, and take the 
+shortcut. This will take you to screen #7.
+
+2. Go across 11 screens to #18. Do not take any shortcuts until there. 
+There will be Money Bag #1.
+
+3. Go ahead 3 more screens to #21. Take the shortcut, which will take 
+you to #30.
+
+4. Go back above ground, and go RIGHT 2 screens. Get Diamond Ring #1
+
+5. Proceed again to the left, 4 screens ahead, to #32. Make sure you 
+don't take the underground at #31, that's a trap. Remember, the second 
+one. Take this shortcut, where you'll end at screen #47.
+
+6. This is the first "stretch" of being above ground. In it, you will 
+come across Money Bag #2, Diamond Rings #2 and #3, and Golds #1 and #2.
+
+7. The screen with the second Gold is #64. Go left 6 more screens, to 
+#70. Take this shortcut.
+
+8. Here's an even longer stretch of being above ground. The next 
+treasures are:
+Money Bag #3
+(…)
+Silver #5 (screen #137)
+
+9. From screen #137, proceed left two more screens to #139, and take 
+this shortcut. It is the longest useful shortcut in the game; it takes 
+you all the way to #163.
+
+10. Go RIGHT 3 screens to get Money Bag #5. Then turn around and go back 
+left. This is the final long stretch of being above ground, and it's the 
+longest. This time, the treasures are in this order:
+(…)
+Gold #7 (screen #227)
+
+11. Almost there! Just one more Gold and the game is over. From screen 
+#227, go left eleven more screens to #238. Count carefully, it's easy to 
+lose track. Take this shortcut, which takes you to #244.
+
+12. Go left four more screens, and that's it. There's Gold #8, on screen 
+#248, and you should have them all!
+
+(…)
+
+
+×•×•×•×•×•×•×•×•×•×•×•×•
+4. Tips
+×•×•×•×•×•×•×•×•×•×•×•×•
+
+Unless you're going for time records, there's no need to be in a hurry. 
+(…)
+
+Now it's time for my first attempt at ASCII art:
+    ___________________
+   /                   \
+  /     \     \    \    \
+ a|    ¯°   ¯°   ¯°    |e
+  \      b    c     d   /
+   \___________________/
+
+If you haven't figured it out, that's an alligator pit. Probably the 
+(…)
+jumping across two at a time.
+
+×•×•×•×•×•×•×•×•×•×•×•×•
+5. Disclaimer
+×•×•×•×•×•×•×•×•×•×•×•×•
+
+This walkthrough/FAQ is designed for personal use only. It is not to be 
+(…)

@@ -26,7 +26,7 @@ import com.clintonium.es_de_overlay.core.guideFileName
 import com.clintonium.es_de_overlay.core.isBotCheck
 import com.clintonium.es_de_overlay.core.isGuidePage
 import com.clintonium.es_de_overlay.core.siteOf
-import com.clintonium.es_de_overlay.core.textSection
+import com.clintonium.es_de_overlay.core.textSections
 import com.clintonium.es_de_overlay.core.writeHtmlGuide
 import java.io.IOException
 import java.net.URLConnection
@@ -183,7 +183,7 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
         // ponytail: holds every image in memory until the file is written; spool to files if guides outgrow the heap.
         val images = mutableMapOf<String, GuideImage>()
         if (guide.text != null) {
-            sections += textSection(guide.title, guide.text)
+            sections += textSections(guide.title, guide.text)
         } else {
             guide.pages.forEachIndexed { i, (url, title) ->
                 val of = "Saving page ${i + 1} of ${guide.pages.size}"
