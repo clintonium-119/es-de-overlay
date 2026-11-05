@@ -211,8 +211,9 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
             setTextColor(TEXT)
             buttonTintList = ColorStateList.valueOf(TEXT)
             setTextSize(TypedValue.COMPLEX_UNIT_PX, barH * 0.7f)
-            minHeight = tapH
             isSingleLine = true
+            // The view's own minimum: single-line text sets the text's minimum to one line.
+            minimumHeight = tapH
         }
         val boxes = pages.map { (url, name) -> box(name.ifEmpty { url }) }
         val follow = if (next) box("The pages after these, by their Next links") else null
@@ -285,8 +286,9 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
                 } else {
                     load(url, progress)
                     progress(of)
-                    // A Next link that leads off the guide ends the guide there.
-                    extract(picked?.pages) ?: if (i >= listed) break else throw IOException("no guide on $url")
+                    // A picked page is read even where Reader View wouldn't offer it; a Next link that leads off the guide
+                    // ends the guide there.
+                    extract(picked?.pages, force = i < listed) ?: if (i >= listed) break else throw IOException("no guide on $url")
                 }
                 // Each page numbers its own images from 0.
                 sections += GuideSection(title.ifEmpty { page.title }, page.html!!.replace("src=\"img:", "src=\"img:$i-"))
@@ -345,12 +347,13 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
 
     /**
      * Worker thread: the guide on the loaded page, or null when it isn't a guide page. Its links to the guide's pages,
-     * or to the [picked] ones, point at their sections.
+     * or to the [picked] ones, point at their sections. With [force], a page off the guide sites is read even where
+     * Reader View wouldn't offer it.
      */
-    fun extract(picked: List<Pair<String, String>>? = null): PageGuide? {
+    fun extract(picked: List<Pair<String, String>>? = null, force: Boolean = false): PageGuide? {
         if (!isGuidePage(string(eval("location.href")))) return null
         eval(script)
-        val d = JSONObject(eval("esdeGuide.describe()"))
+        val d = JSONObject(eval("esdeGuide.describe($force)"))
         val kind = d.getString("kind")
         if (kind == "none") return null
         val list = d.getJSONArray("pages")

@@ -98,15 +98,16 @@
   // Any other page, when Reader View would offer it: its main content, and the guide's other pages from its links.
   // Pages numbered ?page=N anywhere on the page; else links in the content below this page's path, or beside it in
   // a folder two or more deep ("/wikis/shantae/", not a flat "/wiki/"); also a rel="next" or "Next" link as
-  // [next], which the save can follow page by page. Parsed once per URL.
+  // [next], which the save can follow page by page. Parsed once per URL. A page picked to save is read even
+  // when Reader View wouldn't offer it ([force]): guide pages that are mostly lists or tables fail its test.
   let parsed = null;
-  function generic() {
-    if (!parsed || parsed.url !== location.href) parsed = { url: location.href, guide: readable() };
+  function generic(force) {
+    if (!parsed || parsed.url !== location.href || (force && !parsed.guide)) parsed = { url: location.href, guide: readable(force) };
     return parsed.guide;
   }
 
-  function readable() {
-    if (!/^https?:$/.test(location.protocol) || !isProbablyReaderable(document)) return null;
+  function readable(force) {
+    if (!/^https?:$/.test(location.protocol) || !(force || isProbablyReaderable(document))) return null;
     const article = new Readability(document.cloneNode(true)).parse();
     if (!article || !article.content) return null;
     // Parsed inert: no images load and no handlers run until the content is cleaned.
@@ -146,15 +147,15 @@
   }
 
   const SITES = { 'gamefaqs.gamespot.com': gamefaqs, 'www.neoseeker.com': neoseeker, 'www.zeldadungeon.net': zeldadungeon };
-  const guide = () => (SITES[location.host] || generic)();
+  const guide = (force) => (SITES[location.host] || generic)(force);
 
   let out = '';
   let images = [];
   const results = {};
 
   window.esdeGuide = {
-    describe() {
-      const g = guide();
+    describe(force) {
+      const g = guide(force);
       return g ? { kind: g.kind, title: g.title, author: g.author, pages: g.pages, generic: !!g.generic, next: g.next || null } : { kind: 'none' };
     },
 

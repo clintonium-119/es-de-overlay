@@ -84,13 +84,13 @@ private fun zeldaDungeonWalkthrough(name: String): String? {
 }
 
 /**
- * A web search for [name]'s guides, for those on other sites. Brave Search, because on 2026-11-05 it answered a
- * WebView's request with results, where DuckDuckGo's plain page answered with a challenge and Google's and
- * Bing's needed scripts to fill in.
+ * A web search for [name]'s guides, for those on other sites. DuckDuckGo, because on 2026-11-05 it showed results
+ * in the Nova's WebView, where Brave Search and Mojeek asked to prove it wasn't a bot and Bing opened on a cookie
+ * banner.
  */
-fun webSearchUrl(name: String) = "https://$WEB_SEARCH/search?q=" + URLEncoder.encode("${cleanName(name)} guide", Charsets.UTF_8)
+fun webSearchUrl(name: String) = "https://$WEB_SEARCH/?q=" + URLEncoder.encode("${cleanName(name)} guide", Charsets.UTF_8)
 
-private const val WEB_SEARCH = "search.brave.com"
+private const val WEB_SEARCH = "duckduckgo.com"
 
 /** The guide site [url] is on, if any. */
 fun siteOf(url: String): GuideSite? = runCatching { URI(url).host }.getOrNull()?.let { host ->

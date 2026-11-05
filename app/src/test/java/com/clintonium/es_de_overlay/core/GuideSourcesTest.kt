@@ -193,7 +193,7 @@ class GuideSourcesTest {
             "https://www.zeldadungeon.net/retro-remake-rumble-links-awakening/",
             "file:///sdcard/guide.html",
             "about:blank",
-            "https://search.brave.com/search?q=Shantae+guide",
+            "https://duckduckgo.com/?q=Shantae+guide",
         )
         // Pages elsewhere are up to Reader View's rules.
         val elsewhere = listOf("https://strategywiki.org/wiki/Super_Metroid/Walkthrough", "http://example.com/guide")
@@ -206,7 +206,7 @@ class GuideSourcesTest {
     @Test
     fun `the web search looks for the game's guides`() {
         assertEquals(
-            "https://search.brave.com/search?q=Skate+Or+Die%3A+Tour+De+Thrash+guide",
+            "https://duckduckgo.com/?q=Skate+Or+Die%3A+Tour+De+Thrash+guide",
             webSearchUrl("Skate Or Die : Tour De Thrash (USA) [!]"),
         )
     }
