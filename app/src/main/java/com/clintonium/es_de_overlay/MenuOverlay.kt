@@ -2,6 +2,7 @@ package com.clintonium.es_de_overlay
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.Typeface
@@ -50,6 +51,16 @@ fun themeFont(context: Context, prefs: Prefs): Typeface = runCatching {
         Typeface.Builder(it.fileDescriptor).setFallback("sans-serif").build()
     }
 }.getOrDefault(Typeface.SANS_SERIF)
+
+/**
+ * How far below the middle of its line [font]'s text goes, in ems, so a capital S sits centred the way ES-DE
+ * draws list rows. Centring the line itself leaves VAG Rounded's capitals high in the pill, its descent being deep.
+ */
+fun capCentring(font: Typeface): Float {
+    val paint = Paint().apply { typeface = font; textSize = 1000f }
+    val s = Rect().also { paint.getTextBounds("S", 0, 1, it) }
+    return paint.fontMetrics.run { ascent + descent - s.top } / 2000f
+}
 
 /**
  * Adds [view] as a focusable full-screen window over the game, with the system bars hidden, and focuses it.
@@ -155,12 +166,15 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
         // Measured from ES-DE's gamelist with this theme: the pill fills 6/7 of a row, text inset 0.7 em.
         val pillInset = rowPx / 14
         val textInset = (textPx * 0.7f).toInt()
+        val capShift = (2 * textPx * capCentring(font)).toInt()
         val rows = items.map { label ->
             TextView(context).apply {
                 text = label
                 typeface = font
                 setTextSize(TypedValue.COMPLEX_UNIT_PX, textPx)
                 gravity = Gravity.CENTER_VERTICAL
+                // Centre the line (ascent to descent) so capCentring's shift puts the capitals mid-pill.
+                includeFontPadding = false
                 // A row too wide for the list scrolls sideways while selected, like a long name in ES-DE's gamelist.
                 isSingleLine = true
                 ellipsize = TextUtils.TruncateAt.MARQUEE
@@ -179,8 +193,9 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
                 } else {
                     null
                 }
-                // A background with padding replaces the view's own, so set it back.
-                row.setPadding(textInset, 0, textInset, 0)
+                // A background with padding replaces the view's own, so set it back. Padding on top only moves
+                // the centred text down by half of it.
+                row.setPadding(textInset, capShift, textInset, 0)
             }
             rows.getOrNull(i)?.let {
                 it.requestRectangleOnScreen(Rect(0, 0, it.width, it.height))

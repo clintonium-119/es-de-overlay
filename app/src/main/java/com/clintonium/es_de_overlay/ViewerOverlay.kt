@@ -554,6 +554,9 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         fun px(device: Float) = "%.2fpx".format(Locale.ROOT, device / density)
         fun color(c: Int) = "#%06X".format(c and 0xFFFFFF)
         val mono = Paint().apply { typeface = Typeface.MONOSPACE; textSize = 100f }.measureText("M".repeat(80))
+        // The pill's padding moves its text down by this, keeping the pill's size, to centre the capitals.
+        val shift = capCentring(themeFont(context, prefs))
+        fun em(v: Float) = "%.3fem".format(Locale.ROOT, v)
         return """
             @font-face { font-family: theme; src: url(font.otf); }
             body { background: ${color(BACKGROUND)}; color: ${color(TEXT)}; font-family: theme, sans-serif;
@@ -568,7 +571,8 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 background: ${color(BACKGROUND)}; padding: ${px(barH / 2f)} ${px(screenW / 40f)}; }
             #contents.open::before { content: "Contents"; display: block; font-size: 1.4em; padding-left: 0.5em; }
             #contents ol { list-style: none; padding: 0; margin: 0; }
-            #contents a { display: inline-block; color: ${color(TEXT)}; border-radius: 1em; padding: 0.1em 0.7em;
+            #contents a { display: inline-block; color: ${color(TEXT)}; border-radius: 1em;
+                padding: ${em(0.1f + shift)} 0.7em ${em(0.1f - shift)};
                 margin: 0.15em 0; text-decoration: none; }
             #contents .on a { background: ${color(PILL)}; color: ${color(PILL_TEXT)}; }
             footer { color: ${color(VIEWER_TEXT)}; font-size: 0.7em; margin-top: 2em; }
