@@ -96,8 +96,8 @@
   }
 
   // Any other page, when Reader View would offer it: its main content, and the guide's other pages from its links.
-  // Pages numbered ?page=N anywhere on the page; else links in the content below this page's path, or beside it in
-  // a folder two or more deep ("/wikis/shantae/", not a flat "/wiki/"); also a rel="next" or "Next" link as
+  // Pages numbered ?page=N anywhere on the page; else links anywhere below this page's path, or in the content
+  // beside it in a folder two or more deep ("/wikis/shantae/", not a flat "/wiki/"); also a rel="next" or "Next" link as
   // [next], which the save can follow page by page. Parsed once per URL. A page picked to save is read even
   // when Reader View wouldn't offer it ([force]): guide pages that are mostly lists or tables fail its test.
   let parsed = null;
@@ -111,7 +111,19 @@
     const article = new Readability(document.cloneNode(true)).parse();
     if (!article || !article.content) return null;
     // Parsed inert: no images load and no handlers run until the content is cleaned.
-    const content = new DOMParser().parseFromString(article.content, 'text/html').body;
+    let content = new DOMParser().parseFromString(article.content, 'text/html').body;
+    // Reader View weighs text, so on a page of maps with captions it can pick a footer instead. When its pick has
+    // little text and none of the page's big pictures, the guide is the smallest block holding all of them.
+    const big = $$('img').filter(i => {
+      const r = i.getBoundingClientRect();
+      return r.width >= 200 && r.height >= 100 && !i.closest('header,nav,aside,footer');
+    });
+    const kept = new Set($$('img', content).map(i => i.getAttribute('src')));
+    if (article.length < 500 && big.length >= 2 && !big.some(i => kept.has(i.getAttribute('src')))) {
+      let around = big[0].parentElement;
+      while (around && !big.every(i => around.contains(i))) around = around.parentElement;
+      if (around && around !== document.body && around !== document.documentElement) content = around;
+    }
     const title = squash(article.title || document.title);
     const link = href => { try { return new URL(href, location.href); } catch (e) { return null; } };
     const urls = (root) => $$('a[href]', root).map(a => ({ u: link(a.getAttribute('href')), title: text(a) }))
@@ -130,10 +142,12 @@
         pages.push({ url: u.href, title: 'Page ' + n });
       }
     } else {
-      const inContent = urls(content).filter(l => bare(l.u.href) !== bare(location.href));
+      const others = root => urls(root).filter(l => bare(l.u.href) !== bare(location.href));
+      const inContent = others(content);
       const path = self.pathname.replace(/\/$/, '');
       const dir = path.replace(/[^/]*$/, '');
-      let listed = inContent.filter(l => l.u.pathname.startsWith(path + '/'));
+      // Pages below this one are its own, wherever the page links them: a contents sidebar lists all of a guide's.
+      let listed = [...inContent, ...others(document)].filter(l => l.u.pathname.startsWith(path + '/'));
       if (!listed.length && dir.split('/').length > 3) listed = inContent.filter(l => l.u.pathname.startsWith(dir));
       pages = distinct([here(), ...listed.map(l => ({ url: bare(l.u.href), title: l.title || l.u.pathname }))]);
     }
