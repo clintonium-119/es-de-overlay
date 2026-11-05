@@ -41,6 +41,7 @@ import com.clintonium.es_de_overlay.core.mediaPath
 import com.clintonium.es_de_overlay.core.nextLaunch
 import com.clintonium.es_de_overlay.core.resolveGame
 import com.clintonium.es_de_overlay.core.startUrl
+import com.clintonium.es_de_overlay.core.webSearchUrl
 import java.io.File
 import java.io.FileInputStream
 import java.nio.ByteBuffer
@@ -434,13 +435,15 @@ class HelperService : Service() {
     }
 
     /**
-     * The sites only a browser gets into, which open over this menu at the game's search, or ZeldaDungeon's walkthrough.
-     * Closing the browser shows the menu again; a guide saved there opens in the viewer.
+     * The sites only a browser gets into, which open over this menu at the game's search, or ZeldaDungeon's walkthrough,
+     * then a web search for guides elsewhere. Closing the browser shows the menu again; a guide saved there opens in the
+     * viewer.
      */
-    private fun browserRows(g: GameRef, name: String): List<Pair<String, () -> Unit>> = GuideSite.entries.mapNotNull { site ->
-        startUrl(site, name)?.let { url ->
-            (if (site == GuideSite.ZELDADUNGEON) site.label else "Search ${site.label}") to { startService(ViewerService.browse(this, url, g)) }
-        }
+    private fun browserRows(g: GameRef, name: String): List<Pair<String, () -> Unit>> {
+        fun browse(url: String) = { startService(ViewerService.browse(this, url, g)); Unit }
+        return GuideSite.entries.mapNotNull { site ->
+            startUrl(site, name)?.let { url -> (if (site == GuideSite.ZELDADUNGEON) site.label else "Search ${site.label}") to browse(url) }
+        } + ("Search the Web" to browse(webSearchUrl(name)))
     }
 
     /** Main thread: runs [save] with progress in the menu, then reopens the menu with the new guide and opens it. */

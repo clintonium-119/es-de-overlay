@@ -83,21 +83,32 @@ private fun zeldaDungeonWalkthrough(name: String): String? {
         .maxByOrNull { it.second.length }?.first
 }
 
+/**
+ * A web search for [name]'s guides, for those on other sites. Brave Search, because on 2026-11-05 it answered a
+ * WebView's request with results, where DuckDuckGo's plain page answered with a challenge and Google's and
+ * Bing's needed scripts to fill in.
+ */
+fun webSearchUrl(name: String) = "https://$WEB_SEARCH/search?q=" + URLEncoder.encode("${cleanName(name)} guide", Charsets.UTF_8)
+
+private const val WEB_SEARCH = "search.brave.com"
+
 /** The guide site [url] is on, if any. */
 fun siteOf(url: String): GuideSite? = runCatching { URI(url).host }.getOrNull()?.let { host ->
     GuideSite.entries.firstOrNull { it.host == host || it.host == "www.$host" }
 }
 
 /**
- * Whether [url] is a guide's page, written from guide URLs seen on each site on 2026-10-30:
+ * Whether [url] may hold a guide to save: any web page off the three guide sites but the web search's, where
+ * Reader View's rules judge it, or on them a guide's page, written from guide URLs seen on each site on 2026-10-30:
  * - GameFAQs `/gameboy/563277-the-legend-of-zelda-links-awakening/faqs/18445`, plus `/main-walkthrough` for a page;
  * - Neoseeker `/linkdx/faqs/182906-zelda-links-awakening-h.html` and its wiki walkthroughs,
  *   `/metroid-samus-returns/walkthrough/Collectathon_-_Surface` and `/animal-well/Path_of_the_Seahorse_(B._Flame)`;
  * - ZeldaDungeon `/links-awakening-walkthrough/` and its chapters, `/links-awakening-walkthrough/tail-cave/`.
  */
 fun isGuidePage(url: String): Boolean {
-    val path = runCatching { URI(url).path }.getOrNull() ?: return false
-    val pattern = when (siteOf(url) ?: return false) {
+    val uri = runCatching { URI(url) }.getOrNull() ?: return false
+    val path = uri.path ?: return false
+    val pattern = when (siteOf(url) ?: return uri.scheme in setOf("http", "https") && uri.host != WEB_SEARCH) {
         GuideSite.GAMEFAQS -> GAMEFAQS_GUIDE
         GuideSite.NEOSEEKER -> NEOSEEKER_GUIDE
         GuideSite.ZELDADUNGEON -> ZELDADUNGEON_GUIDE
@@ -114,9 +125,9 @@ fun isBotCheck(title: String): Boolean = BOT_CHECK_TITLES.any { title.trim().sta
 
 private val BOT_CHECK_TITLES = listOf("Just a moment", "Security check", "Attention Required!")
 
-/** `<site> - <title>.html`, at most 120 characters. */
-fun guideFileName(site: GuideSite, title: String): String {
-    val prefix = "${site.label} - "
+/** `<site> - <title>.html`, at most 120 characters; [site] is a guide site's label, or another site's host. */
+fun guideFileName(site: String, title: String): String {
+    val prefix = "${fileName(site)} - "
     return prefix + fileName(title).take(120 - prefix.length - ".html".length).trimEnd() + ".html"
 }
 

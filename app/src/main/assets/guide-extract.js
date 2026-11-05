@@ -1,6 +1,7 @@
-// Finds the guide on the page the touch browser shows, for saving it. BrowserOverlay injects this after each
-// page load and reads it back through evaluateJavascript: there is no bridge. Selectors were read from live
-// GameFAQs, Neoseeker and ZeldaDungeon guide pages on 2026-10-30, and break when a site changes its layout.
+// Finds the guide on the page the touch browser shows, for saving it. BrowserOverlay injects this, after
+// Mozilla's Readability, after each page load and reads it back through evaluateJavascript: there is no bridge.
+// Selectors were read from live GameFAQs, Neoseeker and ZeldaDungeon guide pages on 2026-10-30, and break when a
+// site changes its layout. Any other page goes to Readability, Firefox's Reader View.
 (() => {
   if (window.esdeGuide) return;
   // Long strings go back to the app in pieces of this many characters.
@@ -12,7 +13,8 @@
 
   const $ = (s, root = document) => root.querySelector(s);
   const $$ = (s, root = document) => [...root.querySelectorAll(s)];
-  const text = e => (e ? e.innerText.replace(/\s+/g, ' ').trim() : '');
+  const squash = s => (s || '').replace(/\s+/g, ' ').trim();
+  const text = e => (e ? squash(e.innerText) : '');
   const bare = href => { const u = new URL(href, location.href); u.hash = ''; return u.href; };
   const here = () => ({ url: bare(location.href), title: document.title });
   // First title for each URL, in order.
@@ -93,8 +95,58 @@
     return { kind: 'html', title, author: '', pages: pages.length ? distinct(pages) : [here()], content, lists: copies };
   }
 
+  // Any other page, when Reader View would offer it: its main content, and the guide's other pages from its links.
+  // Pages numbered ?page=N anywhere on the page; else links in the content below this page's path, or beside it in
+  // a folder two or more deep ("/wikis/shantae/", not a flat "/wiki/"); also a rel="next" or "Next" link as
+  // [next], which the save can follow page by page. Parsed once per URL.
+  let parsed = null;
+  function generic() {
+    if (!parsed || parsed.url !== location.href) parsed = { url: location.href, guide: readable() };
+    return parsed.guide;
+  }
+
+  function readable() {
+    if (!/^https?:$/.test(location.protocol) || !isProbablyReaderable(document)) return null;
+    const article = new Readability(document.cloneNode(true)).parse();
+    if (!article || !article.content) return null;
+    // Parsed inert: no images load and no handlers run until the content is cleaned.
+    const content = new DOMParser().parseFromString(article.content, 'text/html').body;
+    const title = squash(article.title || document.title);
+    const link = href => { try { return new URL(href, location.href); } catch (e) { return null; } };
+    const urls = (root) => $$('a[href]', root).map(a => ({ u: link(a.getAttribute('href')), title: text(a) }))
+      .filter(l => l.u && l.u.origin === location.origin && !/\.(png|jpe?g|gif|webp|svg|pdf|zip|mp4)$/i.test(l.u.pathname));
+    const self = new URL(location.href);
+    let pages = [];
+    const numbers = urls(document).filter(l => l.u.pathname === self.pathname && /^\d+$/.test(l.u.searchParams.get('page') || ''))
+      .map(l => +l.u.searchParams.get('page'));
+    if (numbers.length) {
+      const at = self.searchParams.get('page');
+      if (at === null) pages.push(here());
+      for (let n = Math.min(...numbers, at === null ? Infinity : +at); n <= Math.max(...numbers, +at); n++) {
+        const u = new URL(location.href);
+        u.hash = '';
+        u.searchParams.set('page', n);
+        pages.push({ url: u.href, title: 'Page ' + n });
+      }
+    } else {
+      const inContent = urls(content).filter(l => bare(l.u.href) !== bare(location.href));
+      const path = self.pathname.replace(/\/$/, '');
+      const dir = path.replace(/[^/]*$/, '');
+      let listed = inContent.filter(l => l.u.pathname.startsWith(path + '/'));
+      if (!listed.length && dir.split('/').length > 3) listed = inContent.filter(l => l.u.pathname.startsWith(dir));
+      pages = distinct([here(), ...listed.map(l => ({ url: bare(l.u.href), title: l.title || l.u.pathname }))]);
+    }
+    const nextLink = $('link[rel~="next"][href], a[rel~="next"][href]') ||
+      $$('a[href]').find(a => /^next( page)?\s*[»›>→]?$/i.test(text(a)));
+    const next = nextLink && link(nextLink.getAttribute('href'));
+    return {
+      kind: 'html', generic: true, title, author: squash(article.byline), pages, content,
+      next: next && next.origin === location.origin && bare(next.href) !== bare(location.href) ? bare(next.href) : null,
+    };
+  }
+
   const SITES = { 'gamefaqs.gamespot.com': gamefaqs, 'www.neoseeker.com': neoseeker, 'www.zeldadungeon.net': zeldadungeon };
-  const guide = () => (SITES[location.host] || (() => null))();
+  const guide = () => (SITES[location.host] || generic)();
 
   let out = '';
   let images = [];
@@ -103,7 +155,7 @@
   window.esdeGuide = {
     describe() {
       const g = guide();
-      return g ? { kind: g.kind, title: g.title, author: g.author, pages: g.pages } : { kind: 'none' };
+      return g ? { kind: g.kind, title: g.title, author: g.author, pages: g.pages, generic: !!g.generic, next: g.next || null } : { kind: 'none' };
     },
 
     /** Keeps the text guide's text for part(); returns its length. */

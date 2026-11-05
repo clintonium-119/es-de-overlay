@@ -2,11 +2,13 @@ package com.clintonium.es_de_overlay
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -16,7 +18,9 @@ import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.CheckBox
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import com.clintonium.es_de_overlay.core.GameRef
 import com.clintonium.es_de_overlay.core.GuideImage
@@ -29,6 +33,7 @@ import com.clintonium.es_de_overlay.core.siteOf
 import com.clintonium.es_de_overlay.core.textSections
 import com.clintonium.es_de_overlay.core.writeHtmlGuide
 import java.io.IOException
+import java.net.URI
 import java.net.URLConnection
 import java.util.Base64
 import java.util.concurrent.ArrayBlockingQueue
@@ -45,9 +50,13 @@ private const val CHUNK = 256 * 1024
 /** The least time between two page loads of a save, so a whole guide never arrives faster than a reader's taps. */
 private const val PAGE_GAP_MS = 2_000L
 
+/** The most pages a save follows Next links to. */
+private const val MAX_NEXT_PAGES = 50
+
 /**
  * The guide on the browser's page: [text] for a text guide, else [html], whose image sources are `img:0` to
  * `img:<imageCount - 1>`. [pages] are the guide's pages in order as URL and title; just this page if it has one.
+ * A [generic] guide is a page off the guide sites, read by Reader View, whose [next] page may follow.
  */
 class PageGuide(
     val kind: String,
@@ -57,19 +66,31 @@ class PageGuide(
     val text: String?,
     val html: String?,
     val imageCount: Int,
+    val generic: Boolean,
+    val next: String?,
 )
 
+/** The pages the user ticked before a save, and whether to follow Next links from the last of them. */
+class Picked(val pages: List<Pair<String, String>>, val followNext: Boolean)
+
 /**
- * A touch browser over the game, for guide sites only a browser gets into: a WebView with its own User-Agent
- * and cookie settings, above a bar like the viewer's with Back, the page title, Save guide on a guide page, and
- * Close. Save guide loads each of the guide's pages in turn in this same visible WebView, waits for the user on a
- * bot check, and writes the guide as one HTML file in the game's guides folder. Built on [open] and destroyed on
- * [close]; it runs in the viewer's process, which ends when it closes.
+ * A touch browser over the game, for guide sites only a browser gets into and the web search: a WebView with its
+ * own User-Agent and cookie settings, above a bar like the viewer's with Back, the page title, Save guide on a
+ * guide page, and Close. Off the guide sites, Save guide is offered where Firefox's Reader View would be, and
+ * first lists the guide's other pages it found to untick. Save guide loads each of the guide's pages in turn in
+ * this same visible WebView, waits for the user on a bot check, and writes the guide as one HTML file in the
+ * game's guides folder. Built on [open] and destroyed on [close]; it runs in the viewer's process, which ends
+ * when it closes.
  */
 class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
     private val wm = context.getSystemService(WindowManager::class.java)
     private val main = Handler(Looper.getMainLooper())
-    private val script by lazy { context.assets.open("guide-extract.js").bufferedReader().use { it.readText() } }
+    /** Mozilla's Readability, made global once per page, then `guide-extract.js`. */
+    private val script by lazy {
+        fun asset(name: String) = context.assets.open(name).bufferedReader().use { it.readText() }
+        "if(!window.Readability)(function(){\n${asset("readability/Readability.js")}\n${asset("readability/Readability-readerable.js")}\n" +
+            "window.Readability=Readability;window.isProbablyReaderable=isProbablyReaderable})();\n${asset("guide-extract.js")}"
+    }
     /** The viewer's bar text size; the bar itself is 48 dp, tall enough to tap. */
     private val barH = wm.maximumWindowMetrics.bounds.height() / 24
     private val tapH = (48 * context.resources.displayMetrics.density).toInt()
@@ -77,6 +98,8 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
     private var web: WebView? = null
     /** Main thread: a save is running. */
     private var saving = false
+    /** Main thread: while the page list is up, removes it and returns the ticked pages. */
+    private var picking: (() -> Picked)? = null
     @Volatile private var cancelled = false
     /** URLs of finished page loads, which a save waits on. */
     private val finished = LinkedBlockingQueue<String>()
@@ -106,13 +129,29 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
             setOnClickListener { onTap() }
         }
         lateinit var save: TextView
+        lateinit var view: LinearLayout
         save = button("Save guide") {
-            if (saving) cancelled = true else startSave(game, title, save, onSaved)
+            val picked = picking
+            when {
+                saving -> cancelled = true
+                picked != null -> startSave(game, title, save, picked(), onSaved)
+                else -> web.evaluateJavascript("$script;esdeGuide.describe()") { json ->
+                    val d = runCatching { JSONObject(json) }.getOrNull()
+                    val pages = d?.optJSONArray("pages")?.let(::pageList).orEmpty()
+                    val next = d?.optString("next")?.takeIf { d.optBoolean("generic") && !d.isNull("next") }
+                    if (saving || picking != null || this.web == null) return@evaluateJavascript
+                    if (d?.optBoolean("generic") == true && (pages.size > 1 || next != null)) {
+                        pick(view, web, title, pages, next != null)
+                    } else {
+                        startSave(game, title, save, null, onSaved)
+                    }
+                }
+            }
         }.apply { visibility = View.GONE }
         web.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
                 finished.offer(url)
-                if (saving) return
+                if (saving || picking != null) return
                 save.visibility = View.GONE
                 if (isGuidePage(url)) {
                     view.evaluateJavascript("$script;esdeGuide.describe().kind") { kind ->
@@ -137,12 +176,19 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
         val bar = LinearLayout(context).apply {
             setBackgroundColor(VIEWER_BAR)
             val fill = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            addView(button("Back") { if (saving) Unit else if (web.canGoBack()) web.goBack() else done() }, fill)
+            addView(button("Back") {
+                when {
+                    saving -> Unit
+                    picking != null -> picking?.invoke()?.also { title.text = web.title }
+                    web.canGoBack() -> web.goBack()
+                    else -> done()
+                }
+            }, fill)
             addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
             addView(save, fill)
             addView(button("Close", done), fill)
         }
-        val view = LinearLayout(context).apply {
+        view = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(BACKGROUND)
             addView(web, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -154,13 +200,51 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
         this.web = web
     }
 
-    /** Main thread: saves the guide on this page on its own thread, with progress in [status]; [button] cancels it. */
-    private fun startSave(game: GameRef, status: TextView, button: TextView, onSaved: (String) -> Unit) {
+    /**
+     * Main thread: lists [pages] in place of [web], each with a box, all ticked, and a box for the pages after them
+     * by Next links when [next]. Save guide takes the ticked ones, Back the page again.
+     */
+    private fun pick(view: LinearLayout, web: WebView, title: TextView, pages: List<Pair<String, String>>, next: Boolean) {
+        fun box(label: String) = CheckBox(context).apply {
+            text = label
+            isChecked = true
+            setTextColor(TEXT)
+            buttonTintList = ColorStateList.valueOf(TEXT)
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, barH * 0.7f)
+            minHeight = tapH
+            isSingleLine = true
+        }
+        val boxes = pages.map { (url, name) -> box(name.ifEmpty { url }) }
+        val follow = if (next) box("The pages after these, by their Next links") else null
+        val list = ScrollView(context).apply {
+            setBackgroundColor(BACKGROUND)
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(barH, barH / 2, barH, barH / 2)
+                (boxes + listOfNotNull(follow)).forEach(::addView)
+            })
+        }
+        web.visibility = View.GONE
+        view.addView(list, 0, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        title.text = "Untick the pages to leave out"
+        picking = {
+            picking = null
+            view.removeView(list)
+            web.visibility = View.VISIBLE
+            Picked(pages.filterIndexed { i, _ -> boxes[i].isChecked }, follow?.isChecked == true)
+        }
+    }
+
+    /**
+     * Main thread: saves the guide on this page, or the [picked] pages of it, on its own thread, with progress in
+     * [status]; [button] cancels it.
+     */
+    private fun startSave(game: GameRef, status: TextView, button: TextView, picked: Picked?, onSaved: (String) -> Unit) {
         saving = true
         cancelled = false
         button.text = "Cancel"
         thread(name = "guide-save") {
-            val result = runCatching { saveGuide(game) { text -> main.post { status.text = text } } }
+            val result = runCatching { saveGuide(game, picked) { text -> main.post { status.text = text } } }
                 .onFailure { if (it !is CancellationException) Log.w(TAG, "browser: saving the guide failed", it) }
             main.post {
                 saving = false
@@ -173,42 +257,56 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
 
     /**
      * Save thread: [game]'s guide from the loaded page, written into its guides folder only once all of it has
-     * arrived. Each page of an HTML guide loads in turn in this browser. Returns the path written.
+     * arrived. Each page of an HTML guide, or each [picked] one and those its Next links lead to, loads in turn in
+     * this browser. Returns the path written.
      */
-    private fun saveGuide(game: GameRef, progress: (String) -> Unit): String {
+    private fun saveGuide(game: GameRef, picked: Picked?, progress: (String) -> Unit): String {
         val here = string(eval("location.href")).substringBefore('#')
-        val guide = extract() ?: throw IOException("no guide on $here")
-        val site = siteOf(here) ?: throw IOException("not a guide site: $here")
+        val guide = extract(picked?.pages) ?: throw IOException("no guide on $here")
+        // A page off the guide sites is credited to its host.
+        val site = siteOf(here)?.label ?: URI(here).host.removePrefix("www.")
         val sections = mutableListOf<GuideSection>()
         // ponytail: holds every image in memory until the file is written; spool to files if guides outgrow the heap.
         val images = mutableMapOf<String, GuideImage>()
         if (guide.text != null) {
             sections += textSections(guide.title, guide.text)
         } else {
-            guide.pages.forEachIndexed { i, (url, title) ->
-                val of = "Saving page ${i + 1} of ${guide.pages.size}"
+            val pages = (picked?.pages ?: guide.pages).toMutableList()
+            // Pages after the picked ones, found by Next links as each loads; their titles come from the pages.
+            val following = picked?.followNext == true
+            val listed = pages.size
+            var i = 0
+            while (i < pages.size) {
+                val (url, title) = pages[i]
+                val of = if (following) "Saving page ${i + 1}" else "Saving page ${i + 1} of ${pages.size}"
                 progress(of)
                 val page = if (i == 0 && url == here) {
                     guide
                 } else {
                     load(url, progress)
                     progress(of)
-                    extract() ?: throw IOException("no guide on $url")
+                    // A Next link that leads off the guide ends the guide there.
+                    extract(picked?.pages) ?: if (i >= listed) break else throw IOException("no guide on $url")
                 }
                 // Each page numbers its own images from 0.
-                sections += GuideSection(title, page.html!!.replace("src=\"img:", "src=\"img:$i-"))
+                sections += GuideSection(title.ifEmpty { page.title }, page.html!!.replace("src=\"img:", "src=\"img:$i-"))
                 for (n in 0 until page.imageCount) {
                     if (cancelled) throw CancellationException()
                     progress("$of, image ${n + 1} of ${page.imageCount}")
                     image(n)?.let { images["img:$i-$n"] = it }
                 }
+                val next = page.next
+                if (following && i == pages.lastIndex && next != null && pages.none { it.first == next } && pages.size < listed + MAX_NEXT_PAGES) {
+                    pages += next to ""
+                }
+                i++
             }
         }
         if (cancelled) throw CancellationException()
         progress("Writing the guide")
         val source = guide.pages.first().first
         val by = if (guide.author.isEmpty()) "" else " by ${escapeHtml(guide.author)}"
-        val credit = "From <a href=\"${escapeHtml(source)}\">${site.label}</a> (${escapeHtml(source)})$by. " +
+        val credit = "From <a href=\"${escapeHtml(source)}\">${escapeHtml(site)}</a> (${escapeHtml(source)})$by. " +
             "© the author; saved for personal use."
         val name = guideFileName(site, if (guide.author.isEmpty()) guide.title else "${guide.title} by ${guide.author}")
         val dir = isDirectory(context, prefs.romsTree!!, "${game.system}/${game.romRelativePath}")
@@ -245,19 +343,29 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
         }
     }
 
-    /** Worker thread: the guide on the loaded page, or null when it isn't a guide page. */
-    fun extract(): PageGuide? {
+    /**
+     * Worker thread: the guide on the loaded page, or null when it isn't a guide page. Its links to the guide's pages,
+     * or to the [picked] ones, point at their sections.
+     */
+    fun extract(picked: List<Pair<String, String>>? = null): PageGuide? {
         if (!isGuidePage(string(eval("location.href")))) return null
         eval(script)
         val d = JSONObject(eval("esdeGuide.describe()"))
         val kind = d.getString("kind")
         if (kind == "none") return null
         val list = d.getJSONArray("pages")
-        val pages = (0 until list.length()).map { list.getJSONObject(it).run { getString("url") to getString("title") } }
-        if (kind == "text") return PageGuide(kind, d.getString("title"), d.getString("author"), pages, read(eval("esdeGuide.text()").toInt()), null, 0)
-        val html = JSONObject(eval("esdeGuide.html($list)"))
-        return PageGuide(kind, d.getString("title"), d.getString("author"), pages, null, read(html.getInt("length")), html.getInt("images"))
+        val pages = pageList(list)
+        val generic = d.optBoolean("generic")
+        val next = if (d.isNull("next")) null else d.optString("next")
+        val title = d.getString("title")
+        val author = d.getString("author")
+        if (kind == "text") return PageGuide(kind, title, author, pages, read(eval("esdeGuide.text()").toInt()), null, 0, generic, next)
+        val links = picked?.let { p -> JSONArray(p.map { (url, name) -> JSONObject().put("url", url).put("title", name) }) } ?: list
+        val html = JSONObject(eval("esdeGuide.html($links)"))
+        return PageGuide(kind, title, author, pages, null, read(html.getInt("length")), html.getInt("images"), generic, next)
     }
+
+    private fun pageList(list: JSONArray) = (0 until list.length()).map { list.getJSONObject(it).run { getString("url") to getString("title") } }
 
     /**
      * Worker thread: image [n] of the HTML [extract] read last, from inside the page, else from one plain request
@@ -299,6 +407,7 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
 
     fun close() {
         cancelled = true
+        picking = null
         web?.let {
             (it.parent as? ViewGroup)?.removeView(it)
             it.stopLoading()

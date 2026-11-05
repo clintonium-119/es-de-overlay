@@ -191,12 +191,24 @@ class GuideSourcesTest {
             "https://www.zeldadungeon.net/?s=Link",
             "https://www.zeldadungeon.net/wiki/Link's_Awakening_Items",
             "https://www.zeldadungeon.net/retro-remake-rumble-links-awakening/",
-            "https://strategywiki.org/wiki/Super_Metroid/Walkthrough",
+            "file:///sdcard/guide.html",
+            "about:blank",
+            "https://search.brave.com/search?q=Shantae+guide",
         )
-        assertEquals(guides, guides.filter(::isGuidePage))
+        // Pages elsewhere are up to Reader View's rules.
+        val elsewhere = listOf("https://strategywiki.org/wiki/Super_Metroid/Walkthrough", "http://example.com/guide")
+        assertEquals(guides + elsewhere, (guides + elsewhere).filter(::isGuidePage))
         assertEquals(emptyList<String>(), others.filter(::isGuidePage))
         assertEquals(GuideSite.NEOSEEKER, siteOf("https://neoseeker.com/linkdx/faqs/"))
         assertNull(siteOf("https://zelda.neoseeker.com/wiki/Link"))
+    }
+
+    @Test
+    fun `the web search looks for the game's guides`() {
+        assertEquals(
+            "https://search.brave.com/search?q=Skate+Or+Die%3A+Tour+De+Thrash+guide",
+            webSearchUrl("Skate Or Die : Tour De Thrash (USA) [!]"),
+        )
     }
 
     @Test
@@ -209,8 +221,9 @@ class GuideSourcesTest {
 
     @Test
     fun `guide file names drop reserved characters and stay short`() {
-        assertEquals("GameFAQs - Shantae - FAQ_Walkthrough _.html", guideFileName(GuideSite.GAMEFAQS, "Shantae: FAQ/Walkthrough ?"))
-        val long = guideFileName(GuideSite.NEOSEEKER, "x".repeat(200))
+        assertEquals("GameFAQs - Shantae - FAQ_Walkthrough _.html", guideFileName(GuideSite.GAMEFAQS.label, "Shantae: FAQ/Walkthrough ?"))
+        assertEquals("ign.com - Shantae Guide.html", guideFileName("ign.com", "Shantae Guide"))
+        val long = guideFileName(GuideSite.NEOSEEKER.label, "x".repeat(200))
         assertEquals(120, long.length)
         assertTrue(long.startsWith("Neoseeker - xxx") && long.endsWith("x.html"))
     }
