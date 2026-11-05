@@ -111,8 +111,8 @@ Folders down, then start it under Service:
   Picking a source again replaces the saved file. Without a connection the menu says
   `Couldn't reach the guide sources`.
 - Below those, Find Guides always lists **Search GameFAQs** and **Search Neoseeker**, plus
-  **ZeldaDungeon** for a Zelda game it has a walkthrough for, and last **Search the Web**, a Brave
-  search for "<game> guide". These sites are only contacted once you pick one. Each opens a browser
+  **ZeldaDungeon** for a Zelda game it has a walkthrough for, and last **Search the Web**, a
+  DuckDuckGo search for "<game> guide". These sites are only contacted once you pick one. Each opens a browser
   over the game, used by touch, at the site's search for the game (ZeldaDungeon at the game's
   walkthrough). Its bar has **Back**, the page title, **Save guide** on a guide's page, and
   **Close**; tapping a text field brings up the keyboard. The first visit to a site may show a
