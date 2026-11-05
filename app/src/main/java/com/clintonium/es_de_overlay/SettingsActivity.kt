@@ -48,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.clintonium.es_de_overlay.core.Overwrite
 import com.clintonium.es_de_overlay.core.reportsScreensaver
+import rikka.shizuku.Shizuku
 
 class SettingsActivity : ComponentActivity() {
     private var refresh by mutableIntStateOf(0)
@@ -59,8 +60,16 @@ class SettingsActivity : ComponentActivity() {
     // The permission the dialog was last launched for: its result only says whether it was granted.
     private var asked = ""
 
+    // Shizuku's row changes while settings are open: Shizuku starts or stops, or its permission dialog is answered.
+    private val shizukuStarted = Shizuku.OnBinderReceivedListener { refresh++ }
+    private val shizukuStopped = Shizuku.OnBinderDeadListener { refresh++ }
+    private val shizukuAnswered = Shizuku.OnRequestPermissionResultListener { _, _ -> refresh++ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Shizuku.addBinderReceivedListenerSticky(shizukuStarted)
+        Shizuku.addBinderDeadListener(shizukuStopped)
+        Shizuku.addRequestPermissionResultListener(shizukuAnswered)
         autoGrant = intent.getBooleanExtra(EXTRA_GRANT, false)
         grantOnly = autoGrant
         setContent {
@@ -82,6 +91,13 @@ class SettingsActivity : ComponentActivity() {
         refresh++
     }
 
+    override fun onDestroy() {
+        Shizuku.removeBinderReceivedListener(shizukuStarted)
+        Shizuku.removeBinderDeadListener(shizukuStopped)
+        Shizuku.removeRequestPermissionResultListener(shizukuAnswered)
+        super.onDestroy()
+    }
+
     @Composable
     private fun Screen() {
         // Reading the counter subscribes this screen, so prefs and permission states are re-read after each bump.
@@ -98,6 +114,8 @@ class SettingsActivity : ComponentActivity() {
         var bootStart by remember { mutableStateOf(prefs.bootStart) }
         var sleepWhenIdle by remember { mutableStateOf(prefs.sleepWhenIdle) }
         var sleepMinutes by remember { mutableIntStateOf(prefs.sleepMinutes) }
+        var quitOnHome by remember { mutableStateOf(prefs.quitOnHome) }
+        val shizuku = remember(tick) { ShizukuShell.state(this) }
         val screensaverReported = remember(tick, esde) { esde?.let(::esdeReportsScreensaver) }
 
         val pickEsde = treePicker { prefs.esdeTree = it }
@@ -233,6 +251,47 @@ class SettingsActivity : ComponentActivity() {
             Dropdown("After the screensaver has run for", sleepMinutes, (0..30).toList(), { if (it == 0) "At once" else "$it min" }) {
                 sleepMinutes = it
                 prefs.sleepMinutes = it
+            }
+            Section("Quitting games")
+            Setting(
+                "Shizuku",
+                when (shizuku) {
+                    ShizukuShell.State.NOT_INSTALLED -> "Not installed"
+                    ShizukuShell.State.NOT_RUNNING -> "Not running"
+                    ShizukuShell.State.NOT_ALLOWED -> "Not allowed"
+                    ShizukuShell.State.READY -> "Enabled"
+                },
+                when (shizuku) {
+                    ShizukuShell.State.NOT_RUNNING -> "Open Shizuku"
+                    ShizukuShell.State.NOT_ALLOWED -> "Allow"
+                    else -> null
+                },
+                "Lets Quit Game end a game without opening its App Info page, and is needed to quit games left with " +
+                    "Home. Install Shizuku, or a fork that starts on boot such as Shizuku-Next.",
+            ) {
+                // After "Deny and don't ask again", Shizuku's own app list is the only place left to allow it.
+                if (shizuku == ShizukuShell.State.NOT_ALLOWED && !Shizuku.shouldShowRequestPermissionRationale()) {
+                    ShizukuShell.requestPermission()
+                } else {
+                    packageManager.getLaunchIntentForPackage(ShizukuShell.PACKAGE)?.let(::startActivity)
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Quit games left with Home")
+                    Text(
+                        "Ends the game's app when you leave it with Home, as Quit Game does, so progress since the last " +
+                            "save is lost and the game starts fresh next time. ES-DE can then launch a different " +
+                            "RetroArch game the first time. Needs Shizuku.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = quitOnHome,
+                    onCheckedChange = { quitOnHome = it; prefs.quitOnHome = it },
+                    enabled = shizuku == ShizukuShell.State.READY,
+                )
             }
             if (esde != null) {
                 Section("Guides")

@@ -22,8 +22,9 @@ import java.util.concurrent.TimeUnit
  * Catches the controller's Back for the menu. Key filtering is on, so Android hands this every key first and waits
  * for the answer; anything but the controller's Back is passed on at once.
  *
- * Also ends a game's app on request ([forceStop]): Android only lets system apps force-stop another app,
- * so this presses Force stop on the app's App Info page in Settings, then goes home to ES-DE.
+ * Also ends a game's app on request ([forceStop]), then goes home to ES-DE. Android only lets system apps force-stop
+ * another app, so this goes through Shizuku's shell when it's running and allowed, which shows nothing, and otherwise
+ * presses Force stop on the app's App Info page in Settings.
  *
  * And turns the screen off when ES-DE has sat idle ([watchIdle]). Android keeps this service running whenever it's
  * enabled, so that works with the overlay service stopped too.
@@ -91,7 +92,7 @@ class ButtonService : AccessibilityService() {
         }
         // The controller's Home (the Nova sends MOVE_HOME) goes on to Android; the menu closes as it lets go.
         if (event.keyCode == KeyEvent.KEYCODE_MOVE_HOME && event.action == KeyEvent.ACTION_UP && event.isFromSource(InputDevice.SOURCE_GAMEPAD)) {
-            main.post(HelperService::home)
+            main.post(HelperService::closeMenuNow)
         }
         // The controller's Back only: the back swipe and other apps' Back have no gamepad source.
         if (event.keyCode != KeyEvent.KEYCODE_BACK || !event.isFromSource(InputDevice.SOURCE_GAMEPAD)) return false
@@ -112,9 +113,21 @@ class ButtonService : AccessibilityService() {
 
     override fun onInterrupt() {}
 
-    /** Main thread: opens [pkg]'s App Info, presses Force stop, then OK in its dialog, and goes home. */
+    /** Main thread: ends [pkg] through Shizuku when it's usable, else on its App Info page, and goes home. */
     private fun stop(pkg: String) {
         Log.i(TAG, "force-stopping $pkg")
+        io.execute {
+            val stopped = ShizukuShell.ready && ShizukuShell.forceStop(pkg)
+            main.post {
+                // The menu stays up until the game is gone, so the game doesn't show in between; App Info needs it gone.
+                HelperService.closeMenuNow()
+                if (stopped) home("shizuku") else pressForceStop(pkg)
+            }
+        }
+    }
+
+    /** Main thread: opens [pkg]'s App Info, presses Force stop, then OK in its dialog, and goes home. */
+    private fun pressForceStop(pkg: String) {
         startActivity(
             Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", pkg, null)).addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION or
@@ -150,7 +163,7 @@ class ButtonService : AccessibilityService() {
         @SuppressLint("StaticFieldLeak")
         private var instance: ButtonService? = null
 
-        /** Any thread: force-stops [pkg] and returns to ES-DE. Does nothing while the service is off. */
+        /** Any thread: force-stops [pkg], closes the menu and returns to ES-DE. Does nothing while the service is off. */
         fun forceStop(pkg: String) {
             Handler(Looper.getMainLooper()).post { instance?.stop(pkg) }
         }

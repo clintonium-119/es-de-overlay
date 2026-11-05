@@ -31,5 +31,7 @@ dependencies {
     implementation(platform("androidx.compose:compose-bom:2026.01.01"))
     implementation("androidx.compose.material3:material3")
     implementation("androidx.activity:activity-compose:1.12.4")
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
     testImplementation("junit:junit:4.13.2")
 }

@@ -46,6 +46,10 @@ class Prefs(private val context: Context) {
     var sleepMinutes: Int
         get() = sp.getInt("sleepMinutes", 9)
         set(v) = sp.edit { putInt("sleepMinutes", v) }
+    /** Whether a game left with Home is ended through Shizuku, as Quit Game would. */
+    var quitOnHome: Boolean
+        get() = sp.getBoolean("quitOnHome", false)
+        set(v) = sp.edit { putBoolean("quitOnHome", v) }
 
     private fun esdeIsHome() = context.packageManager.resolveActivity(
         Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),

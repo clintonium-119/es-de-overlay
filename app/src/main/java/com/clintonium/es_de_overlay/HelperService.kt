@@ -33,6 +33,7 @@ import com.clintonium.es_de_overlay.core.GameInfo
 import com.clintonium.es_de_overlay.core.GameRef
 import com.clintonium.es_de_overlay.core.GuideSite
 import com.clintonium.es_de_overlay.core.Launch
+import com.clintonium.es_de_overlay.core.LeaveWatch
 import com.clintonium.es_de_overlay.core.gamelistInfo
 import com.clintonium.es_de_overlay.core.guideEntries
 import com.clintonium.es_de_overlay.core.guidePath
@@ -153,6 +154,8 @@ class HelperService : Service() {
     private var opening: Any? = null
     /** Main thread: whether a capture is waiting for the closed menu to leave the screen. */
     private var starting = false
+    /** Main thread. */
+    private val leave = LeaveWatch(ESDE)
 
     // Written on the io thread, read on main.
     @Volatile private var launch: Launch? = null
@@ -248,11 +251,23 @@ class HelperService : Service() {
         main.post { onForeground(fg) }
     }
 
-    /** Main thread: when the game is left, close the menu and end a recording. */
+    /** Main thread: when the game is left, close the menu and end a recording; when it's left for ES-DE, end it if set to. */
     private fun onForeground(fg: String?) {
+        leave.left(fg, launch?.pkg)?.let(::quitLeft)
         if (fg == launch?.pkg) return
         closeMenu()
         capture?.stop()
+    }
+
+    /** Main thread: ends [pkg], left with Home, when that's set and Shizuku is usable; never through App Info. */
+    private fun quitLeft(pkg: String) {
+        // ES-DE can launch this app and Shizuku as Android apps too; ending either would end what ends games.
+        if (pkg == packageName || pkg == ShizukuShell.PACKAGE) return
+        if (!prefs.quitOnHome || !ShizukuShell.ready) return
+        io.execute {
+            launch = null
+            Log.i(TAG, if (ShizukuShell.forceStop(pkg)) "left with Home: ended $pkg" else "left with Home: couldn't end $pkg")
+        }
     }
 
     /** Main thread: closes the menu and any viewer or browser over it, and cancels its opening or a Find Guides check or save. */
@@ -384,7 +399,7 @@ class HelperService : Service() {
     /** Main thread: force-stops the game's app, which then has no chance to save, and goes to ES-DE. */
     private fun quitGame() {
         val pkg = launch?.pkg ?: return
-        menu.release()
+        leave.forget()
         io.execute { launch = null }
         ButtonService.forceStop(pkg)
     }
@@ -677,8 +692,11 @@ class HelperService : Service() {
             instance?.onBack()
         }
 
-        /** Main thread: the controller's Home, which Android still gets. Closes the menu now rather than at the next poll. */
-        fun home() {
+        /**
+         * Main thread: closes the menu now rather than at the next poll. For the controller's Home, which Android still
+         * gets, and for Quit Game once the game is gone.
+         */
+        fun closeMenuNow() {
             instance?.closeMenu()
         }
     }

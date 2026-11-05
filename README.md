@@ -24,7 +24,9 @@ ES-DE screenshot where the gamelist shows it. The rows, top to bottom:
 - **Quit Game** ends the game's app and returns to ES-DE.
 
 Back again closes the menu and returns to the game; Home goes to ES-DE as usual. System screenshots
-(power + volume down) taken during a game are filed the same way as captures.
+(power + volume down) taken during a game are filed the same way as captures. With the optional
+[Shizuku](#shizuku-optional), Quit Game ends the game without a trip through Android's Settings,
+and games you leave with Home can be ended too.
 
 ## Build and install
 
@@ -38,8 +40,8 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ## Setup (once)
 
 Open **ES-DE Overlay** (ES-DE also lists it under Android Apps). Its sections run Service,
-Folders, Capture, Screen, Guides (once the ES-DE folder is set) and Permissions; set it up from
-Folders down, then start it under Service:
+Folders, Capture, Screen, Quitting games, Guides (once the ES-DE folder is set) and Permissions;
+set it up from Folders down, then start it under Service:
 
 1. **ES-DE data folder → Set Folder**: the ES-DE folder that holds `downloaded_media`, `gamelists`
    and `logs`. Open the SD card (or internal storage), choose `ES-DE`, *Use this folder*, *Allow*.
@@ -67,16 +69,70 @@ Folders down, then start it under Service:
    permission's dialog, **Enable** opens the app's App Info page instead.
 7. **Back button menu → Enable**, then turn on *ES-DE Overlay* in Android's accessibility
    settings. Android hands it each controller button before the app in front gets it; it keeps
-   only Back, and only during a game ES-DE launched, a capture or the open menu. For Quit Game it
-   presses Force stop on the game's App Info page in Settings. After updating from a version that
-   opened the menu with Home, turn it on again: the row reads *Disabled* until you do. Retroid's
-   *Prevent pressing Home accidentally* isn't needed.
+   only Back, and only during a game ES-DE launched, a capture or the open menu. For Quit Game
+   without Shizuku it presses Force stop on the game's App Info page in Settings. After updating
+   from a version that opened the menu with Home, turn it on again: the row reads *Disabled* until
+   you do. Retroid's *Prevent pressing Home accidentally* isn't needed.
 8. **Start Service → Start now.** One consent covers every capture until the service stops.
    Optional: **Offer to start after boot** posts a *Tap to start ES-DE Overlay* notification after
    a restart.
 9. Optional: **Quick settings tile → Add** puts an *ES-DE Overlay* on/off tile in the swipe-down
    shade, and the row reads *Added* afterwards. Turning the tile on shows the consent dialog and
    then returns to whatever you were doing.
+10. Optional, under Quitting games: set up [Shizuku](#shizuku-optional), then
+    **Shizuku → Allow** and **Quit games left with Home**.
+
+## Shizuku (optional)
+
+Android lets only system apps end another app. [Shizuku](https://shizuku.rikka.app) runs a small
+helper with adb's permissions, which may, and ES-DE Overlay uses it when it's running and allowed:
+
+- **Quit Game** ends the game with nothing else on screen. Without Shizuku it opens the game's App
+  Info page in Settings for a moment and presses Force stop, as before.
+- **Quit games left with Home** (off by default, needs Shizuku) ends the game's app when you leave
+  it with Home, as Quit Game would. Progress since your last save is lost and the game starts fresh
+  next time, but ES-DE's next launch of a different RetroArch game works the first time. It covers
+  every game ES-DE launched, emulators and Android games alike, except ES-DE Overlay and Shizuku
+  themselves.
+
+1. Install one of them:
+   - **Shizuku**, from [Google Play](https://play.google.com/store/apps/details?id=moe.shizuku.privileged.api)
+     or its [GitHub releases](https://github.com/RikkaApps/Shizuku/releases). Without root it has to
+     be started again after every restart.
+   - **Shizuku-Next**, from its [GitHub releases](https://github.com/rushiranpise/Shizuku-Next/releases):
+     a fork that can start itself on boot and restart itself if it stops. It's signed with a
+     different key, so uninstall Shizuku first.
+2. Start it, by one of the ways in [Shizuku's guide](https://shizuku.rikka.app/guide/setup/):
+   - **Wireless debugging** (needs Wi-Fi): in Android's developer options turn on *USB debugging*
+     and *Wireless debugging*. In Shizuku start pairing, tap *Pair device with pairing code* under
+     Wireless debugging, and type the code into Shizuku's notification. Then tap **Start** in
+     Shizuku.
+   - **From a computer**: with USB debugging on and the device plugged in, run
+     `adb shell sh /sdcard/Android/data/moe.shizuku.privileged.api/start.sh`.
+   - On a rooted device, start it directly.
+3. Shizuku-Next only: turn on *Start on boot*, and *Watchdog* to have it restart itself. Started
+   through wireless debugging, that needs Wi-Fi at boot; see below for starting without it.
+4. In ES-DE Overlay, under **Quitting games**, the **Shizuku** row reads *Not installed*, *Not
+   running* (**Open Shizuku** opens it), *Not allowed* or *Enabled*. Tap **Allow** and allow ES-DE
+   Overlay in Shizuku's dialog; the row turns *Enabled*. Then turn on **Quit games left with Home**
+   if you want it. The switch can't be turned on while Shizuku isn't *Enabled*.
+
+### Advanced: start Shizuku-Next without Wi-Fi
+
+Some firmware lets adb listen on a network port from every boot, which Shizuku-Next's USB start
+method can then use with no Wi-Fi and no computer. This works on the Retroid Pocket Nova; many
+phones refuse the setting (stock Samsung firmware does). It leaves adb listening on port 5555 on
+every network the device joins. A connection still needs a computer key you've allowed, but undo
+it if that matters to you.
+
+1. With USB debugging on and the device plugged into a computer, run
+   `adb shell setprop persist.adb.tcp.port 5555`, then `adb shell getprop persist.adb.tcp.port`. It
+   should print `5555`; if it prints nothing, the firmware doesn't allow it.
+2. In Shizuku-Next choose the USB start method, turn on *Start on boot*, *Watchdog* and *TCP mode*,
+   and start it. Allow the *Allow USB debugging?* prompt for Shizuku's key.
+3. Restart to check: Shizuku-Next should be running a few seconds after boot, with Wi-Fi on or off.
+
+To undo it, run `adb shell setprop persist.adb.tcp.port ""` and restart.
 
 ## Use
 
@@ -85,8 +141,8 @@ Folders down, then start it under Service:
   at the first and last rows. **B** in any screen opened from the menu comes back to the row that
   opened it. **Back** again closes everything the menu has open, a guide or the browser too, and
   returns to the game. Home closes the menu and anything open over it, and goes to ES-DE, leaving
-  the game running. A row too long for the list scrolls sideways a second after it's selected, as
-  in ES-DE's gamelist.
+  the game running unless **Quit games left with Home** is on. A row too long for the list scrolls
+  sideways a second after it's selected, as in ES-DE's gamelist.
 - The game's name sits above the rows in the theme's large size, and its ES-DE image (the type
   picked under **Screenshot media type**, PNG or JPG) fills the theme's art box on the right, with
   pixel art kept sharp. A game with no screenshot shows an outlined box reading `No screenshot`.
@@ -153,7 +209,8 @@ Folders down, then start it under Service:
   through the guide's other pictures, and **B** goes back to the guide where it was.
   Otherwise **B** first steps back through tapped links, then closes.
 - **Quit Game** (the last row) ends the game's app at once, with no confirmation, and ES-DE comes
-  back. It works for any game ES-DE launched, emulator or Android game. It closes without warning:
+  back. With Shizuku nothing else shows; without it, the game's App Info page shows for a moment.
+  It works for any game ES-DE launched, emulator or Android game. It closes without warning:
   your saves are kept, but progress since your last save is lost (RetroArch writes in-game saves
   every 10 s here), and an emulator's save-on-exit doesn't run.
 - Every guide and manual reopens at the page or place where you left it, also after a restart. A
@@ -223,12 +280,16 @@ identified with certainty (the notification shows the raw launch line instead).
 - Games ES-DE launched don't get the controller's Back while the overlay runs, except in about
   their first second: the overlay reads launches from ES-DE's log once a second. Eden's own menu
   still opens with a swipe from the left edge, and Android's back swipe isn't affected.
-- Home leaves the game running in the background. Relaunching the same game resumes it. A RetroArch
-  left running closes when ES-DE launches a different RetroArch game, so that launch shows nothing;
-  launching it again works. Quit Game, or RetroArch's own quit, ends it instead.
-- Android doesn't let the app end another app directly, so Quit Game goes through the app's App
-  Info page in Settings, which shows for a moment. Retroid's firmware doesn't force-stop apps on its
-  Whitelist, so Quit Game does nothing for an app added there.
+- Home leaves the game running in the background unless **Quit games left with Home** is on, which
+  needs [Shizuku](#shizuku-optional). Relaunching the same game resumes it. A RetroArch left running
+  closes when ES-DE launches a different RetroArch game, so that launch shows nothing; launching it
+  again works. Quit Game, or RetroArch's own quit, ends it instead.
+- Android doesn't let the app end another app directly. Without Shizuku, Quit Game goes through
+  the app's App Info page in Settings, which shows for a moment. Retroid's firmware doesn't
+  force-stop apps on its Whitelist, so Quit Game, and probably leaving with Home, does nothing for
+  an app added there.
+- **Quit games left with Home** ends a game that crashed or quit back to ES-DE too, which does no
+  harm, and an Android app opened from ES-DE's lists once you go Home from it.
 - The menu and Quit Game need the overlay running. Switch games that take nearly all the Nova's
   memory in Eden (Super Mario Odyssey, Mario + Rabbids) make Android end the overlay within seconds,
   so the menu doesn't open and Back reaches the game; a lower CPU clock doesn't change this.
