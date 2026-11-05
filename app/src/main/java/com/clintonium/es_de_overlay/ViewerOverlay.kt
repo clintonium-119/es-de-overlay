@@ -819,12 +819,15 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
             "for(var i=0;i<s.length;i++)if(s[i].getBoundingClientRect().top<innerHeight/4)n=i+1;" +
             "if(window.esdeAt&&Math.abs(esdeAt.y-scrollY)<1)n=esdeAt.n;"
 
-        /** JavaScript: `g` the guide's pictures (embedded as data, like a saved guide's), `p` the first one in view or -1. */
-        const val PICTURES = "var g=document.querySelectorAll('img[src^=\"data:\"]'),p=-1;for(var i=0;i<g.length;i++){" +
+        /** A CSS selector for a saved guide's pictures: embedded as data, and not SVG, which the page viewer can't show. */
+        private const val PICTURE = "img[src^=\"data:\"]:not([src^=\"data:image/svg\"])"
+
+        /** JavaScript: `g` the guide's pictures, `p` the first one in view or -1. */
+        const val PICTURES = "var g=document.querySelectorAll('$PICTURE'),p=-1;for(var i=0;i<g.length;i++){" +
             "var r=g[i].getBoundingClientRect();if(r.width>0&&r.bottom>0&&r.top<innerHeight&&r.right>0&&r.left<innerWidth){p=i;break}}"
 
         /** JavaScript that turns a tap on picture p of m into a load of `picture?n=p&of=m`, which the viewer opens instead. */
-        const val PICTURE_TAPS = "document.addEventListener('click',function(e){var g=document.querySelectorAll('img[src^=\"data:\"]')," +
+        const val PICTURE_TAPS = "document.addEventListener('click',function(e){var g=document.querySelectorAll('$PICTURE')," +
             "p=[].indexOf.call(g,e.target);if(p>=0){e.preventDefault();location.href='https://$HOST/picture?n='+p+'&of='+g.length}})"
 
         /** JavaScript that records section `n` as where a jump went, at this scroll position. */

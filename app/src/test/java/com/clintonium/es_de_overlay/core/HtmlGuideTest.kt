@@ -68,15 +68,19 @@ class HtmlGuideTest {
     }
 
     @Test
-    fun `guidePicture reads back each embedded picture in file order`() {
+    fun `guidePicture reads back each embedded picture in file order, skipping SVG`() {
         val a = ByteArray(70_000) { (it * 7).toByte() }
         val b = byteArrayOf(0x47, 0x49, 0x46, 0x38, 0x39, 0x61)
         val out = html(
             listOf(
                 GuideSection("Maps", "<p>Town</p><img src=\"img:a\" alt=\"Town\"><img src=\"img:gone\" alt=\"Unsaved\">"),
-                GuideSection("Items", "<p>Lamp &lt;img src=\"data:</p><img alt=\"Lamp\" src=\"img:b\">"),
+                GuideSection("Items", "<p>Lamp &lt;img src=\"data:</p><img src=\"img:icon\"><img alt=\"Lamp\" src=\"img:b\">"),
             ),
-            mapOf("img:a" to GuideImage("image/png", a), "img:b" to GuideImage("image/gif", b)),
+            mapOf(
+                "img:a" to GuideImage("image/png", a),
+                "img:icon" to GuideImage("image/svg+xml", "<svg/>".toByteArray()),
+                "img:b" to GuideImage("image/gif", b),
+            ),
         )
         assertArrayEquals(a, guidePicture(out.byteInputStream(), 0))
         assertArrayEquals(b, guidePicture(out.byteInputStream(), 1))

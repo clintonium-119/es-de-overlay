@@ -186,10 +186,12 @@ fun writeHtmlGuide(
 
 /**
  * The bytes of picture [n] (from 0, in file order) of a guide [writeHtmlGuide] wrote, read from its [html] without
- * holding the rest. Throws an [IOException] when there are fewer pictures.
+ * holding the rest. SVG pictures, which don't decode as bitmaps, aren't counted. Throws an [IOException] when there
+ * are fewer pictures.
  */
 fun guidePicture(html: InputStream, n: Int): ByteArray = html.buffered(1 shl 16).use { input ->
     val marker = "<img src=\"data:".toByteArray()
+    val svg = "image/svg".toByteArray()
     var left = n + 1
     var matched = 0
     while (left > 0) {
@@ -201,7 +203,9 @@ fun guidePicture(html: InputStream, n: Int): ByteArray = html.buffered(1 shl 16)
             else -> 0
         }
         if (matched == marker.size) {
-            left--
+            input.mark(svg.size)
+            if (!input.readNBytes(svg.size).contentEquals(svg)) left--
+            input.reset()
             matched = 0
         }
     }
