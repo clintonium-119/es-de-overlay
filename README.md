@@ -225,8 +225,9 @@ identified with certainty (the notification shows the raw launch line instead).
   capture; every game and emulator on this Nova allows it. Without the permission clips are silent.
 - RetroArch's 120 Hz shader sub-frames (`video_shader_subframes`) put a dark frame between real
   ones. The app skips those, so clips play at 60 fps without flicker, and media keep the shader look.
-- A very large PNG map can take about a second to show when it opens. A zoom or a pan moves the
-  view at once; the newly shown part is blurry for up to about half a second while it sharpens.
+- A very large PNG map shows its top quarter about 0.3 s after it opens and the whole map within
+  about a second. A zoom or a pan moves the view at once; the newly shown part is blurry for up to
+  about half a second while it sharpens.
 - Capture consent can't be granted at boot without a person. With "Offer to start after boot" on,
   a notification after boot opens the consent dialog in one tap.
 - Reinstalling or stopping the service (including from the tile) needs a new consent.
