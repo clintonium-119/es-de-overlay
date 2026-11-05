@@ -172,7 +172,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                         KeyEvent.KEYCODE_DPAD_UP -> web.evaluateJavascript(CONTENTS_UP, null)
                         KeyEvent.KEYCODE_DPAD_DOWN -> web.evaluateJavascript(CONTENTS_DOWN, null)
                         KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER -> {
-                            web.evaluateJavascript(CONTENTS_PICK, null)
+                            web.evaluateJavascript(CONTENTS_PICK) { label.text = sectionText(it, name) }
                             showContents(false)
                         }
                         KeyEvent.KEYCODE_BUTTON_Y -> closeContents()
@@ -184,8 +184,9 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                         KeyEvent.KEYCODE_DPAD_RIGHT -> web.pageDown(false)
                         KeyEvent.KEYCODE_BUTTON_L1 -> web.settings.textZoom = (web.settings.textZoom - 25).coerceAtLeast(50)
                         KeyEvent.KEYCODE_BUTTON_R1 -> web.settings.textZoom = (web.settings.textZoom + 25).coerceAtMost(200)
-                        KeyEvent.KEYCODE_BUTTON_L2 -> web.evaluateJavascript(section(-1), null)
-                        KeyEvent.KEYCODE_BUTTON_R2 -> web.evaluateJavascript(section(1), null)
+                        // The bar is set from the jump's answer: a jump the page can't scroll for fires no scroll event.
+                        KeyEvent.KEYCODE_BUTTON_L2 -> web.evaluateJavascript(section(-1)) { label.text = sectionText(it, name) }
+                        KeyEvent.KEYCODE_BUTTON_R2 -> web.evaluateJavascript(section(1)) { label.text = sectionText(it, name) }
                     }
                     code in HTML_KEYS
                 }
@@ -563,10 +564,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         web.setBackgroundColor(BACKGROUND)
         web.isVerticalScrollBarEnabled = false
         val refresh = Runnable {
-            web.evaluateJavascript("(function(){$SECTIONS return n+' '+s.length})()") { r ->
-                val (n, of) = r.trim('"').split(' ').map { it.toIntOrNull() ?: 0 }
-                label.text = if (of > 0) "SECTION ${n.coerceAtLeast(1)} OF $of" else name
-            }
+            web.evaluateJavascript("(function(){$SECTIONS return n+' '+s.length})()") { label.text = sectionText(it, name) }
         }
         web.setOnScrollChangeListener { _, _, _, _, _ ->
             main.removeCallbacks(refresh)
@@ -712,12 +710,28 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         /** A made-up origin, so the guide's relative `guide.css` and `font.otf` resolve to the viewer. */
         const val HOST = "guide.local"
 
-        /** JavaScript: `s` the guide's sections, `n` the one at the top of the view (1-based, 0 above the first). */
-        const val SECTIONS = "var s=document.querySelectorAll('section'),n=0;" +
-            "for(var i=0;i<s.length;i++)if(s[i].getBoundingClientRect().top<innerHeight/4)n=i+1;"
+        /** The bar's text for a `"n m"` answer from the page: section n of m, or the guide's [name] without sections. */
+        fun sectionText(answer: String, name: String): String {
+            val (n, of) = answer.trim('"').split(' ').map { it.toIntOrNull() ?: 0 } + listOf(0, 0)
+            return if (of > 0) "SECTION ${n.coerceAtLeast(1)} OF $of" else name
+        }
 
-        /** JavaScript that scrolls [by] sections from the current one; before the first is the top. */
-        fun section(by: Int) = "(function(){$SECTIONS n+=$by;if(n<1)scrollTo(0,0);else if(n<=s.length)s[n-1].scrollIntoView()})()"
+        /**
+         * JavaScript: `s` the guide's sections, `n` the one at the top of the view (1-based, 0 above the first): the
+         * last to start in the top quarter, or the one a jump went to while the view is still where the jump left it.
+         * A short section's next one also starts in the top quarter, and near the end the page can't scroll a
+         * section up to the top, so the view alone would skip it.
+         */
+        const val SECTIONS = "var s=document.querySelectorAll('section'),n=0;" +
+            "for(var i=0;i<s.length;i++)if(s[i].getBoundingClientRect().top<innerHeight/4)n=i+1;" +
+            "if(window.esdeAt&&Math.abs(esdeAt.y-scrollY)<1)n=esdeAt.n;"
+
+        /** JavaScript that records section `n` as where a jump went, at this scroll position. */
+        private const val JUMPED = "window.esdeAt={n:n,y:scrollY};"
+
+        /** JavaScript that scrolls [by] sections from the current one (before the first is the top); returns `"n m"`. */
+        fun section(by: Int) = "(function(){$SECTIONS var to=n+$by;if(to<1){to=0;scrollTo(0,0)}" +
+            "else if(to<=s.length)s[to-1].scrollIntoView();else to=n;n=to;$JUMPED return n+' '+s.length})()"
 
         /** JavaScript that shows the contents list with the section in view picked; returns its rows, 0 for none. */
         const val CONTENTS_OPEN = "(function(){$SECTIONS var c=document.getElementById('contents'),l=c?c.querySelectorAll('li'):[];" +
@@ -730,9 +744,10 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         val CONTENTS_UP = contentsStep("previousElementSibling")
         val CONTENTS_DOWN = contentsStep("nextElementSibling")
 
-        /** JavaScript that hides the contents list and scrolls to the picked section. */
+        /** JavaScript that hides the contents list and scrolls to the picked section; returns `"n m"`. */
         const val CONTENTS_PICK = "(function(){var c=document.getElementById('contents'),a=c.querySelector('.on a')," +
-            "t=a&&document.querySelector(a.getAttribute('href'));c.classList.remove('open');if(t)t.scrollIntoView()})()"
+            "t=a&&document.querySelector(a.getAttribute('href'));c.classList.remove('open');if(t)t.scrollIntoView();" +
+            "$SECTIONS var k=[].indexOf.call(s,t)+1;if(k){n=k;$JUMPED}return n+' '+s.length})()"
         const val CONTENTS_CLOSE = "document.getElementById('contents').classList.remove('open')"
     }
 }
