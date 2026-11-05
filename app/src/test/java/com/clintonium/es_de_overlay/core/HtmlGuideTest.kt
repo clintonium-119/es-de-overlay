@@ -66,4 +66,20 @@ class HtmlGuideTest {
         assertTrue(out.trimEnd().endsWith("<footer>$credit</footer>\n</body></html>"))
         assertFalse(out.contains("<script", ignoreCase = true))
     }
+
+    @Test
+    fun `guidePicture reads back each embedded picture in file order`() {
+        val a = ByteArray(70_000) { (it * 7).toByte() }
+        val b = byteArrayOf(0x47, 0x49, 0x46, 0x38, 0x39, 0x61)
+        val out = html(
+            listOf(
+                GuideSection("Maps", "<p>Town</p><img src=\"img:a\" alt=\"Town\"><img src=\"img:gone\" alt=\"Unsaved\">"),
+                GuideSection("Items", "<p>Lamp &lt;img src=\"data:</p><img alt=\"Lamp\" src=\"img:b\">"),
+            ),
+            mapOf("img:a" to GuideImage("image/png", a), "img:b" to GuideImage("image/gif", b)),
+        )
+        assertArrayEquals(a, guidePicture(out.byteInputStream(), 0))
+        assertArrayEquals(b, guidePicture(out.byteInputStream(), 1))
+        assertTrue(runCatching { guidePicture(out.byteInputStream(), 2) }.exceptionOrNull() is java.io.IOException)
+    }
 }

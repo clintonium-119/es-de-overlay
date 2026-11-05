@@ -19,6 +19,16 @@
   const here = () => ({ url: bare(location.href), title: document.title });
   // First title for each URL, in order.
   const distinct = pages => pages.filter((p, i) => pages.findIndex(q => q.url === p.url) === i);
+  // The biggest picture a srcset lists ("a.jpg 1x, b.jpg 2x" or "a.jpg 295w, b.jpg 590w"), null for none. A URL
+  // runs to the next space, so it can hold a comma; a candidate with no descriptor is 1x.
+  const largest = srcset => {
+    let best = null, size = 0;
+    for (const [, url, d] of (srcset || '').matchAll(/[\s,]*(\S*[^\s,])([^,]*)/g)) {
+      const n = parseFloat((/([\d.]+)[wx]/.exec(d) || [0, 1])[1]);
+      if (n > size) { best = url; size = n; }
+    }
+    return best;
+  };
   // GameFAQs splits a long text guide into <pre> blocks at line ends, around ads, and drops the newline there.
   const preText = (box) => { const pres = $$('pre', box); return pres.length ? pres.map(p => p.textContent).join('\n') : box.textContent; };
 
@@ -188,8 +198,8 @@
 
     /**
      * Keeps the guide's cleaned HTML for part(): no scripts, frames, forms, ads or share blocks; only plain
-     * attributes; links to the guide's [pages] become #sK, other links their text; each image src img:N.
-     * Returns its length and the number of images.
+     * attributes; links to the guide's [pages] become #sK, other links their text; each image src img:N, for its
+     * srcset's biggest picture if it lists any. Returns its length and the number of images.
      */
     html(pages) {
       const g = guide();
@@ -209,7 +219,7 @@
       }
       images = [];
       for (const img of $$('img', c)) {
-        const src = img.getAttribute('src');
+        const src = largest(img.getAttribute('srcset')) || img.getAttribute('src');
         if (!src || src.startsWith('data:')) {
           img.removeAttribute('src');
           continue;

@@ -35,11 +35,13 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.view.doOnLayout
+import com.clintonium.es_de_overlay.core.guidePicture
 import com.clintonium.es_de_overlay.core.isOneTextSection
 import com.clintonium.es_de_overlay.core.splitTextGuide
 import com.clintonium.es_de_overlay.core.textSections
 import com.clintonium.es_de_overlay.core.writeHtmlGuide
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.StringWriter
 import java.util.Locale
@@ -69,6 +71,15 @@ private class RegionPage(private val decoder: BitmapRegionDecoder) : Page {
 
     override fun close() = decoder.recycle()
 }
+
+/** A region decoder for an image's [bytes]; a GIF or BMP, which it can't read, goes through PNG first. */
+private fun regionDecoder(bytes: ByteArray): BitmapRegionDecoder = runCatching { BitmapRegionDecoder.newInstance(bytes, 0, bytes.size)!! }
+    .getOrElse { e ->
+        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: throw e
+        val png = ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
+        bitmap.recycle()
+        BitmapRegionDecoder.newInstance(png, 0, png.size)!!
+    }
 
 private class PdfPage(private val page: PdfRenderer.Page) : Page {
     override val width get() = page.width
@@ -100,7 +111,8 @@ private class Rendered(val page: Int, val width: Int, val height: Int, val rect:
  * PNG/JPG pages are fitted whole and centered; zoomed out, D-pad left/right turn pages and L2/R2 go to
  * the first or last page; zoomed in, the D-pad pans and L2/R2 reset; L1/R1 zoom; Y lists a CBZ's maps by
  * name. Saved HTML guides
- * scroll in an offline WebView styled like the theme, with their contents on Y; text guides show the same
+ * scroll in an offline WebView styled like the theme, with their contents on Y; A or a tap opens their
+ * pictures in the page viewer. Text guides show the same
  * way, split into sections at their headings. Only the
  * current page's bitmaps are held, and everything is released on [close].
  */
@@ -146,19 +158,69 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         val keys: (Int) -> Boolean
         when (val ext = name.substringAfterLast('.').lowercase()) {
             "html", "txt" -> {
-                val web = web(guidePage(uri, ext, name), name, saved, savedView, label, onClose)
+                val page = guidePage(uri, ext, name)
+                val box = FrameLayout(context)
                 // Y shows the guide's contents over it; while they're up, the D-pad, A, B and Y work the list.
                 var contentsOpen = false
-                fun showContents(open: Boolean) {
-                    contentsOpen = open
-                    help.text = if (open) "✚ MOVE   A GO   B CLOSE" else "✚ SCROLL   L1/R1 ZOOM   L2/R2 SECTION   Y CONTENTS"
+                // Whether one of the guide's pictures is in view, for A.
+                var pictureInView = false
+                // The picture A or a tap opened, over the guide, and its key handler; B goes back to the guide.
+                var picture: ((Int) -> Boolean)? = null
+                fun chrome() {
+                    help.text = if (contentsOpen) "✚ MOVE   A GO   B CLOSE"
+                    else "✚ SCROLL   L1/R1 ZOOM   L2/R2 SECTION   Y CONTENTS" + if (pictureInView) "   A IMAGE" else ""
                 }
+                /** Shows the guide's picture [n] of [of] in the page viewer, which turns through the others. */
+                fun openPicture(n: Int, of: Int) {
+                    if (picture != null || n !in 0 until of) return
+                    val guidePosition = position
+                    val guideView = view
+                    val guideBack = back
+                    val guideRelease = release
+                    val guideLabel = label.text
+                    val under = layer()
+                    val image = layer()
+                    val frame = FrameLayout(context).apply {
+                        setBackgroundColor(Color.BLACK)
+                        // Taps stop here rather than reaching the guide underneath.
+                        isClickable = true
+                        addView(under)
+                        addView(image)
+                    }
+                    box.addView(frame)
+                    val doc = Doc(of, { RegionPage(regionDecoder(guidePicture(page(), it))) }) {}
+                    picture = paged(doc, name, n, null, frame, under, image, label, help)
+                    val shut = release
+                    // Closing while a picture is up saves the guide's own place.
+                    position = guidePosition
+                    view = guideView
+                    release = { shut(); guideRelease() }
+                    back = {
+                        shut()
+                        box.removeView(frame)
+                        picture = null
+                        back = guideBack
+                        release = guideRelease
+                        label.text = guideLabel
+                        chrome()
+                        true
+                    }
+                }
+                val web = web(page, name, saved, savedView, { answer ->
+                    if (picture == null) {
+                        label.text = sectionText(answer, name)
+                        pictureInView = (answer.trim('"').split(' ').getOrNull(2)?.toIntOrNull() ?: -1) >= 0
+                        chrome()
+                    }
+                }, ::openPicture, onClose)
+                box.addView(web)
                 fun closeContents() {
                     web.evaluateJavascript(CONTENTS_CLOSE, null)
-                    showContents(false)
+                    contentsOpen = false
+                    chrome()
                 }
-                showContents(false)
-                content = web
+                chrome()
+                content = box
                 back = {
                     if (contentsOpen) {
                         closeContents()
@@ -167,17 +229,28 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                         web.canGoBack().also { if (it) web.goBack() }
                     }
                 }
-                keys = { code ->
+                keys = keys@{ code ->
+                    picture?.let { return@keys it(code) }
                     if (contentsOpen) when (code) {
                         KeyEvent.KEYCODE_DPAD_UP -> web.evaluateJavascript(CONTENTS_UP, null)
                         KeyEvent.KEYCODE_DPAD_DOWN -> web.evaluateJavascript(CONTENTS_DOWN, null)
                         KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER -> {
                             web.evaluateJavascript(CONTENTS_PICK) { label.text = sectionText(it, name) }
-                            showContents(false)
+                            contentsOpen = false
+                            chrome()
                         }
                         KeyEvent.KEYCODE_BUTTON_Y -> closeContents()
                     } else when (code) {
-                        KeyEvent.KEYCODE_BUTTON_Y -> web.evaluateJavascript(CONTENTS_OPEN) { if (it != "0") showContents(true) }
+                        KeyEvent.KEYCODE_BUTTON_Y -> web.evaluateJavascript(CONTENTS_OPEN) {
+                            if (it != "0") {
+                                contentsOpen = true
+                                chrome()
+                            }
+                        }
+                        KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER -> web.evaluateJavascript("(function(){$PICTURES return p+' '+g.length})()") {
+                            val (n, of) = it.trim('"').split(' ').map { s -> s.toIntOrNull() ?: -1 } + listOf(-1, -1)
+                            openPicture(n, of)
+                        }
                         KeyEvent.KEYCODE_DPAD_UP -> web.scrollBy(0, -viewH / 4)
                         KeyEvent.KEYCODE_DPAD_DOWN -> web.scrollBy(0, viewH / 4)
                         KeyEvent.KEYCODE_DPAD_LEFT -> web.pageUp(false)
@@ -197,12 +270,6 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                     "cbz" -> cbz(uri)
                     "png", "jpg", "jpeg" -> Doc(1, { RegionPage(resolver.openInputStream(uri)!!.use { BitmapRegionDecoder.newInstance(it)!! }) }) {}
                     else -> throw IllegalArgumentException("unsupported guide format: $name")
-                }
-                fun layer() = ImageView(context).apply {
-                    scaleType = ImageView.ScaleType.MATRIX
-                    // Drawn in software: pages uploaded as GPU textures stayed in the renderer's cache
-                    // (~70 MB after a big map) once the viewer closed, and nothing trims it in an overlay.
-                    setLayerType(View.LAYER_TYPE_SOFTWARE, null)
                 }
                 val under = layer()
                 val image = layer()
@@ -240,6 +307,13 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         }
         wm.addFullScreen(view, PixelFormat.OPAQUE)
         root = view
+    }
+
+    private fun layer() = ImageView(context).apply {
+        scaleType = ImageView.ScaleType.MATRIX
+        // Drawn in software: pages uploaded as GPU textures stayed in the renderer's cache
+        // (~70 MB after a big map) once the viewer closed, and nothing trims it in an overlay.
+        setLayerType(View.LAYER_TYPE_SOFTWARE, null)
     }
 
     /**
@@ -543,11 +617,15 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
     /**
      * A WebView for a saved guide that never reaches the network: the [page], `guide.css` and the theme's
      * font are served from it and the ES-DE folder, every other request gets a 404, and only `#` links
-     * within the page are followed. JavaScript is on for the viewer's own section lookups and contents
-     * list; there is no bridge.
+     * within the page are followed. JavaScript is on for the viewer's own section lookups, contents list
+     * and picture taps; there is no bridge. After a scroll, [refreshed] gets `"n m p"`: section n of m at the
+     * top, and the picture in view (-1 for none). A tap on picture n of m calls [onPicture].
      */
     @SuppressLint("SetJavaScriptEnabled")
-    private fun web(page: () -> InputStream, name: String, saved: Int, savedView: List<Float>?, label: TextView, onClose: () -> Unit): WebView {
+    private fun web(
+        page: () -> InputStream, name: String, saved: Int, savedView: List<Float>?,
+        refreshed: (String) -> Unit, onPicture: (Int, Int) -> Unit, onClose: () -> Unit,
+    ): WebView {
         val css = css().toByteArray()
         val refused = ConcurrentHashMap.newKeySet<String>()
         val web = WebView(context)
@@ -563,9 +641,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         }
         web.setBackgroundColor(BACKGROUND)
         web.isVerticalScrollBarEnabled = false
-        val refresh = Runnable {
-            web.evaluateJavascript("(function(){$SECTIONS return n+' '+s.length})()") { label.text = sectionText(it, name) }
-        }
+        val refresh = Runnable { web.evaluateJavascript("(function(){$SECTIONS $PICTURES return n+' '+s.length+' '+p})()", refreshed) }
         web.setOnScrollChangeListener { _, _, _, _, _ ->
             main.removeCallbacks(refresh)
             main.postDelayed(refresh, 100)
@@ -585,8 +661,13 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 return WebResourceResponse("text/plain", "utf-8", 404, "Not Found", emptyMap(), ByteArrayInputStream(ByteArray(0)))
             }
 
-            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) =
-                !(request.url.host == HOST && request.url.path == "/guide.html" && request.url.fragment != null)
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                val url = request.url
+                if (url.host == HOST && url.path == "/picture") {
+                    onPicture(url.getQueryParameter("n")?.toIntOrNull() ?: -1, url.getQueryParameter("of")?.toIntOrNull() ?: 0)
+                }
+                return !(url.host == HOST && url.path == "/guide.html" && url.fragment != null)
+            }
 
             private var restored = false
 
@@ -597,6 +678,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                     web.evaluateJavascript(
                         "scrollTo(0,(document.documentElement.scrollHeight-innerHeight)*${saved.coerceIn(0, 10_000)}/10000)", null,
                     )
+                    web.evaluateJavascript(PICTURE_TAPS, null)
                 }
                 refresh.run()
             }
@@ -725,6 +807,14 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         const val SECTIONS = "var s=document.querySelectorAll('section'),n=0;" +
             "for(var i=0;i<s.length;i++)if(s[i].getBoundingClientRect().top<innerHeight/4)n=i+1;" +
             "if(window.esdeAt&&Math.abs(esdeAt.y-scrollY)<1)n=esdeAt.n;"
+
+        /** JavaScript: `g` the guide's pictures (embedded as data, like a saved guide's), `p` the first one in view or -1. */
+        const val PICTURES = "var g=document.querySelectorAll('img[src^=\"data:\"]'),p=-1;for(var i=0;i<g.length;i++){" +
+            "var r=g[i].getBoundingClientRect();if(r.width>0&&r.bottom>0&&r.top<innerHeight&&r.right>0&&r.left<innerWidth){p=i;break}}"
+
+        /** JavaScript that turns a tap on picture p of m into a load of `picture?n=p&of=m`, which the viewer opens instead. */
+        const val PICTURE_TAPS = "document.addEventListener('click',function(e){var g=document.querySelectorAll('img[src^=\"data:\"]')," +
+            "p=[].indexOf.call(g,e.target);if(p>=0){e.preventDefault();location.href='https://$HOST/picture?n='+p+'&of='+g.length}})"
 
         /** JavaScript that records section `n` as where a jump went, at this scroll position. */
         private const val JUMPED = "window.esdeAt={n:n,y:scrollY};"

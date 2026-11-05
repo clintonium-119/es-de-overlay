@@ -1,5 +1,7 @@
 package com.clintonium.es_de_overlay.core
 
+import java.io.IOException
+import java.io.InputStream
 import java.io.StringWriter
 import java.io.Writer
 import java.util.Base64
@@ -180,4 +182,38 @@ fun writeHtmlGuide(
         out.write("\n</section>\n")
     }
     out.write("<footer>$credit</footer>\n</body></html>\n")
+}
+
+/**
+ * The bytes of picture [n] (from 0, in file order) of a guide [writeHtmlGuide] wrote, read from its [html] without
+ * holding the rest. Throws an [IOException] when there are fewer pictures.
+ */
+fun guidePicture(html: InputStream, n: Int): ByteArray = html.buffered(1 shl 16).use { input ->
+    val marker = "<img src=\"data:".toByteArray()
+    var left = n + 1
+    var matched = 0
+    while (left > 0) {
+        val b = input.read()
+        if (b < 0) throw IOException("no picture ${n + 1}")
+        matched = when (b.toByte()) {
+            marker[matched] -> matched + 1
+            marker[0] -> 1
+            else -> 0
+        }
+        if (matched == marker.size) {
+            left--
+            matched = 0
+        }
+    }
+    // Past the type and ";base64," to the closing quote.
+    while (true) {
+        when (input.read()) {
+            -1 -> throw IOException("picture ${n + 1} cut off")
+            ','.code -> break
+        }
+    }
+    val base64 = object : InputStream() {
+        override fun read() = input.read().let { if (it == '"'.code) -1 else it }
+    }
+    Base64.getDecoder().wrap(base64).readBytes()
 }
