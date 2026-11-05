@@ -166,9 +166,13 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 var pictureInView = false
                 // The picture A or a tap opened, over the guide, and its key handler; B goes back to the guide.
                 var picture: ((Int) -> Boolean)? = null
+                lateinit var web: WebView
+                // Zoomed past 100 %, a text guide's lines run off the right edge, and D-pad left/right pan to them.
+                fun zoomed() = web.settings.textZoom > 100
                 fun chrome() {
                     help.text = if (contentsOpen) "✚ MOVE   A GO   B CLOSE"
-                    else "✚ SCROLL   L1/R1 ZOOM   L2/R2 SECTION   Y CONTENTS" + if (pictureInView) "   A IMAGE" else ""
+                    else (if (zoomed()) "✚ PAN" else "✚ SCROLL") + "   L1/R1 ZOOM   L2/R2 SECTION   Y CONTENTS" +
+                        if (pictureInView) "   A IMAGE" else ""
                 }
                 /** Shows the guide's picture [n] of [of] in the page viewer, which turns through the others. */
                 fun openPicture(n: Int, of: Int) {
@@ -206,7 +210,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                         true
                     }
                 }
-                val web = web(page, name, saved, savedView, { answer ->
+                web = this.web(page, name, saved, savedView, { answer ->
                     if (picture == null) {
                         label.text = sectionText(answer, name)
                         pictureInView = (answer.trim('"').split(' ').getOrNull(2)?.toIntOrNull() ?: -1) >= 0
@@ -253,10 +257,16 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                         }
                         KeyEvent.KEYCODE_DPAD_UP -> web.scrollBy(0, -viewH / 4)
                         KeyEvent.KEYCODE_DPAD_DOWN -> web.scrollBy(0, viewH / 4)
-                        KeyEvent.KEYCODE_DPAD_LEFT -> web.pageUp(false)
-                        KeyEvent.KEYCODE_DPAD_RIGHT -> web.pageDown(false)
-                        KeyEvent.KEYCODE_BUTTON_L1 -> web.settings.textZoom = (web.settings.textZoom - 25).coerceAtLeast(50)
-                        KeyEvent.KEYCODE_BUTTON_R1 -> web.settings.textZoom = (web.settings.textZoom + 25).coerceAtMost(200)
+                        KeyEvent.KEYCODE_DPAD_LEFT -> if (zoomed()) web.scrollBy(-screenW / 4, 0) else web.pageUp(false)
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> if (zoomed()) web.scrollBy(screenW / 4, 0) else web.pageDown(false)
+                        KeyEvent.KEYCODE_BUTTON_L1 -> {
+                            web.settings.textZoom = (web.settings.textZoom - 25).coerceAtLeast(50)
+                            chrome()
+                        }
+                        KeyEvent.KEYCODE_BUTTON_R1 -> {
+                            web.settings.textZoom = (web.settings.textZoom + 25).coerceAtMost(200)
+                            chrome()
+                        }
                         // The bar is set from the jump's answer: a jump the page can't scroll for fires no scroll event.
                         KeyEvent.KEYCODE_BUTTON_L2 -> web.evaluateJavascript(section(-1)) { label.text = sectionText(it, name) }
                         KeyEvent.KEYCODE_BUTTON_R2 -> web.evaluateJavascript(section(1)) { label.text = sectionText(it, name) }
@@ -704,7 +714,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         return web
     }
 
-    /** The theme's colours and font for saved guides; `<pre>` fits 80 columns like the text viewer. */
+    /** The theme's colours and font for saved guides; `<pre>` fits 80 columns like the text viewer at 100 %. */
     private fun css(): String {
         val density = context.resources.displayMetrics.density
         fun px(device: Float) = "%.2fpx".format(Locale.ROOT, device / density)
@@ -721,7 +731,8 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
             a { color: ${color(TEXT)}; }
             img { max-width: 100%; height: auto; }
             figure { margin-left: 0; margin-right: 0; }
-            pre { font-family: monospace; font-size: ${px(100f * screenW * 0.95f / mono)}; overflow-x: auto; }
+            /* Long lines run off the right edge rather than wrap or scroll alone, so the whole page pans to them. */
+            pre { font-family: monospace; font-size: ${px(100f * screenW * 0.95f / mono)}; }
             /* A text guide's sections, which carry their own headings, read on as one text. */
             section > pre:only-child { margin: 0; }
             #contents { display: none; }
