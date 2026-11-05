@@ -107,16 +107,18 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
     private var release: () -> Unit = {}
     /** Where the open document is: its page, or its scroll position from [fraction]. Saved under [key] on close. */
     private var position: () -> Int = { 0 }
+    /** Its zoom, and a page's centre, or null at the fit. Saved with [position]. */
+    private var view: () -> List<Float>? = { null }
     private var key: String? = null
 
     /**
-     * Opens [uri], picking the format from [name]'s extension, at the position saved under [key] (its path
-     * below the ES-DE folder); [onClose] runs when B closes it.
+     * Opens [uri], picking the format from [name]'s extension, at the position and zoom saved under [key] (its
+     * path below the ES-DE folder); [onClose] runs when B closes it.
      */
     fun open(uri: Uri, name: String, key: String, onClose: () -> Unit) {
         close()
         try {
-            build(uri, name, prefs.position(key), onClose)
+            build(uri, name, prefs.position(key), prefs.view(key), onClose)
             this.key = key
         } catch (e: Exception) {
             close()
@@ -124,7 +126,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         }
     }
 
-    private fun build(uri: Uri, name: String, saved: Int, onClose: () -> Unit) {
+    private fun build(uri: Uri, name: String, saved: Int, savedView: List<Float>?, onClose: () -> Unit) {
         val label = barText(context, barH, Gravity.START or Gravity.CENTER_VERTICAL)
         val help = barText(context, barH, Gravity.CENTER)
         val content: View
@@ -133,7 +135,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         var back = { false }
         when (val ext = name.substringAfterLast('.').lowercase()) {
             "html" -> {
-                val web = web(uri, name, saved, label, onClose)
+                val web = web(uri, name, saved, savedView, label, onClose)
                 // Y shows the guide's contents over it; while they're up, the D-pad, A, B and Y work the list.
                 var contentsOpen = false
                 fun showContents(open: Boolean) {
@@ -235,7 +237,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                     addView(under)
                     addView(image)
                 }
-                keys = paged(doc, name, saved, under, image, label, help)
+                keys = paged(doc, name, saved, savedView, under, image, label, help)
             }
         }
         val view = FrameLayout(context).apply {
@@ -272,10 +274,11 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
      * the bitmaps already shown at once and the sharp one replaces its region when ready. The page's
      * first render, the whole page at its fit, stays in [under], so what the sharp region in [image]
      * doesn't cover yet is blurry rather than black. A big image's top quarter, which decodes in about a
-     * quarter of the time, shows there first.
+     * quarter of the time, shows there first. A [startView] saved zoomed in (zoom over the fit, centre over
+     * the page size) is restored once the start page opens; turning the page goes back to the fit.
      */
     private fun paged(
-        doc: Doc, name: String, start: Int, under: ImageView, image: ImageView, label: TextView, help: TextView,
+        doc: Doc, name: String, start: Int, startView: List<Float>?, under: ImageView, image: ImageView, label: TextView, help: TextView,
     ): (Int) -> Boolean {
         val worker = Executors.newSingleThreadExecutor()
         // Worker thread only.
@@ -297,8 +300,10 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         var busy = false
         var again = false
         var closed = false
+        var restore = startView?.takeIf { it.size == 3 }
 
         fun zoomed() = pw > 0 && scale > fit * 1.01f
+        fun maxScale() = maxOf(fit * 4, 2f)
         fun chrome() {
             label.text = if (doc.count > 1) "PAGE ${page + 1} OF ${doc.count}" else name
             help.text = when {
@@ -331,6 +336,14 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 scale = fit
                 cx = pw / 2f
                 cy = ph / 2f
+                restore?.let { (z, x, y) ->
+                    scale = (fit * z).coerceIn(fit, maxScale())
+                    cx = x * pw
+                    cy = y * ph
+                    // The sharp region, once the render in flight is in.
+                    again = true
+                }
+                restore = null
             }
             under.setImageBitmap(result.bitmap)
             base?.recycle()
@@ -420,6 +433,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
             if (n !in 0 until doc.count || n == page) return
             page = n
             pw = 0
+            restore = null
             dropSharp()
             under.setImageDrawable(null)
             base?.recycle()
@@ -428,11 +442,13 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         }
         fun zoom(to: Float) {
             if (pw == 0) return
-            scale = to.coerceIn(fit, maxOf(fit * 4, 2f))
+            scale = to.coerceIn(fit, maxScale())
             render()
         }
 
         position = { page }
+        // Before the page opens, the view it was asked to open at.
+        view = { if (zoomed()) listOf(scale / fit, cx / pw, cy / ph) else restore }
         release = {
             closed = true
             dropSharp()
@@ -473,7 +489,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
      * list; there is no bridge.
      */
     @SuppressLint("SetJavaScriptEnabled")
-    private fun web(uri: Uri, name: String, saved: Int, label: TextView, onClose: () -> Unit): WebView {
+    private fun web(uri: Uri, name: String, saved: Int, savedView: List<Float>?, label: TextView, onClose: () -> Unit): WebView {
         val css = css().toByteArray()
         val refused = ConcurrentHashMap.newKeySet<String>()
         val web = WebView(context)
@@ -484,6 +500,8 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
             allowContentAccess = false
             // Safe Browsing would look pages up with Google.
             safeBrowsingEnabled = false
+            // The text zoom L1/R1 left it at, set before the page lays out so the scroll position lands.
+            savedView?.firstOrNull()?.let { textZoom = it.toInt().coerceIn(50, 200) }
         }
         web.setBackgroundColor(BACKGROUND)
         web.isVerticalScrollBarEnabled = false
@@ -539,6 +557,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         web.loadUrl("https://$HOST/guide.html")
         val density = context.resources.displayMetrics.density
         position = { fraction(web.scrollY, (web.contentHeight * density).toInt() - web.height) }
+        view = { web.settings.textZoom.takeIf { it != 100 }?.let { listOf(it.toFloat()) } }
         release = {
             main.removeCallbacks(refresh)
             (web.parent as? ViewGroup)?.removeView(web)
@@ -603,9 +622,10 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
     }
 
     fun close() {
-        key?.let { prefs.setPosition(it, position()) }
+        key?.let { prefs.setPosition(it, position(), view()) }
         key = null
         position = { 0 }
+        view = { null }
         release()
         release = {}
         root?.let(wm::removeView)

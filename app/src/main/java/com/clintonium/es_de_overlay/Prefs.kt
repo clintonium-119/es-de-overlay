@@ -55,6 +55,15 @@ class Prefs(private val context: Context) {
     /** Where the viewer left a document (a page, or a scroll fraction), keyed by its path below the ES-DE folder. */
     fun position(key: String) = positions.getInt(key, 0)
 
-    /** Written at once: the viewer's process ends right after it closes, before an apply() would land. */
-    fun setPosition(key: String, value: Int) = positions.edit(commit = true) { putInt(key, value) }
+    /** The viewer's zoom (and centre) for a document left zoomed in, or null for its fit. */
+    fun view(key: String) = positions.getString("/$key", null)?.split(' ')?.mapNotNull(String::toFloatOrNull)
+
+    /**
+     * Written at once: the viewer's process ends right after it closes, before an apply() would land. The
+     * [view] goes under "/" and the key: keys are relative paths, so that can't clash with another's position.
+     */
+    fun setPosition(key: String, value: Int, view: List<Float>?) = positions.edit(commit = true) {
+        putInt(key, value)
+        if (view == null) remove("/$key") else putString("/$key", view.joinToString(" "))
+    }
 }
