@@ -124,7 +124,8 @@ Folders down, then start it under Service:
   nothing. When it's done, the browser closes and the guide opens; closing it shows the Guides list
   with the new guide. Closing the browser without saving returns to the Find Guides list.
 - On any other site, **Save guide** shows on pages Firefox's Reader View would offer to read, and
-  saves the page's main content with its images; a page that is mostly pictures, such as a page
+  saves the page's main content with its images, each at the largest size the page lists; a page
+  that is mostly pictures, such as a page
   of maps, keeps them with their captions. When the page links to more pages of the same guide
   (numbered pages, pages below it anywhere on the page, chapters beside it, or a Next link), it
   first lists them, ticked but for ones that look like the site's own (contributors, edit, log
@@ -144,8 +145,12 @@ Folders down, then start it under Service:
   A CBZ's bar shows the page's number and name, e.g. `3 OF 9   TAIL CAVE`. **Y** lists its maps by
   name with the current one picked: the D-pad moves, **A** jumps to the map, and **B** or **Y**
   closes the list. Saved web guides (`.html`) and text guides (`.txt`) scroll with the D-pad
-  (left/right by a page), L1/R1 change the text size and L2/R2 move between sections. **Y** shows
-  their contents over the guide, with the section in view picked, and works the same way.
+  (left/right by a page), L1/R1 change the text size and L2/R2 move between sections. Above
+  100 %, a text guide's lines run off the right edge rather than wrap, and left/right pan the
+  guide sideways instead (the bar shows `✚ PAN`). **Y** shows their contents over the guide, with
+  the section in view picked, and works the same way. While a picture is in view the bar shows
+  `A IMAGE`: **A**, or a tap on a picture, opens it in the viewer above, where left/right turn
+  through the guide's other pictures, and **B** goes back to the guide where it was.
   Otherwise **B** first steps back through tapped links, then closes.
 - **Quit Game** (the last row) ends the game's app at once, with no confirmation, and ES-DE comes
   back. It works for any game ES-DE launched, emulator or Android game. It closes without warning:
