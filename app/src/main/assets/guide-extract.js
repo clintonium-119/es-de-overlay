@@ -95,6 +95,13 @@
     return { kind: 'html', title, author: '', pages: pages.length ? distinct(pages) : [here()], content, lists: copies };
   }
 
+  // A listed page that looks like the site's own rather than the guide's starts unticked: a "+66 more" link, or an
+  // address that is just a contributors, edit, history, talk, log-in or search page.
+  const SITE_TEXT = /^(\+?\d+\s+more|more|edit|history|talk|discussion|comments?|log ?in|sign ?(in|up)|share|print)$/i;
+  const SITE_PAGE = /^((top-?)?contributors?|edit|history|talk|discussion|comments|login|signin|signup|register|account|profile|search|tags?|categor(y|ies)|share|print|feed|rss)$/i;
+  const siteOwn = (u, title) => SITE_TEXT.test(title) || SITE_PAGE.test(u.pathname.split('/').pop().replace(/\.\w+$/, '')) ||
+    /^(edit|history)$/i.test(u.searchParams.get('action') || '');
+
   // Any other page, when Reader View would offer it: its main content, and the guide's other pages from its links.
   // Pages numbered ?page=N anywhere on the page; else links anywhere below this page's path, or in the content
   // beside it in a folder two or more deep ("/wikis/shantae/", not a flat "/wiki/"); also a rel="next" or "Next" link as
@@ -149,7 +156,7 @@
       // Pages below this one are its own, wherever the page links them: a contents sidebar lists all of a guide's.
       let listed = [...inContent, ...others(document)].filter(l => l.u.pathname.startsWith(path + '/'));
       if (!listed.length && dir.split('/').length > 3) listed = inContent.filter(l => l.u.pathname.startsWith(dir));
-      pages = distinct([here(), ...listed.map(l => ({ url: bare(l.u.href), title: l.title || l.u.pathname }))]);
+      pages = distinct([here(), ...listed.map(l => ({ url: bare(l.u.href), title: l.title || l.u.pathname, skip: siteOwn(l.u, l.title) }))]);
     }
     const nextLink = $('link[rel~="next"][href], a[rel~="next"][href]') ||
       $$('a[href]').find(a => /^next( page)?\s*[»›>→]?$/i.test(text(a)));

@@ -137,11 +137,13 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
                 picked != null -> startSave(game, title, save, picked(), onSaved)
                 else -> web.evaluateJavascript("$script;esdeGuide.describe()") { json ->
                     val d = runCatching { JSONObject(json) }.getOrNull()
-                    val pages = d?.optJSONArray("pages")?.let(::pageList).orEmpty()
+                    val list = d?.optJSONArray("pages")
+                    val pages = list?.let(::pageList).orEmpty()
+                    val unticked = list?.let { l -> (0 until l.length()).filter { l.getJSONObject(it).optBoolean("skip") }.toSet() }.orEmpty()
                     val next = d?.optString("next")?.takeIf { d.optBoolean("generic") && !d.isNull("next") }
                     if (saving || picking != null || this.web == null) return@evaluateJavascript
                     if (d?.optBoolean("generic") == true && (pages.size > 1 || next != null)) {
-                        pick(view, web, title, pages, next != null)
+                        pick(view, web, title, pages, unticked, next != null)
                     } else {
                         startSave(game, title, save, null, onSaved)
                     }
@@ -201,10 +203,13 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
     }
 
     /**
-     * Main thread: lists [pages] in place of [web], each with a box, all ticked, and a box for the pages after them
-     * by Next links when [next]. Save guide takes the ticked ones, Back the page again.
+     * Main thread: lists [pages] in place of [web], each with a box, ticked but for the [unticked] ones (the site's
+     * own pages, by their look), and a box for the pages after them by Next links when [next]. Save guide takes the
+     * ticked ones, Back the page again.
      */
-    private fun pick(view: LinearLayout, web: WebView, title: TextView, pages: List<Pair<String, String>>, next: Boolean) {
+    private fun pick(
+        view: LinearLayout, web: WebView, title: TextView, pages: List<Pair<String, String>>, unticked: Set<Int>, next: Boolean,
+    ) {
         fun box(label: String) = CheckBox(context).apply {
             text = label
             isChecked = true
@@ -215,7 +220,7 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
             // The view's own minimum: single-line text sets the text's minimum to one line.
             minimumHeight = tapH
         }
-        val boxes = pages.map { (url, name) -> box(name.ifEmpty { url }) }
+        val boxes = pages.mapIndexed { i, (url, name) -> box(name.ifEmpty { url }).apply { isChecked = i !in unticked } }
         val follow = if (next) box("The pages after these, by their Next links") else null
         val list = ScrollView(context).apply {
             setBackgroundColor(BACKGROUND)
