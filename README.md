@@ -111,17 +111,23 @@ Folders down, then start it under Service:
   Picking a source again replaces the saved file. Without a connection the menu says
   `Couldn't reach the guide sources`.
 - Below those, Find Guides always lists **Search GameFAQs** and **Search Neoseeker**, plus
-  **ZeldaDungeon** for a Zelda game it has a walkthrough for. These sites are only contacted once
-  you pick one. Each opens a browser over the game, used by touch, at the site's search for the game
-  (ZeldaDungeon at the game's walkthrough). Its bar has **Back**, the page title, **Save guide** on a
-  guide's page, and **Close**; tapping a text field brings up the keyboard. The first visit to a site
-  may show a security check: it either clears by itself or asks you to tap "Verify you are human".
+  **ZeldaDungeon** for a Zelda game it has a walkthrough for, and last **Search the Web**, a Brave
+  search for "<game> guide". These sites are only contacted once you pick one. Each opens a browser
+  over the game, used by touch, at the site's search for the game (ZeldaDungeon at the game's
+  walkthrough). Its bar has **Back**, the page title, **Save guide** on a guide's page, and
+  **Close**; tapping a text field brings up the keyboard. The first visit to a site may show a
+  security check: it either clears by itself or asks you to tap "Verify you are human".
 - **Save guide** saves the open guide. A text guide saves at once. A guide split into pages saves
   by loading each page in turn in the same browser, at least 2 seconds apart, with
   `Saving page 3 of 8, image 12 of 40` in the bar. If a page shows a security check, the bar says
   `Clear the check to continue` and the save waits until you have. **Cancel** stops and saves
   nothing. When it's done, the browser closes and the guide opens; closing it shows the Guides list
   with the new guide. Closing the browser without saving returns to the Find Guides list.
+- On any other site, **Save guide** shows on pages Firefox's Reader View would offer to read, and
+  saves the page's main content with its images. When the page links to more pages of the same
+  guide (numbered pages, chapters below or beside it, or a Next link), it first lists them, all
+  ticked: untick any to leave out and tap **Save guide** again, or **Back** to return to the page.
+  Next links are followed page by page, up to 50 pages.
 - The viewer works like ES-DE's own manual viewer:
 
   | | Zoomed out | Zoomed in |
@@ -130,18 +136,22 @@ Folders down, then start it under Service:
   | D-pad up/down | — | pan |
   | L1 / R1 | zoom out / in | zoom out / in |
   | L2 / R2 | first / last page | reset the zoom |
+  | Y | maps list (CBZ) | maps list (CBZ) |
   | B | close | close |
 
-  Text guides scroll with the D-pad (left/right by a page) and jump with L2/R2. Saved web guides
-  (`.html`) scroll the same way, L1/R1 change the text size and L2/R2 move between sections. **Y**
-  shows their contents over the guide, with the section in view picked: the D-pad moves, **A** jumps
-  to the section, and **B** or **Y** closes the list. Otherwise **B** first steps back through
-  tapped links, then closes.
+  A CBZ's bar shows the page's number and name, e.g. `3 OF 9   TAIL CAVE`. **Y** lists its maps by
+  name with the current one picked: the D-pad moves, **A** jumps to the map, and **B** or **Y**
+  closes the list. Saved web guides (`.html`) and text guides (`.txt`) scroll with the D-pad
+  (left/right by a page), L1/R1 change the text size and L2/R2 move between sections. **Y** shows
+  their contents over the guide, with the section in view picked, and works the same way.
+  Otherwise **B** first steps back through tapped links, then closes.
 - **Quit Game** (the last row) ends the game's app at once, with no confirmation, and ES-DE comes
   back. It works for any game ES-DE launched, emulator or Android game. It closes without warning:
   your saves are kept, but progress since your last save is lost (RetroArch writes in-game saves
   every 10 s here), and an emulator's save-on-exit doesn't run.
-- Every guide and manual reopens at the page or place where you left it, also after a restart.
+- Every guide and manual reopens at the page or place where you left it, also after a restart. A
+  map or manual left zoomed in reopens at the same zoom and spot, and a web or text guide at the
+  same text size.
 - ES-DE shows new media when you return to the gamelist; no reload needed.
 
 ## Guides
@@ -165,11 +175,14 @@ Find Guides saves into the folder form, e.g. for Shantae:
 <ES-DE>/downloaded_media/gbc/guides/Shantae/GameFAQs - Shantae – Guide and Walkthrough by DEngel.html
 ```
 
-A VGMaps save is one CBZ of the game's maps in the atlas's order. A StrategyWiki save is one HTML
-file: a contents list, one section per wiki page, its images inside the file, and the source and
-license (CC BY-SA 4.0) at the end. A guide saved from the browser is the same kind of HTML file:
-a text guide is kept as fixed-width text, and a guide in pages gets one section per page with its
-images inside. Site scripts, ads and comments are left out, and the end names the source page and
+A VGMaps save is one CBZ of the game's maps in the atlas's order, each named as the atlas names it
+(`003 Tail Cave.png`). A StrategyWiki save is one HTML file: a contents list, one section per wiki
+page, its images inside the file, and the source and license (CC BY-SA 4.0) at the end. A guide
+saved from the browser is the same kind of HTML file: a text guide is kept as fixed-width text, and
+a guide in pages gets one section per page with its images inside. A text guide, saved or a `.txt`,
+is split into sections at its headings: where its contents list's tags (`[INTRO]`, `(B)`, `1.`)
+start a line further down, else at lines boxed or underlined with `=`, `-`, `*`, `#`, `~` or `_`.
+Text guides saved before this version are split when they open. Site scripts, ads and comments are left out, and the end names the source page and
 author. These guides belong to their authors; save them for your own reading. The viewer shows
 saved guides offline in the theme's colours and font; opened anywhere else they are plain web
 pages.
@@ -240,11 +253,18 @@ identified with certainty (the notification shows the raw launch line instead).
   different game. GameFAQs and Neoseeker are searched in the browser, where you pick the game.
 - Saving from the browser reads each site's page layout, as seen in October 2026. A site that
   changes its layout can break Save guide until the app is updated, and a site could block the
-  in-app browser outright. Ads show in the live browser; saved guides leave them out. Guides with
+  in-app browser outright. Elsewhere, Reader View's rules decide what the main content is, and the
+  guide's other pages are guessed from its links, so check the list before saving. Chapters found
+  beside a chapter page come after it, not in the guide's order.
+- A CBZ saved by VGMaps before map names shows each map's file name (`Shantae-DribbleFountain`);
+  saving it again from Find Guides names them. A text guide with no contents tags or rule lines
+  stays one section. Ads show in the live browser; saved guides leave them out. Guides with
   many large images make large files (Super Metroid's GameFAQs guide with 264 images is 58 MB).
 - The app goes online only when you pick Find Guides or a browser site, with its own User-Agent for
   its own requests; the browser is a normal WebView. Saved guides need no connection.
 - Device findings and how each was checked: [`docs/VERIFIED.md`](docs/VERIFIED.md). Plan:
   [`PLAN.md`](PLAN.md).
+- Saving from other sites uses Mozilla's [Readability](https://github.com/mozilla/readability)
+  0.6.0, under the Apache License 2.0 (`app/src/main/assets/readability/LICENSE.md`).
 
 Debug log: `adb logcat -G 16M && adb logcat -s ESDEShot`.
