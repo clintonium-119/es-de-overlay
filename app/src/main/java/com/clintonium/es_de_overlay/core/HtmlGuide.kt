@@ -36,9 +36,11 @@ fun textSections(title: String, text: String): List<GuideSection> {
     }
     val bounds = if (lines.subList(0, starts[0].first).any(String::isNotBlank)) listOf(0 to title) + starts
     else listOf(0 to starts[0].second) + starts.drop(1)
+    // Each section but the last keeps its final line break: a <pre> drops a trailing one, which would lose a blank line.
     return bounds.mapIndexed { i, (from, name) ->
         val to = bounds.getOrNull(i + 1)?.first ?: lines.size
-        GuideSection(name, "<pre>${escapeHtml(lines.subList(from, to).joinToString("\n"))}</pre>", heading = false)
+        val end = if (to < lines.size) "\n" else ""
+        GuideSection(name, "<pre>${escapeHtml(lines.subList(from, to).joinToString("\n") + end)}</pre>", heading = false)
     }
 }
 

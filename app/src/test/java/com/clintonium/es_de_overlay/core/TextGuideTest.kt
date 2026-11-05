@@ -15,10 +15,10 @@ class TextGuideTest {
 
     private fun pre(section: GuideSection) = unescapeHtml(section.html.removePrefix("<pre>").removeSuffix("</pre>"))
 
-    /** The sections' names, after checking that their text, joined, is the guide's text line for line. */
+    /** The sections' names, after checking that their texts, one after another, are the guide's text line for line. */
     private fun names(title: String, text: String): List<String> {
         val sections = textSections(title, text)
-        assertEquals(text.lines().joinToString("\n"), sections.joinToString("\n", transform = ::pre))
+        assertEquals(text.lines().joinToString("\n"), sections.joinToString("", transform = ::pre))
         return sections.map { it.title }
     }
 
@@ -33,6 +33,8 @@ class TextGuideTest {
         val controls = textSections("Shantae FAQ", text)[1]
         assertEquals(listOf("#".repeat(79), " ".repeat(33) + "(B) CONTROLS"), pre(controls).lines().take(2))
         assertFalse(controls.heading)
+        // The two blank lines before the next box both stay: a <pre> drops only a final line break.
+        assertTrue(pre(controls).endsWith("items.\n\n\n"))
     }
 
     @Test
