@@ -25,6 +25,8 @@ import android.widget.TextView
 import com.clintonium.es_de_overlay.core.GameRef
 import com.clintonium.es_de_overlay.core.GuideImage
 import com.clintonium.es_de_overlay.core.GuideSection
+import com.clintonium.es_de_overlay.core.LINEAR
+import com.clintonium.es_de_overlay.core.Look
 import com.clintonium.es_de_overlay.core.escapeHtml
 import com.clintonium.es_de_overlay.core.guideFileName
 import com.clintonium.es_de_overlay.core.isBotCheck
@@ -96,6 +98,8 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
     private val tapH = (48 * context.resources.displayMetrics.density).toInt()
     private var root: View? = null
     private var web: WebView? = null
+    /** The colours of the open page's window, from [open]. */
+    private var look = LINEAR
     /** Main thread: a save is running. */
     private var saving = false
     /** Main thread: while the page list is up, removes it and returns the ticked pages. */
@@ -107,12 +111,13 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
     private var lastLoad = 0L
 
     /**
-     * Opens [url]. A saved guide of [game]'s goes to [onSaved] as its path below the ES-DE folder; [onClose] runs
-     * when Back runs out of history, Close is tapped or the page's renderer dies.
+     * Opens [url] in [look]'s colours. A saved guide of [game]'s goes to [onSaved] as its path below the ES-DE folder;
+     * [onClose] runs when Back runs out of history, Close is tapped or the page's renderer dies.
      */
     @SuppressLint("SetJavaScriptEnabled")
-    fun open(url: String, game: GameRef, onSaved: (String) -> Unit, onClose: () -> Unit) {
+    fun open(url: String, game: GameRef, look: Look, onSaved: (String) -> Unit, onClose: () -> Unit) {
         close()
+        this.look = look
         val done = {
             close()
             onClose()
@@ -192,7 +197,7 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
         }
         view = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(BACKGROUND)
+            setBackgroundColor(look.background)
             addView(web, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
             addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, tapH))
         }
@@ -213,8 +218,8 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
         fun box(label: String) = CheckBox(context).apply {
             text = label
             isChecked = true
-            setTextColor(TEXT)
-            buttonTintList = ColorStateList.valueOf(TEXT)
+            setTextColor(look.text)
+            buttonTintList = ColorStateList.valueOf(look.text)
             setTextSize(TypedValue.COMPLEX_UNIT_PX, barH * 0.7f)
             isSingleLine = true
             // The view's own minimum: single-line text sets the text's minimum to one line.
@@ -223,7 +228,7 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
         val boxes = pages.mapIndexed { i, (url, name) -> box(name.ifEmpty { url }).apply { isChecked = i !in unticked } }
         val follow = if (next) box("The pages after these, by their Next links") else null
         val list = ScrollView(context).apply {
-            setBackgroundColor(BACKGROUND)
+            setBackgroundColor(look.background)
             addView(LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(barH, barH / 2, barH, barH / 2)

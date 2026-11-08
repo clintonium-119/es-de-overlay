@@ -46,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.clintonium.es_de_overlay.core.LookSource
 import com.clintonium.es_de_overlay.core.Overwrite
 import com.clintonium.es_de_overlay.core.reportsScreensaver
 import rikka.shizuku.Shizuku
@@ -110,6 +111,7 @@ class SettingsActivity : ComponentActivity() {
         val romsWarning = remember(tick, esde, roms) { if (esde != null && roms != null) romsWarning(esde, roms) else null }
         var mediaType by remember { mutableStateOf(prefs.mediaType) }
         var clip by remember { mutableIntStateOf(prefs.clipSeconds) }
+        var textScale by remember { mutableIntStateOf(prefs.textScale) }
         var overwrite by remember { mutableStateOf(prefs.overwrite) }
         var bootStart by remember { mutableStateOf(prefs.bootStart) }
         var sleepWhenIdle by remember { mutableStateOf(prefs.sleepWhenIdle) }
@@ -117,6 +119,8 @@ class SettingsActivity : ComponentActivity() {
         var quitOnHome by remember { mutableStateOf(prefs.quitOnHome) }
         val shizuku = remember(tick) { ShizukuShell.state(this) }
         val screensaverReported = remember(tick, esde) { esde?.let(::esdeReportsScreensaver) }
+        // No game, so no system: the theme's own theme.xml.
+        val lookSource = remember(tick, esde, mediaType) { ThemeLook(this, prefs).current("", mediaType).look.source }
 
         val pickEsde = treePicker { prefs.esdeTree = it }
         val pickRoms = treePicker { prefs.romsTree = it }
@@ -252,6 +256,23 @@ class SettingsActivity : ComponentActivity() {
                 sleepMinutes = it
                 prefs.sleepMinutes = it
             }
+            Section("Look")
+            Setting(
+                "Theme",
+                describe(lookSource),
+                null,
+                "The menu, guides and browser use the colours and font of the ES-DE theme in use. Themes from " +
+                    "ES-DE's theme downloader are read through Shizuku. Put an overlay-theme.xml in the ES-DE folder " +
+                    "to change any of them; see the docs.",
+            ) {}
+            Dropdown(
+                "Text size",
+                textScale,
+                listOf(90, 100, 110, 125, 150, 175, 200),
+                { if (it == 100) "100 % (the theme's)" else "$it %" },
+                "Scales the theme's text in the menu and guides, for themes whose small text fits ES-DE's busy screens. " +
+                    "The menu takes it from the next game you start.",
+            ) { textScale = it; prefs.textScale = it }
             Section("Quitting games")
             Setting(
                 "Shizuku",
@@ -373,6 +394,15 @@ class SettingsActivity : ComponentActivity() {
                 Text(status, style = MaterialTheme.typography.bodySmall)
             }
             if (action != null) OutlinedButton(onClick = onClick) { Text(action) }
+        }
+    }
+
+    private fun describe(source: LookSource): String = when (source) {
+        is LookSource.Theme -> "Follows ES-DE's theme: ${source.name}" + source.scheme.takeIf { it.isNotEmpty() }?.let { " — $it" }.orEmpty()
+        is LookSource.Default -> "Default look (Linear): ${source.reason}"
+        is LookSource.File -> "overlay-theme.xml over " + when (val under = source.underlying) {
+            is LookSource.Default -> "the default look (Linear)"
+            else -> describe(under).removePrefix("Follows ES-DE's theme: ")
         }
     }
 

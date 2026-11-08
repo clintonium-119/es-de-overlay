@@ -2,8 +2,9 @@
 
 Android app for the Retroid Pocket Nova (Android 13) that runs next to [ES-DE](https://es-de.org).
 During a game launched from ES-DE, the controller's Back button opens a menu over the game, laid
-out like the `minui-menu-es-de-custom` theme's gamelist: the game's name above the rows and its
-ES-DE screenshot where the gamelist shows it. The rows, top to bottom:
+out like a gamelist and drawn in the colours and font of the ES-DE theme in use (see
+[Look](#look)): the game's name above the rows and its ES-DE screenshot beside them. The rows, top
+to bottom:
 
 - **Resume** closes the menu and returns to the game.
 - **Guides** lists the game's guides (see [Guides](#guides)), with **Find Guides** as the last row.
@@ -217,6 +218,44 @@ To undo it, run `adb shell setprop persist.adb.tcp.port ""` and restart.
   map or manual left zoomed in reopens at the same zoom and spot, and a web or text guide at the
   same text size.
 - ES-DE shows new media when you return to the gamelist; no reload needed.
+
+## Look
+
+The menu, the guide viewer and the guide browser take their colours and font from the ES-DE
+theme in use, with the variant, colour scheme, font size and aspect ratio set in ES-DE: the
+gamelist's text list for the rows and the cursor, its game description text for guide text, its
+help prompts for the help pill, and its background. The overlay keeps its own layout and draws
+solid colours, not the theme's images. Any theme in `ES-DE/themes/` works. ES-DE's theme
+downloader installs themes in ES-DE's own app storage, which other apps can't read; the overlay
+reads them through [Shizuku](#shizuku-optional), copying a theme's XML, font and SVG files when
+a game starts after the theme changed. Without Shizuku, copy the theme's folder from
+`Android/data/org.es_de.frontend/files/themes/` into `ES-DE/themes/`, for example from a
+computer over USB, since Android keeps most file managers out of that folder; copy it again after
+the theme updates. A theme ES-DE has built in, such as Linear, is read from ES-DE's app, so its
+colour scheme and fonts follow too. If ES-DE itself can't be read, the overlay uses a default
+look in Linear's dark colours with the system font. Settings → **Look** says which of these is
+in use, and its **Text size** scales the theme's text in the menu and guides from 90 % to 200 %,
+for themes whose small text suits ES-DE's busy screens but reads small in the overlay.
+
+To change any of it, put an `overlay-theme.xml` in the ES-DE folder. It overrides only the values
+it names; the rest still follow the theme:
+
+```xml
+<overlay>
+    <background>102030</background>
+    <selectedText>FFFFFF</selectedText>
+</overlay>
+```
+
+Colours are written as ES-DE writes them, `RRGGBB` or `RRGGBBAA`. The values: `background`,
+`text`, `selectedText`, `selectedBackground` (the cursor's pill), `selectedCornerRadius` (a
+fraction of the screen width), `selector` (the cursor's bar), `selectorWidth` (a fraction of the
+screen width; left out, the bar is the row's width), `selectorCornerRadius` (a fraction of the
+row's height), `helpBackground`, `helpIcon`, `helpText`, `fontPath` (the list font, a path below
+the ES-DE folder), `fontSize` (a fraction of the screen height), `lineSpacing`, `bodyText`,
+`bodyFontPath`, `bodyFontSize` and `bodyLineSpacing` (guide text; a multiple of its size), and
+`artCornerRadius`, and `textScale` (a percentage, like the Text size setting). A value that
+doesn't parse is ignored. Changes show from the next game ES-DE starts.
 
 ## Guides
 

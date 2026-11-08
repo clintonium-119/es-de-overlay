@@ -1,0 +1,8 @@
+<theme>
+    <include>./../theme.xml</include>
+    <view name="gamelist">
+        <textlist name="gamelistTextlist">
+            <selectorWidth>0.5</selectorWidth>
+        </textlist>
+    </view>
+</theme>

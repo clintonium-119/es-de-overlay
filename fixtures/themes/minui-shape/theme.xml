@@ -1,0 +1,83 @@
+<theme>
+   <colorScheme name="
+      dark,
+      light
+      ">
+      <variables>
+         <colorSchemePath>./colors.xml</colorSchemePath>
+      </variables>
+   </colorScheme>
+   <colorScheme name="
+      custom
+      ">
+      <variables>
+         <colorSchemePath>./custom/colors.xml</colorSchemePath>
+      </variables>
+   </colorScheme>
+   <include>${colorSchemePath}</include>
+   <view name="
+      system,
+      gamelist
+      ">
+      <helpsystem name="help-menu">
+         <scope>menu</scope>
+         <textColor>CCCCCC</textColor>
+         <backgroundColor>222222</backgroundColor>
+      </helpsystem>
+      <image name="background">
+         <pos>0 0</pos>
+         <cropSize>1 1</cropSize>
+         <color>${backgroundColor}</color>
+      </image>
+      <textlist name="
+         list
+         ">
+         <fontPath>${listFont}</fontPath>
+         <fontSize>${listFontSize}</fontSize>
+         <lineSpacing>${listLineSpacing}</lineSpacing>
+         <selectorColor>00000000</selectorColor>
+         <selectedBackgroundColor>${pillColor}</selectedBackgroundColor>
+         <selectedColor>${pillTextColor}</selectedColor>
+         <primaryColor>${textColor}</primaryColor>
+         <selectedBackgroundCornerRadius>${cornerRadius}</selectedBackgroundCornerRadius>
+      </textlist>
+      <helpsystem name="help-left, help-right">
+         <fontPath>${listFont}</fontPath>
+         <textColor>${helpTextColor}</textColor>
+         <iconColor>${helpIconColor}</iconColor>
+         <backgroundColor>${helpBackgroundColor}</backgroundColor>
+      </helpsystem>
+   </view>
+   <fontSize name="x-small">
+      <variables>
+         <listFontSize>0.0333</listFontSize>
+         <listLineSpacing>2.25</listLineSpacing>
+      </variables>
+   </fontSize>
+   <fontSize name="small">
+      <variables>
+         <listFontSize>0.0417</listFontSize>
+         <listLineSpacing>2.0</listLineSpacing>
+      </variables>
+   </fontSize>
+   <fontSize name="medium">
+      <variables>
+         <listFontSize>0.05</listFontSize>
+         <listLineSpacing>1.9</listLineSpacing>
+      </variables>
+   </fontSize>
+   <variant name="list-screenshot">
+      <view name="gamelist">
+         <video name="art">
+            <imageType>screenshot</imageType>
+            <imageCornerRadius>${cornerRadius}</imageCornerRadius>
+         </video>
+      </view>
+   </variant>
+   <aspectRatio name="16:9">
+      <include>./aspect-16-9.xml</include>
+   </aspectRatio>
+   <aspectRatio name="4:3">
+      <include>./aspect-4-3.xml</include>
+   </aspectRatio>
+</theme>

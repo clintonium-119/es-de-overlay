@@ -1,0 +1,9 @@
+<themeCapabilities>
+    <themeName>Slate Shape</themeName>
+    <aspectRatio>16:9</aspectRatio>
+    <aspectRatio>16:9_vertical</aspectRatio>
+    <colorScheme name="dark"/>
+    <colorScheme name="light"/>
+    <variant name="withVideos"/>
+    <variant name="withoutVideos"/>
+</themeCapabilities>

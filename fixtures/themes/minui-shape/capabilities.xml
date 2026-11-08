@@ -1,0 +1,20 @@
+<themeCapabilities>
+   <themeName>MinUI Shape</themeName>
+   <aspectRatio>16:9</aspectRatio>
+   <aspectRatio>4:3</aspectRatio>
+   <fontSize>x-small</fontSize>
+   <fontSize>small</fontSize>
+   <fontSize>medium</fontSize>
+   <colorScheme name="dark">
+      <label>Dark</label>
+   </colorScheme>
+   <colorScheme name="light">
+      <label>Light</label>
+   </colorScheme>
+   <colorScheme name="custom">
+      <label>Custom</label>
+   </colorScheme>
+   <variant name="list-screenshot">
+      <label>List (screenshots)</label>
+   </variant>
+</themeCapabilities>

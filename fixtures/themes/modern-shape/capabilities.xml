@@ -1,0 +1,19 @@
+<themeCapabilities>
+    <themeName>Modern Shape</themeName>
+    <aspectRatio>16:9</aspectRatio>
+    <aspectRatio>4:3</aspectRatio>
+    <fontSize>medium</fontSize>
+    <fontSize>large</fontSize>
+    <colorScheme name="dark">
+        <label>Dark</label>
+    </colorScheme>
+    <colorScheme name="light">
+        <label>Light</label>
+    </colorScheme>
+    <variant name="withVideos">
+        <label>Textlist with videos</label>
+    </variant>
+    <variant name="noGameMedia">
+        <label>Textlist without game media</label>
+    </variant>
+</themeCapabilities>

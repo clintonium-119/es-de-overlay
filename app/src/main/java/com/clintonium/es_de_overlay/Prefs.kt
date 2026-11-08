@@ -32,6 +32,10 @@ class Prefs(private val context: Context) {
     var clipSeconds: Int
         get() = sp.getInt("clipSeconds", 15)
         set(v) = sp.edit { putInt("clipSeconds", v) }
+    /** The theme's text sizes in the overlay, as a percentage. */
+    var textScale: Int
+        get() = sp.getInt("textScale", 100)
+        set(v) = sp.edit { putInt("textScale", v) }
     var bootStart: Boolean
         get() = sp.getBoolean("bootStart", false)
         set(v) = sp.edit { putBoolean("bootStart", v) }

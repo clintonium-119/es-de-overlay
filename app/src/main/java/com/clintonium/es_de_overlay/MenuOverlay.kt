@@ -9,7 +9,9 @@ import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.InsetDrawable
+import android.graphics.drawable.LayerDrawable
 import android.os.SystemClock
+import android.text.Layout
 import android.text.SpannableStringBuilder
 import android.text.TextUtils
 import android.text.style.ForegroundColorSpan
@@ -27,34 +29,13 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-
-// The minui-menu-es-de-custom theme's dark-bold colors (colors.xml) and small font size (theme.xml).
-const val BACKGROUND = 0xFF000000.toInt()
-const val PILL = 0xFFF7FBF7.toInt()
-const val PILL_TEXT = 0xFF000000.toInt()
-const val TEXT = 0xFFF7FBF7.toInt()
-const val HELP_BG = 0xFF202420.toInt()
-const val HELP_ICON = 0xFFA1A2A1.toInt()
-const val HELP_TEXT = 0xFFF7FBF7.toInt()
-/** List font size and line spacing as fractions of the screen height (`listFontSize`, `listLineSpacing`). */
-const val LIST_FONT = 0.041666666666667f
-const val LIST_SPACING = 1.75f
-// ES-DE's own manual-viewer bar, which the theme doesn't style.
-const val VIEWER_BAR = 0xFF222222.toInt()
-const val VIEWER_TEXT = 0xFFAAAAAA.toInt()
-
-const val FONT = "themes/minui-menu-es-de-custom/_inc/color-schemes/_default/VAG Rounded Std Bold.otf"
-
-/** The theme's VAG Rounded font from the ES-DE folder (it isn't ours to bundle), else sans-serif. */
-fun themeFont(context: Context, prefs: Prefs): Typeface = runCatching {
-    context.contentResolver.openFileDescriptor(treeChild(prefs.esdeTree!!, FONT), "r")!!.use {
-        Typeface.Builder(it.fileDescriptor).setFallback("sans-serif").build()
-    }
-}.getOrDefault(Typeface.SANS_SERIF)
+import kotlin.math.ceil
+import com.clintonium.es_de_overlay.core.Look
 
 /**
  * How far below the middle of its line [font]'s text goes, in ems, so a capital S sits centred the way ES-DE
- * draws list rows. Centring the line itself leaves VAG Rounded's capitals high in the pill, its descent being deep.
+ * draws list rows. Centring the line itself leaves a font with a deep descent, like minUI's VAG Rounded, with its
+ * capitals high in the pill.
  */
 fun capCentring(font: Typeface): Float {
     val paint = Paint().apply { typeface = font; textSize = 1000f }
@@ -89,31 +70,32 @@ fun WindowManager.addFullScreen(view: View, format: Int, fitInsets: Int = 0) {
     view.requestFocus()
 }
 
-/** A rounded help pill: `A OPEN  B BACK`, button letters in the icon color. */
-fun helpPill(context: Context, font: Typeface, textPx: Float, vararg entries: Pair<String, String>) = TextView(context).apply {
+/** A rounded help pill in [look]'s help colours: `A OPEN  B BACK`, button letters in the icon color. */
+fun helpPill(context: Context, look: Look, font: Typeface, textPx: Float, vararg entries: Pair<String, String>) = TextView(context).apply {
     text = SpannableStringBuilder().apply {
         entries.forEachIndexed { i, (button, label) ->
             if (i > 0) append("   ")
-            append(button, ForegroundColorSpan(HELP_ICON), 0)
+            append(button, ForegroundColorSpan(look.helpIcon), 0)
             append(" ${label.uppercase()}")
         }
     }
     typeface = font
-    setTextColor(HELP_TEXT)
+    setTextColor(look.helpText)
     setTextSize(TypedValue.COMPLEX_UNIT_PX, textPx * 0.65f)
     val pad = (textPx * 0.5f).toInt()
     setPadding(pad * 2, pad, pad * 2, pad)
-    background = GradientDrawable().apply { setColor(HELP_BG); cornerRadius = textPx }
+    background = GradientDrawable().apply { setColor(look.helpBackground); cornerRadius = textPx }
 }
 
 /**
- * The theme's list for a screen [screenH] pixels tall: a row per item, the selected one in a pill with its capitals
- * centred, starting on [start]. A row too wide for the list scrolls sideways while selected.
+ * The theme's list for a [screenW] × [screenH] screen: a row per item, the selected one on [look]'s selector bar and
+ * in its pill, with its capitals centred, starting on [start]. A row too wide for the list scrolls sideways while
+ * selected.
  */
-class PillList(context: Context, font: Typeface, screenH: Int, items: List<String>, start: Int) {
-    private val textPx = screenH * LIST_FONT
-    private val rowPx = (textPx * LIST_SPACING).toInt()
-    // Measured from ES-DE's gamelist with this theme: the pill fills 6/7 of a row, text inset 0.7 em.
+class PillList(context: Context, private val look: Look, font: Typeface, private val screenW: Int, screenH: Int, items: List<String>, start: Int) {
+    private val textPx = screenH * look.fontSize
+    private val rowPx = (textPx * look.lineSpacing).toInt()
+    // Measured from ES-DE's gamelist with minUI: the pill fills 6/7 of a row, text inset 0.7 em.
     private val pillInset = rowPx / 14
     private val textInset = (textPx * 0.7f).toInt()
     private val capShift = (2 * textPx * capCentring(font)).toInt()
@@ -129,7 +111,8 @@ class PillList(context: Context, font: Typeface, screenH: Int, items: List<Strin
             isSingleLine = true
             ellipsize = TextUtils.TruncateAt.MARQUEE
             marqueeRepeatLimit = -1
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, rowPx)
+            // The list's width, which a full-row selector covers; the pill keeps to the text.
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, rowPx)
         }
     }
     val view = LinearLayout(context).apply {
@@ -151,12 +134,8 @@ class PillList(context: Context, font: Typeface, screenH: Int, items: List<Strin
         selected = i
         rows.forEachIndexed { n, row ->
             row.isSelected = false
-            row.setTextColor(if (n == i) PILL_TEXT else TEXT)
-            row.background = if (n == i) {
-                InsetDrawable(GradientDrawable().apply { setColor(PILL); cornerRadius = rowPx / 2f }, 0, pillInset, 0, pillInset)
-            } else {
-                null
-            }
+            row.setTextColor(if (n == i) look.selectedText else look.text)
+            row.background = if (n == i) selectedBackground(row) else null
             // A background with padding replaces the view's own, so set it back. Padding on top only moves
             // the centred text down by half of it.
             row.setPadding(textInset, capShift, textInset, 0)
@@ -167,7 +146,40 @@ class PillList(context: Context, font: Typeface, screenH: Int, items: List<Strin
             it.postDelayed({ it.isSelected = selected == i }, 1_000)
         }
     }
+
+    // The selector bar, the row's height and width, or a thin one at its left, rounded as the theme's selector image
+    // is, under the pill, as wide as [row]'s text and its insets, or the row when that's narrower (the text scrolls
+    // inside); either may be transparent.
+    private fun selectedBackground(row: TextView) = object : LayerDrawable(
+        arrayOf(
+            GradientDrawable().apply { setColor(look.selector); cornerRadius = look.selectorCornerRadius * rowPx },
+            InsetDrawable(
+                GradientDrawable().apply {
+                    setColor(look.selectedBackground)
+                    cornerRadius = minOf(look.selectedCornerRadius * screenW, rowPx / 2f)
+                },
+                0, pillInset, 0, pillInset,
+            ),
+        ),
+    ) {
+        private val pillWidth = ceil(Layout.getDesiredWidth(row.text, row.paint)).toInt() + 2 * textInset
+
+        override fun onBoundsChange(bounds: Rect) {
+            setLayerWidth(1, minOf(pillWidth, bounds.width()))
+            super.onBoundsChange(bounds)
+        }
+    }.apply {
+        look.thinSelector?.let {
+            setLayerWidth(0, (it * screenW).toInt().coerceAtLeast(1))
+            setLayerGravity(0, Gravity.START or Gravity.FILL_VERTICAL)
+        }
+        setLayerGravity(1, Gravity.START or Gravity.FILL_VERTICAL)
+    }
 }
+
+// ES-DE's own manual-viewer bar, which a theme doesn't style.
+const val VIEWER_BAR = 0xFF222222.toInt()
+const val VIEWER_TEXT = 0xFFAAAAAA.toInt()
 
 /** Text in ES-DE's viewer bar, sized for a bar [barH] pixels tall: its own condensed face, grey, upper case. */
 fun barText(context: Context, barH: Int, gravity: Int) = TextView(context).apply {
@@ -187,7 +199,7 @@ fun barText(context: Context, barH: Int, gravity: Int) = TextView(context).apply
  * and dropped on [close]; [release] also drops the title and screenshot, so nothing is held between opens.
  * Also owns the invisible window kept up during a capture.
  */
-class MenuOverlay(private val context: Context, private val prefs: Prefs) {
+class MenuOverlay(private val context: Context) {
     private val wm = context.getSystemService(WindowManager::class.java)
     private val screenW = wm.maximumWindowMetrics.bounds.width()
     private val screenH = wm.maximumWindowMetrics.bounds.height()
@@ -210,6 +222,8 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
     /** The game's name and screenshot, set before the menu opens; every [show] keeps them until [release]. */
     var title = ""
     var art: Bitmap? = null
+    /** The look and fonts the menu draws with, set before it opens. */
+    var theme = ThemeLook.DEFAULT
 
     val isOpen get() = root != null
 
@@ -223,11 +237,10 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
     ) {
         close()
         reshow = { show(items, onPick, onClose, alt, start) }
-        val font = themeFont(context, prefs)
-        val list = PillList(context, font, screenH, items, start)
+        val list = PillList(context, theme.look, theme.font, screenW, screenH, items, start)
         val rows = list.rows
         val help = listOfNotNull("A" to "Open", alt?.let { "X" to it.first }, "B" to "Back")
-        open(font, ScrollView(context).apply { addView(list.view) }, help) { code ->
+        open(ScrollView(context).apply { addView(list.view) }, help) { code ->
             when (code) {
                 KeyEvent.KEYCODE_DPAD_UP -> list.move(-1)
                 KeyEvent.KEYCODE_DPAD_DOWN -> list.move(1)
@@ -249,23 +262,27 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
      */
     fun info(fields: List<Pair<String, String>>, description: String?, onClose: () -> Unit) {
         close()
-        val font = themeFont(context, prefs)
-        // The theme's x-small listFontSize.
-        val textPx = screenH * 0.033333333333333f
-        val linePx = (textPx * 1.25f).toInt()
-        val textInset = (screenH * LIST_FONT * 0.7f).toInt()
+        val look = theme.look
+        // The guide text's colour and font, a size below the list's, as minUI's x-small is to its small.
+        val textPx = screenH * look.fontSize * 0.8f
+        // The theme's spacing for its game description.
+        val linePx = (textPx * look.bodyLineSpacing).toInt()
+        val textInset = (screenH * look.fontSize * 0.7f).toInt()
         fun line(text: CharSequence) = TextView(context).apply {
             this.text = text
-            typeface = font
-            setTextColor(TEXT)
+            typeface = theme.bodyFont
+            setTextColor(look.bodyText)
             setTextSize(TypedValue.COMPLEX_UNIT_PX, textPx)
-            setLineSpacing(0f, 1.25f)
+            lineHeight = linePx
+            // A one-line field gets no line spacing from lineHeight, which only spaces lines within a view.
+            minimumHeight = linePx
+            gravity = Gravity.CENTER_VERTICAL
         }
         val text = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(textInset, 0, textInset, 0)
             fields.forEach { (label, value) ->
-                addView(line(SpannableStringBuilder().append(label, ForegroundColorSpan(HELP_ICON), 0).append("  $value")))
+                addView(line(SpannableStringBuilder().append(label, ForegroundColorSpan(look.helpIcon), 0).append("  $value")))
             }
             description?.let {
                 addView(line(it), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
@@ -274,7 +291,7 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
             }
         }
         val scroll = ScrollView(context).apply { addView(text) }
-        open(font, scroll, listOf("✚" to "Scroll", "B" to "Back")) { code ->
+        open(scroll, listOf("✚" to "Scroll", "B" to "Back")) { code ->
             when (code) {
                 KeyEvent.KEYCODE_DPAD_UP -> scroll.scrollBy(0, -linePx)
                 KeyEvent.KEYCODE_DPAD_DOWN -> scroll.scrollBy(0, linePx)
@@ -290,22 +307,25 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
      * Adds the menu window: the [title] above [content] in the list column, the art box beside it and a help pill of
      * [help]. [onKey] gets each key press and returns whether it used it.
      */
-    private fun open(font: Typeface, content: ScrollView, help: List<Pair<String, String>>, onKey: (Int) -> Boolean) {
-        val textPx = screenH * LIST_FONT
+    private fun open(content: ScrollView, help: List<Pair<String, String>>, onKey: (Int) -> Boolean) {
+        val look = theme.look
+        val font = theme.font
+        val textPx = screenH * look.fontSize
         val textInset = (textPx * 0.7f).toInt()
-        // The theme's large listFontSize, in a row of the same line spacing.
-        val titlePx = screenH * 0.058333333333333f
+        // A size up from the list's, as minUI's large is to its small, in a row of the same line spacing; in the
+        // theme's text colour, which a list's own colour can dim (Linear's grey rows).
+        val titlePx = textPx * 1.4f
         val titleRow = TextView(context).apply {
             text = title
             typeface = font
-            setTextColor(TEXT)
+            setTextColor(look.bodyText)
             setTextSize(TypedValue.COMPLEX_UNIT_PX, titlePx)
             gravity = Gravity.CENTER_VERTICAL
             isSingleLine = true
             ellipsize = TextUtils.TruncateAt.MARQUEE
             marqueeRepeatLimit = -1
             setPadding(textInset, 0, textInset, 0)
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (titlePx * LIST_SPACING).toInt())
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (titlePx * look.lineSpacing).toInt())
             postDelayed({ isSelected = true }, 1_000)
         }
         content.isVerticalScrollBarEnabled = false
@@ -316,10 +336,10 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
         }
         val image = art
         val artBox = FrameLayout(context).apply {
-            // The theme's imageCornerRadius; the screenshot is clipped to this background's outline.
+            // The theme's art corner radius, else minUI's; the screenshot is clipped to this background's outline.
             background = GradientDrawable().apply {
-                cornerRadius = screenW * 0.0078125f
-                if (image == null) setStroke(2, HELP_ICON)
+                cornerRadius = screenW * (look.artCornerRadius ?: 0.0078125f)
+                if (image == null) setStroke(2, look.helpIcon)
             }
             clipToOutline = true
             if (image != null) {
@@ -331,7 +351,7 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
                     TextView(context).apply {
                         text = "No screenshot"
                         typeface = font
-                        setTextColor(HELP_ICON)
+                        setTextColor(look.helpIcon)
                         setTextSize(TypedValue.COMPLEX_UNIT_PX, textPx * 0.65f)
                     },
                     FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER),
@@ -339,7 +359,7 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
             }
         }
         val view = FrameLayout(context).apply {
-            setBackgroundColor(BACKGROUND)
+            setBackgroundColor(look.background)
             // ES-DE's gamelist margins: 5% of the width at the sides, 7% of the height above, 6% below.
             val padX = (screenW * 0.05f).toInt()
             val padTop = (screenH * 0.07f).toInt()
@@ -352,7 +372,7 @@ class MenuOverlay(private val context: Context, private val prefs: Prefs) {
                 topMargin = (screenH * 0.44166667f).toInt() - artH / 2 - padTop
             })
             addView(
-                helpPill(context, font, textPx, *help.toTypedArray()),
+                helpPill(context, look, font, textPx, *help.toTypedArray()),
                 FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END),
             )
             // Keep focus on the root so the ScrollView doesn't take the D-pad.

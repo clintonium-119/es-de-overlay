@@ -127,6 +127,8 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
     private val resolver = context.contentResolver
     private val main = Handler(Looper.getMainLooper())
     private var root: View? = null
+    /** The look and fonts of the open document's window, from [open]. */
+    private var theme = ThemeLook.DEFAULT
     private var release: () -> Unit = {}
     /** Where the open document is: its page, or its scroll position from [fraction]. Saved under [key] on close. */
     private var position: () -> Int = { 0 }
@@ -138,10 +140,11 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
 
     /**
      * Opens [uri], picking the format from [name]'s extension, at the position and zoom saved under [key] (its
-     * path below the ES-DE folder); [onClose] runs when B closes it.
+     * path below the ES-DE folder), drawn with [theme]; [onClose] runs when B closes it.
      */
-    fun open(uri: Uri, name: String, key: String, onClose: () -> Unit) {
+    fun open(uri: Uri, name: String, key: String, theme: ThemeLook.Current, onClose: () -> Unit) {
         close()
+        this.theme = theme
         try {
             build(uri, name, prefs.position(key), prefs.view(key), onClose)
             this.key = key
@@ -193,7 +196,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                     val under = layer()
                     val image = layer()
                     val frame = FrameLayout(context).apply {
-                        setBackgroundColor(Color.BLACK)
+                        setBackgroundColor(theme.look.background)
                         // Taps stop here rather than reaching the guide underneath.
                         isClickable = true
                         addView(under)
@@ -300,7 +303,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
             }
         }
         val view = FrameLayout(context).apply {
-            setBackgroundColor(Color.BLACK)
+            setBackgroundColor(theme.look.background)
             addView(content, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, viewH, Gravity.TOP))
             addView(
                 FrameLayout(context).apply {
@@ -531,22 +534,28 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         }
         /** Lists the pages by name over the page, the current one picked, like a guide's contents. */
         fun openList() {
-            val font = themeFont(context, prefs)
-            val textPx = screenH * LIST_FONT
-            val l = PillList(context, font, screenH, doc.names, page)
+            val look = theme.look
+            val textPx = screenH * look.fontSize
+            val l = PillList(context, look, theme.font, screenW, screenH, doc.names, page)
             val v = ScrollView(context).apply {
                 isVerticalScrollBarEnabled = false
-                setBackgroundColor(BACKGROUND)
+                setBackgroundColor(look.background)
                 addView(LinearLayout(context).apply {
                     orientation = LinearLayout.VERTICAL
                     setPadding(screenW / 40, barH / 2, screenW / 40, barH / 2)
-                    addView(TextView(context).apply {
-                        text = "Maps"
-                        typeface = font
-                        setTextColor(TEXT)
-                        setTextSize(TypedValue.COMPLEX_UNIT_PX, textPx * 1.4f)
-                        setPadding((textPx * 0.7f).toInt(), 0, 0, 0)
-                    })
+                    // A row of its own, as the menu's title: its size times the list's line spacing.
+                    addView(
+                        TextView(context).apply {
+                            text = "Maps"
+                            typeface = theme.font
+                            setTextColor(look.bodyText)
+                            setTextSize(TypedValue.COMPLEX_UNIT_PX, textPx * 1.4f)
+                            gravity = Gravity.CENTER_VERTICAL
+                            includeFontPadding = false
+                            setPadding((textPx * 0.7f).toInt(), 0, 0, 0)
+                        },
+                        LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (textPx * 1.4f * look.lineSpacing).toInt()),
+                    )
                     addView(l.view)
                 })
             }
@@ -657,7 +666,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
             // The text zoom L1/R1 left it at, set before the page lays out so the scroll position lands.
             savedView?.firstOrNull()?.let { textZoom = it.toInt().coerceIn(50, 200) }
         }
-        web.setBackgroundColor(BACKGROUND)
+        web.setBackgroundColor(theme.look.background)
         web.isVerticalScrollBarEnabled = false
         val refresh = Runnable { web.evaluateJavascript("(function(){$SECTIONS $PICTURES return n+' '+s.length+' '+p})()", refreshed) }
         web.setOnScrollChangeListener { _, _, _, _, _ ->
@@ -671,8 +680,9 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                     when (url.path) {
                         "/guide.html" -> return WebResourceResponse("text/html", "utf-8", page())
                         "/guide.css" -> return WebResourceResponse("text/css", "utf-8", ByteArrayInputStream(css))
-                        "/font.otf" -> prefs.esdeTree?.let { runCatching { resolver.openInputStream(treeChild(it, FONT)) }.getOrNull() }
-                            ?.let { return WebResourceResponse("font/otf", null, it) }
+                        // The theme's list and guide text fonts; none (a 404) leaves the CSS to fall through to sans-serif.
+                        "/font.otf" -> font(theme.look.fontPath)?.let { return WebResourceResponse("font/otf", null, it) }
+                        "/body-font.otf" -> font(theme.look.bodyFontPath)?.let { return WebResourceResponse("font/otf", null, it) }
                     }
                 }
                 if (refused.add(url.toString())) Log.w(TAG, "viewer: refused $url")
@@ -722,36 +732,69 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         return web
     }
 
-    /** The theme's colours and font for saved guides; `<pre>` fits 80 columns like the text viewer at 100 %. */
+    // A font of the look's, from wherever its theme was read, or null.
+    private fun font(path: String?) = path?.let { runCatching { theme.open(it) }.getOrNull() }
+
+    /**
+     * The theme's colours and fonts for saved guides: the guide text's for the text, the list's for the contents;
+     * `<pre>` fits 80 columns like the text viewer at 100 %.
+     */
     private fun css(): String {
+        val look = theme.look
         val density = context.resources.displayMetrics.density
         fun px(device: Float) = "%.2fpx".format(Locale.ROOT, device / density)
-        fun color(c: Int) = "#%06X".format(c and 0xFFFFFF)
+        fun color(c: Int) = "#%06X%02X".format(c and 0xFFFFFF, c ushr 24)
         val mono = Paint().apply { typeface = Typeface.MONOSPACE; textSize = 100f }.measureText("M".repeat(80))
         // The pill's padding moves its text down by this, keeping the pill's size, to centre the capitals.
-        val shift = capCentring(themeFont(context, prefs))
+        val shift = capCentring(theme.font)
         fun em(v: Float) = "%.3fem".format(Locale.ROOT, v)
+        // The contents' rows as the menu's: the list's font size times its line spacing, the pill or bar 6/7 of a row.
+        val rowPx = screenH * look.fontSize * look.lineSpacing
+        val pillPx = rowPx * 6 / 7
+        // The contents' current entry: the theme's pill, else its selector, a bar at the left when it has a width.
+        val selected = when {
+            look.selectedBackground ushr 24 != 0 -> "background: ${color(look.selectedBackground)};"
+            look.thinSelector != null -> "box-shadow: inset ${px(look.thinSelector!! * screenW)} 0 ${color(look.selector)};"
+            // A row-wide selector spans the theme's selector width, else the menu's list width, and a longer entry.
+            else -> "background: ${color(look.selector)}; min-width: ${px((look.selectorWidth ?: 0.4f) * screenW)};"
+        } + when {
+            look.selectedBackground ushr 24 == 0 && look.selectorCornerRadius > 0f -> " border-radius: ${px(look.selectorCornerRadius * pillPx)};"
+            else -> ""
+        }
         return """
             @font-face { font-family: theme; src: url(font.otf); }
-            body { background: ${color(BACKGROUND)}; color: ${color(TEXT)}; font-family: theme, sans-serif;
-                font-size: ${px(screenH * LIST_FONT)}; margin: 0;
+            @font-face { font-family: body; src: url(body-font.otf); }
+            body { background: ${color(look.background)}; color: ${color(look.bodyText)}; font-family: body, theme, sans-serif;
+                font-size: ${px(screenH * look.bodyFontSize)}; line-height: ${"%.3f".format(Locale.ROOT, look.bodyLineSpacing)}; margin: 0;
                 padding: ${px(barH / 2f)} ${px(screenW / 40f)} ${px(viewH / 2f)}; }
-            a { color: ${color(TEXT)}; }
+            a { color: ${color(look.bodyText)}; }
             img { max-width: 100%; height: auto; }
             figure { margin-left: 0; margin-right: 0; }
-            /* Long lines run off the right edge rather than wrap or scroll alone, so the whole page pans to them. */
-            pre { font-family: monospace; font-size: ${px(100f * screenW * 0.95f / mono)}; }
+            /* Long lines run off the right edge rather than wrap or scroll alone, so the whole page pans to them.
+               The font's own spacing, so text drawings line up across lines. */
+            pre { font-family: monospace; font-size: ${px(100f * screenW * 0.95f / mono)}; line-height: normal; }
+            /* A text guide's text is its fixed-width blocks: its title and headings are sized from them, not from the
+               theme's prose size, which they'd otherwise dwarf. */
+            body:has(section > pre):not(:has(section > :not(h2, pre))) { font-size: ${px(100f * screenW * 0.95f / mono)}; }
+            body:has(section > pre):not(:has(section > :not(h2, pre))) h1 { font-size: 1.5em; }
+            body:has(section > pre):not(:has(section > :not(h2, pre))) h2 { font-size: 1.25em; }
             /* A text guide's sections, which carry their own headings, read on as one text. */
             section > pre:only-child { margin: 0; }
             #contents { display: none; }
             #contents.open { display: block; position: fixed; inset: 0; z-index: 9; overflow-y: auto;
-                background: ${color(BACKGROUND)}; padding: ${px(barH / 2f)} ${px(screenW / 40f)}; }
-            #contents.open::before { content: "Contents"; display: block; font-size: 1.4em; padding-left: 0.5em; }
+                background: ${color(look.background)}; padding: ${px(barH / 2f)} ${px(screenW / 40f)};
+                font-family: theme, sans-serif; font-size: ${px(screenH * look.fontSize)}; color: ${color(look.text)};
+                line-height: normal; }
+            /* A row of its own, as the menu's title: its size times the list's line spacing. */
+            #contents.open::before { content: "Contents"; display: block; font-size: 1.4em; padding-left: 0.5em;
+                line-height: ${"%.3f".format(Locale.ROOT, look.lineSpacing)}; color: ${color(look.bodyText)}; }
             #contents ol { list-style: none; padding: 0; margin: 0; }
-            #contents a { display: inline-block; color: ${color(TEXT)}; border-radius: 1em;
-                padding: ${em(0.1f + shift)} 0.7em ${em(0.1f - shift)};
-                margin: 0.15em 0; text-decoration: none; }
-            #contents .on a { background: ${color(PILL)}; color: ${color(PILL_TEXT)}; }
+            /* The top padding moves the line down by half of it, centring the capitals in the pill as the menu does. */
+            #contents a { display: block; width: fit-content; box-sizing: border-box; height: ${px(pillPx)};
+                margin: ${px(rowPx / 14)} 0; padding: ${em(2 * shift)} 0.7em 0; line-height: calc(${px(pillPx)} - ${em(2 * shift)});
+                white-space: nowrap; color: ${color(look.text)}; text-decoration: none;
+                border-radius: min(${px(look.selectedCornerRadius * screenW)}, ${px(pillPx / 2)}); }
+            #contents .on a { $selected color: ${color(look.selectedText)}; }
             footer { color: ${color(VIEWER_TEXT)}; font-size: 0.7em; margin-top: 2em; }
         """.trimIndent()
     }

@@ -1,0 +1,8 @@
+<theme>
+    <colorScheme name="dark">
+        <variables>
+            <backgroundColor>183018</backgroundColor>
+            <bandColor>8BAC0F</bandColor>
+        </variables>
+    </colorScheme>
+</theme>

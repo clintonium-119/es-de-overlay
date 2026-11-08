@@ -1,0 +1,20 @@
+<theme>
+    <colorScheme name="dark">
+        <variables>
+            <backgroundColor>363636</backgroundColor>
+            <helpPanelColor>010101</helpPanelColor>
+            <primaryColor>F9F9F9</primaryColor>
+            <selectorColor>FEFEFE</selectorColor>
+            <listColor>787878</listColor>
+        </variables>
+    </colorScheme>
+    <colorScheme name="light">
+        <variables>
+            <backgroundColor>848484</backgroundColor>
+            <helpPanelColor>020202</helpPanelColor>
+            <primaryColor>FEFEFE</primaryColor>
+            <selectorColor>FEFEFE</selectorColor>
+            <listColor>555555</listColor>
+        </variables>
+    </colorScheme>
+</theme>

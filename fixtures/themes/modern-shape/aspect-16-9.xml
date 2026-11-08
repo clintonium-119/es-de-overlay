@@ -1,0 +1,7 @@
+<theme>
+    <view name="gamelist">
+        <textlist name="gamelistTextlist">
+            <lineSpacing>1.5</lineSpacing>
+        </textlist>
+    </view>
+</theme>

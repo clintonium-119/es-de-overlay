@@ -1,0 +1,13 @@
+<theme>
+   <variables>
+      <cornerRadius>0.01</cornerRadius>
+      <listFont>./custom/fonts/own.ttf</listFont>
+      <backgroundColor>102030</backgroundColor>
+      <textColor>E0E0C0</textColor>
+      <pillColor>E0E0C0CC</pillColor>
+      <pillTextColor>102030</pillTextColor>
+      <helpTextColor>E0E0C0</helpTextColor>
+      <helpIconColor>8090A0</helpIconColor>
+      <helpBackgroundColor>203040</helpBackgroundColor>
+   </variables>
+</theme>

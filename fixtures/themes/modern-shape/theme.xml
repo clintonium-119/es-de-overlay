@@ -1,0 +1,61 @@
+<theme>
+    <include>./colors.xml</include>
+    <variables>
+        <mainFont>./fonts/modern.otf</mainFont>
+    </variables>
+    <fontSize name="medium">
+        <variables>
+            <gamelistFontSize>0.036</gamelistFontSize>
+            <descriptionFontSize>0.03</descriptionFontSize>
+        </variables>
+    </fontSize>
+    <fontSize name="large">
+        <variables>
+            <gamelistFontSize>0.042</gamelistFontSize>
+            <descriptionFontSize>0.036</descriptionFontSize>
+        </variables>
+    </fontSize>
+    <variant name="all">
+        <aspectRatio name="16:9">
+            <include>./aspect-16-9.xml</include>
+        </aspectRatio>
+        <aspectRatio name="4:3">
+            <include>./aspect-4-3.xml</include>
+        </aspectRatio>
+    </variant>
+    <variant name="all">
+        <view name="system, gamelist">
+            <image name="background">
+                <pos>0 0</pos>
+                <size>1 1</size>
+                <color>${backgroundColor}</color>
+                <zIndex>0</zIndex>
+            </image>
+        </view>
+        <view name="gamelist">
+            <textlist name="gamelistTextlist">
+                <selectorColor>${mainColor}</selectorColor>
+                <selectedColor>${backgroundColor}</selectedColor>
+                <primaryColor>${secondaryColor}</primaryColor>
+                <fontPath>${mainFont}</fontPath>
+                <fontSize>${gamelistFontSize}</fontSize>
+            </textlist>
+            <text name="description">
+                <metadata>description</metadata>
+                <fontSize>${descriptionFontSize}</fontSize>
+                <color>${secondaryColor}</color>
+            </text>
+            <image name="art">
+                <imageType>miximage</imageType>
+                <cornerRadius>0.01</cornerRadius>
+            </image>
+        </view>
+    </variant>
+    <variant name="noGameMedia">
+        <view name="gamelist">
+            <textlist name="gamelistTextlist">
+                <selectorColor>00000000</selectorColor>
+            </textlist>
+        </view>
+    </variant>
+</theme>

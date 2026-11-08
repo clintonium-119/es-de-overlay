@@ -1,0 +1,8 @@
+<theme>
+    <view name="gamelist">
+        <textlist name="gamelistTextlist">
+            <pos>0.03 0.2</pos>
+            <size>0.38 0.7</size>
+        </textlist>
+    </view>
+</theme>

@@ -1,0 +1,24 @@
+<theme>
+    <colorScheme name="dark">
+        <variables>
+            <backgroundColor>202428</backgroundColor>
+            <bandColor>808080</bandColor>
+            <frameColor>707070</frameColor>
+            <selectorColor>3A4048</selectorColor>
+            <selectedColor>FFFFFF</selectedColor>
+            <primaryColor>D0D4D8</primaryColor>
+            <secondaryColor>90989F</secondaryColor>
+        </variables>
+    </colorScheme>
+    <colorScheme name="light">
+        <variables>
+            <backgroundColor>F4F6F8</backgroundColor>
+            <bandColor>808080</bandColor>
+            <frameColor>A0A0A0</frameColor>
+            <selectorColor>C8D0D8</selectorColor>
+            <selectedColor>000000</selectedColor>
+            <primaryColor>303438</primaryColor>
+            <secondaryColor>687078</secondaryColor>
+        </variables>
+    </colorScheme>
+</theme>

@@ -1,0 +1,16 @@
+<theme>
+    <colorScheme name="dark">
+        <variables>
+            <backgroundColor>1A1A1A</backgroundColor>
+            <mainColor>E8E8E8</mainColor>
+            <secondaryColor>A8A8A8</secondaryColor>
+        </variables>
+    </colorScheme>
+    <colorScheme name="light">
+        <variables>
+            <backgroundColor>EFEFEF</backgroundColor>
+            <mainColor>202020</mainColor>
+            <secondaryColor>606060</secondaryColor>
+        </variables>
+    </colorScheme>
+</theme>

@@ -18,6 +18,7 @@ class ViewerService : Service() {
     private lateinit var prefs: Prefs
     private lateinit var viewer: ViewerOverlay
     private lateinit var browser: BrowserOverlay
+    private lateinit var themeLook: ThemeLook
 
     override fun onBind(intent: Intent?) = null
 
@@ -27,6 +28,7 @@ class ViewerService : Service() {
         prefs = Prefs(this)
         viewer = ViewerOverlay(windows, prefs)
         browser = BrowserOverlay(windows, prefs)
+        themeLook = ThemeLook(windows, prefs)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -37,8 +39,10 @@ class ViewerService : Service() {
         val name = intent?.getStringExtra(EXTRA_NAME)
         val key = intent?.getStringExtra(EXTRA_KEY)
         when {
-            url != null && system != null && rom != null -> show(url) { browser.open(url, GameRef(system, rom), ::showSaved) { stopSelf() } }
-            uri != null && name != null && key != null -> show(name) { viewer.open(uri, name, key) { stopSelf() } }
+            url != null && system != null && rom != null -> show(url) {
+                browser.open(url, GameRef(system, rom), theme(system).look, ::showSaved) { stopSelf() }
+            }
+            uri != null && name != null && key != null -> show(name) { viewer.open(uri, name, key, theme(systemOf(key))) { stopSelf() } }
             else -> stopSelf()
         }
         return START_NOT_STICKY
@@ -52,12 +56,20 @@ class ViewerService : Service() {
         browser.close()
         val name = path.substringAfterLast('/')
         show(name) {
-            viewer.open(treeChild(prefs.esdeTree!!, path), name, path) {
+            viewer.open(treeChild(prefs.esdeTree!!, path), name, path, theme(systemOf(path))) {
                 startService(Intent(this, HelperService::class.java).setAction(HelperService.ACTION_GUIDE_SAVED))
                 stopSelf()
             }
         }
     }
+
+    // The look for a game of [system], before its window is up; the default if the theme can't be read.
+    private fun theme(system: String) = runCatching { themeLook.current(system, prefs.mediaType) }
+        .onFailure { Log.w(TAG, "reading the theme failed", it) }
+        .getOrDefault(ThemeLook.DEFAULT)
+
+    // A manual's or guide's system, from its path below the ES-DE folder: downloaded_media/<system>/….
+    private fun systemOf(key: String) = key.removePrefix("downloaded_media/").substringBefore('/')
 
     /** Runs [open] for [name]; if it fails, says so in the menu underneath (a toast would draw below it) and ends the service. */
     private fun show(name: String, open: () -> Unit) {

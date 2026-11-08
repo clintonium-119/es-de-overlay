@@ -21,6 +21,7 @@ import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.DocumentsContract
 import android.util.Log
 import android.view.Display
@@ -144,6 +145,7 @@ class HelperService : Service() {
     private val io = Executors.newSingleThreadScheduledExecutor()
     private lateinit var prefs: Prefs
     private lateinit var menu: MenuOverlay
+    private lateinit var themeLook: ThemeLook
     private lateinit var screenshots: ScreenshotObserver
     private lateinit var windowContext: Context
     private var projection: MediaProjection? = null
@@ -174,7 +176,8 @@ class HelperService : Service() {
         instance = this
         prefs = Prefs(this)
         windowContext = overlayContext(this)
-        menu = MenuOverlay(windowContext, prefs)
+        menu = MenuOverlay(windowContext)
+        themeLook = ThemeLook(windowContext, prefs)
         screenshots = ScreenshotObserver(this, main, ::onScreenshot)
         if (checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED) screenshots.register()
         io.scheduleWithFixedDelay({
@@ -297,11 +300,18 @@ class HelperService : Service() {
         // ES-DE's name for the game, which Find Guides looks up.
         val name = launch?.name ?: return
         val token = Any().also { opening = it }
+        val started = SystemClock.uptimeMillis()
         io.execute {
             val (manual, guides, info) = runCatching { documents(g) }
                 .onFailure { Log.w(TAG, "looking up manual and guides failed", it) }
                 .getOrDefault(Triple(null, emptyList(), null))
             val art = runCatching { screenshot(g) }.getOrNull()
+            // The look read when ES-DE launched the game: its theme only changes in ES-DE, before a launch, and reading
+            // it here would add to the menu's opening.
+            val theme = themeLook.warmed?.also { Log.i(TAG, "look: kept from the launch") }
+                ?: runCatching { themeLook.current(g.system, prefs.mediaType) }
+                    .onFailure { Log.w(TAG, "reading the theme failed", it) }
+                    .getOrDefault(ThemeLook.DEFAULT)
             val inFront = gameInFront() == g
             main.post {
                 // The game may have been left, or Back pressed again, while the lookup ran.
@@ -312,7 +322,9 @@ class HelperService : Service() {
                 opening = null
                 menu.title = name
                 menu.art = art
+                menu.theme = theme
                 openMenu(g, name, manual, guides, info)
+                Log.i(TAG, "menu: open in ${SystemClock.uptimeMillis() - started} ms")
             }
         }
     }
@@ -651,6 +663,10 @@ class HelperService : Service() {
             launch = latest
             game = resolve(latest)
             Log.i(TAG, "launch: ${latest.name} (${latest.system}) pkg=${latest.pkg} -> $game")
+            // Copies a downloaded theme and reads the look now, so the menu doesn't when Back opens it.
+            game?.let { g ->
+                runCatching { themeLook.warm(g.system, prefs.mediaType) }.onFailure { Log.w(TAG, "warming the look failed", it) }
+            }
         }
     }
 

@@ -1,0 +1,69 @@
+<theme>
+    <include>./colors.xml</include>
+    <include>./system/${system.theme}.xml</include>
+    <variables>
+        <primaryFont>./fonts/light.ttf</primaryFont>
+        <secondaryFont>./fonts/regular.ttf</secondaryFont>
+    </variables>
+    <fontSize name="medium">
+        <variables>
+            <textlistFontSize>0.035</textlistFontSize>
+            <descriptionFontSize>0.032</descriptionFontSize>
+        </variables>
+    </fontSize>
+    <fontSize name="large">
+        <variables>
+            <textlistFontSize>0.041</textlistFontSize>
+            <descriptionFontSize>0.038</descriptionFontSize>
+        </variables>
+    </fontSize>
+    <variant name="all">
+        <view name="system, gamelist">
+            <image name="background">
+                <pos>0 0</pos>
+                <size>1 1</size>
+                <color>${backgroundColor}</color>
+                <zIndex>0</zIndex>
+            </image>
+            <image name="helpPanel">
+                <pos>0 0.94</pos>
+                <size>1 0.06</size>
+                <color>${helpPanelColor}</color>
+            </image>
+            <helpsystem name="help">
+                <pos>0.5 0.97</pos>
+                <origin>0.5 1</origin>
+                <textColor>${primaryColor}</textColor>
+                <iconColor>${primaryColor}</iconColor>
+                <fontPath>${primaryFont}</fontPath>
+            </helpsystem>
+        </view>
+    </variant>
+    <variant name="textlist">
+        <view name="gamelist">
+            <textlist name="gamelistTextlist">
+                <selectorWidth>0.003</selectorWidth>
+                <selectorColor>${selectorColor}</selectorColor>
+                <selectedColor>${selectorColor}</selectedColor>
+                <primaryColor>${listColor}</primaryColor>
+                <fontPath>${secondaryFont}</fontPath>
+                <fontSize>${textlistFontSize}</fontSize>
+                <lineSpacing>1.498</lineSpacing>
+            </textlist>
+            <text name="description">
+                <metadata>description</metadata>
+                <fontPath>${primaryFont}</fontPath>
+                <fontSize>${descriptionFontSize}</fontSize>
+                <color>${primaryColor}</color>
+            </text>
+        </view>
+    </variant>
+    <variant name="carousel">
+        <view name="gamelist">
+            <text name="description">
+                <metadata>description</metadata>
+                <color>FF0000</color>
+            </text>
+        </view>
+    </variant>
+</theme>

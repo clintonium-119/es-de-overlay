@@ -1,0 +1,29 @@
+<theme>
+   <variables>
+      <cornerRadius>0.025</cornerRadius>
+   </variables>
+   <colorScheme name="dark">
+      <variables>
+         <listFont>./fonts/rounded-bold.otf</listFont>
+         <backgroundColor>000000</backgroundColor>
+         <textColor>F0F0F0</textColor>
+         <pillColor>F0F0F0</pillColor>
+         <pillTextColor>000000</pillTextColor>
+         <helpTextColor>F0F0F0</helpTextColor>
+         <helpIconColor>A0A0A0</helpIconColor>
+         <helpBackgroundColor>202020</helpBackgroundColor>
+      </variables>
+   </colorScheme>
+   <colorScheme name="light">
+      <variables>
+         <listFont>./fonts/rounded-bold.otf</listFont>
+         <backgroundColor>FFFFFF</backgroundColor>
+         <textColor>101010</textColor>
+         <pillColor>101010</pillColor>
+         <pillTextColor>FFFFFF</pillTextColor>
+         <helpTextColor>101010</helpTextColor>
+         <helpIconColor>606060</helpIconColor>
+         <helpBackgroundColor>E0E0E0</helpBackgroundColor>
+      </variables>
+   </colorScheme>
+</theme>
