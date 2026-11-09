@@ -8,7 +8,7 @@ title: "Integration Map"
 status: in_progress
 owner: ""
 created: '2026-10-28'
-updated: '2026-10-28'
+updated: '2026-11-06'
 reviewed_on: ""
 related_notes: []
 tags: [apovault, knowledge, architecture]
@@ -43,3 +43,4 @@ See `System_Overview.md` § High-Level Architecture. Full flow: `PLAN.md:115-134
 > - [ ] Whether MediaProjection consent is reusable on the Nova build
 >
 > Look at: `docs/VERIFIED.md` after Phase 0.
+- **ES-DE theme source files:** ES-DE stores the active theme in `ES-DE/settings/es_settings.xml` as string keys `Theme` (default `linear-es-de`), `ThemeVariant`, `ThemeColorScheme`, `ThemeFontSize`, `ThemeAspectRatio` (default `automatic`); on Android only the Linear theme ships inside ES-DE's own APK (unreadable to other apps), while every other theme (Modern, Slate, and all downloader themes) is installed under `ES-DE/themes/<reponame>/` as a root `theme.xml` plus mandatory `capabilities.xml`, readable through the app's SAF tree — treat anything there as third-party content requiring hardened XML parsing. **Source:** ES-DE `es-core/src/Settings.cpp` `setDefaults()`, `THEMES.md`, `USERGUIDE.md` (read 2026-11-06).
