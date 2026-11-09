@@ -18,3 +18,9 @@ local.properties
 .idea/
 *.iml
 .kotlin/
+
+# Signing keys and their passwords stay out of git; a release build reads them from the environment.
+*.jks
+*.keystore
+*.p12
+keystore.properties

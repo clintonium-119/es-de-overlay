@@ -15,6 +15,7 @@ import android.view.ViewGroup
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.webkit.RenderProcessGoneDetail
+import android.webkit.WebResourceRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -29,8 +30,11 @@ import com.clintonium.es_de_overlay.core.LINEAR
 import com.clintonium.es_de_overlay.core.Look
 import com.clintonium.es_de_overlay.core.escapeHtml
 import com.clintonium.es_de_overlay.core.guideFileName
+import com.clintonium.es_de_overlay.core.guidePageList
+import com.clintonium.es_de_overlay.core.guideText
 import com.clintonium.es_de_overlay.core.isBotCheck
 import com.clintonium.es_de_overlay.core.isGuidePage
+import com.clintonium.es_de_overlay.core.onSameSite
 import com.clintonium.es_de_overlay.core.siteOf
 import com.clintonium.es_de_overlay.core.textSections
 import com.clintonium.es_de_overlay.core.writeHtmlGuide
@@ -54,6 +58,9 @@ private const val PAGE_GAP_MS = 2_000L
 
 /** The most pages a save follows Next links to. */
 private const val MAX_NEXT_PAGES = 50
+
+/** The most characters read back from a page at once: a 50 MB image in base64. */
+private const val MAX_READ = 70 shl 20
 
 /**
  * The guide on the browser's page: [text] for a text guide, else [html], whose image sources are `img:0` to
@@ -114,6 +121,7 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
      * Opens [url] in [look]'s colours. A saved guide of [game]'s goes to [onSaved] as its path below the ES-DE folder;
      * [onClose] runs when Back runs out of history, Close is tapped or the page's renderer dies.
      */
+    // The guide sites and their bot checks need JavaScript; pages get no bridge into the app and no files.
     @SuppressLint("SetJavaScriptEnabled")
     fun open(url: String, game: GameRef, look: Look, onSaved: (String) -> Unit, onClose: () -> Unit) {
         close()
@@ -125,8 +133,15 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
         // For inspecting the sites' markup from a desktop Chrome.
         if (BuildConfig.DEBUG) WebView.setWebContentsDebuggingEnabled(true)
         val web = WebView(context)
-        web.settings.javaScriptEnabled = true
-        web.settings.domStorageEnabled = true
+        web.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            // The web only, also for the URLs a page hands a save: no files, no content providers.
+            allowFileAccess = false
+            allowContentAccess = false
+            // Search finds any site, so Android's phishing and malware checks stay on; they look pages up with Google.
+            safeBrowsingEnabled = true
+        }
         val title = barText(context, barH, Gravity.CENTER)
         fun button(label: String, onTap: () -> Unit) = barText(context, barH, Gravity.CENTER).apply {
             text = label
@@ -141,11 +156,14 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
                 saving -> cancelled = true
                 picked != null -> startSave(game, title, save, picked(), onSaved)
                 else -> web.evaluateJavascript("$script;esdeGuide.describe()") { json ->
+                    val here = web.url.orEmpty()
                     val d = runCatching { JSONObject(json) }.getOrNull()
                     val list = d?.optJSONArray("pages")
-                    val pages = list?.let(::pageList).orEmpty()
-                    val unticked = list?.let { l -> (0 until l.length()).filter { l.getJSONObject(it).optBoolean("skip") }.toSet() }.orEmpty()
-                    val next = d?.optString("next")?.takeIf { d.optBoolean("generic") && !d.isNull("next") }
+                    val pages = list?.let { pageList(here, it) }.orEmpty()
+                    val skipped = list?.let { l -> (0 until l.length()).mapNotNull(l::optJSONObject).filter { it.optBoolean("skip") } }
+                        .orEmpty().map { it.optString("url") }.toSet()
+                    val unticked = pages.indices.filter { pages[it].first in skipped }.toSet()
+                    val next = d?.optString("next")?.takeIf { d.optBoolean("generic") && !d.isNull("next") && onSameSite(here, it) }
                     if (saving || picking != null || this.web == null) return@evaluateJavascript
                     if (d?.optBoolean("generic") == true && (pages.size > 1 || next != null)) {
                         pick(view, web, title, pages, unticked, next != null)
@@ -156,6 +174,10 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
             }
         }.apply { visibility = View.GONE }
         web.webViewClient = object : WebViewClient() {
+            // Web pages only: intent:, file:, content: and javascript: links do nothing.
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) =
+                request.url.scheme !in setOf("https", "about")
+
             override fun onPageFinished(view: WebView, url: String) {
                 finished.offer(url)
                 if (saving || picking != null) return
@@ -361,24 +383,27 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
      * Reader View wouldn't offer it.
      */
     fun extract(picked: List<Pair<String, String>>? = null, force: Boolean = false): PageGuide? {
-        if (!isGuidePage(string(eval("location.href")))) return null
+        val here = string(eval("location.href"))
+        if (!isGuidePage(here)) return null
         eval(script)
+        // What the page reports is data from the page, which may not be the script's: bounded before use.
         val d = JSONObject(eval("esdeGuide.describe($force)"))
         val kind = d.getString("kind")
         if (kind == "none") return null
-        val list = d.getJSONArray("pages")
-        val pages = pageList(list)
+        val pages = pageList(here, d.getJSONArray("pages"))
         val generic = d.optBoolean("generic")
-        val next = if (d.isNull("next")) null else d.optString("next")
-        val title = d.getString("title")
-        val author = d.getString("author")
+        val next = if (d.isNull("next")) null else d.optString("next").takeIf { onSameSite(here, it) }
+        val title = guideText(d.optString("title"))
+        val author = guideText(d.optString("author"))
         if (kind == "text") return PageGuide(kind, title, author, pages, read(eval("esdeGuide.text()").toInt()), null, 0, generic, next)
-        val links = picked?.let { p -> JSONArray(p.map { (url, name) -> JSONObject().put("url", url).put("title", name) }) } ?: list
+        val links = JSONArray((picked ?: pages).map { (url, name) -> JSONObject().put("url", url).put("title", name) })
         val html = JSONObject(eval("esdeGuide.html($links)"))
         return PageGuide(kind, title, author, pages, null, read(html.getInt("length")), html.getInt("images"), generic, next)
     }
 
-    private fun pageList(list: JSONArray) = (0 until list.length()).map { list.getJSONObject(it).run { getString("url") to getString("title") } }
+    /** The pages a page at [here] listed in [list], bounded by [guidePageList]. */
+    private fun pageList(here: String, list: JSONArray) =
+        guidePageList(here, (0 until list.length()).mapNotNull(list::optJSONObject).map { it.optString("url") to it.optString("title") })
 
     /**
      * Worker thread: image [n] of the HTML [extract] read last, from inside the page, else from one plain request
@@ -413,9 +438,12 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
 
     private fun string(json: String) = JSONArray("[$json]").getString(0)
 
-    /** Worker thread: the [length] characters the page keeps for `part()`. */
-    private fun read(length: Int) = buildString(length) {
-        for (i in 0 until (length + CHUNK - 1) / CHUNK) append(string(eval("esdeGuide.part($i)")))
+    /** Worker thread: the [length] characters the page keeps for `part()`; the page says how many. */
+    private fun read(length: Int): String {
+        if (length !in 0..MAX_READ) throw IOException("the page offered $length characters")
+        return buildString(length) {
+            for (i in 0 until (length + CHUNK - 1) / CHUNK) append(string(eval("esdeGuide.part($i)")))
+        }
     }
 
     fun close() {

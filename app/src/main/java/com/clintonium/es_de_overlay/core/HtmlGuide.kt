@@ -136,6 +136,60 @@ fun unescapeHtml(text: String): String = ENTITY.replaceEach(text) { m ->
 private val ENTITY = Regex("&(#[xX]?[0-9a-fA-F]+|[a-zA-Z]+);")
 private val NAMED_ENTITIES = mapOf("amp" to "&", "lt" to "<", "gt" to ">", "quot" to "\"", "apos" to "'", "nbsp" to " ")
 
+/**
+ * [html] with nothing in it that runs or loads by itself: comments, scripts, styles, frames, objects, forms, `<base>`,
+ * `<meta>`, `<link>`, SVG and MathML, and elements whose text isn't read as tags, dropped; `on*` handlers and
+ * `srcdoc` dropped; a URL attribute kept only for http(s), mailto, `img:` keys, `data:image/` and relative URLs.
+ * Anything that doesn't read as a whole tag has its `<` escaped, so the result holds no tag that wasn't checked.
+ * The guide builders already clean what they save; this keeps a saved guide script-free whatever a page handed back.
+ */
+fun safeHtml(html: String): String = MARKUP.replaceEach(html) { m ->
+    val name = m.group(3)?.lowercase() ?: return@replaceEach if (m.group().startsWith("<!--") || m.group(1) != null) "" else "&lt;"
+    if (name in DROPPED_TAGS) return@replaceEach ""
+    buildString {
+        append('<').append(m.group(2)).append(m.group(3))
+        if (m.group(2).isEmpty()) {
+            for (a in ATTR.scan(m.group(4))) {
+                val attr = a.group(1).lowercase()
+                val value = a.group(2)?.let { if (it[0] == '"' || it[0] == '\'') it.substring(1, it.length - 1) else it }
+                if (attr.startsWith("on") || attr == "srcdoc" || attr in URL_ATTRS && value != null && !SAFE_URL.containsMatchIn(urlAsRead(value))) continue
+                append(' ').append(a.group(1))
+                if (value != null) append("=\"").append(value.replace("\"", "&quot;")).append('"')
+            }
+        }
+        append(if (m.group().endsWith("/>")) " />" else ">")
+    }
+}
+
+/** A URL attribute's value as a browser reads it: references decoded, and tabs, line breaks and spaces dropped. */
+private fun urlAsRead(value: String) = unescapeHtml(value).filter { it > ' ' }.lowercase()
+
+/**
+ * A comment; an element dropped with what it holds (1); a whole tag, its `/` (2), name (3) and attributes (4);
+ * or any other `<`. Possessive, so a tag that never closes can't make it backtrack.
+ */
+private val MARKUP = Regex(
+    """<!--.*?-->|<(script|style|iframe|object|noscript|template|textarea|title|xmp|noembed|noframes)\b.*?</\1\s*>|""" +
+        """<(/?)([A-Za-z][A-Za-z0-9:._-]*+)((?:[\s/]++[^\s"'<>/=]++(?:\s*+=\s*+(?:"[^"]*+"|'[^']*+'|[^\s>]++))?+)*+)[\s/]*+>|<""",
+    setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL),
+)
+private val ATTR = Regex("""([^\s"'<>/=]++)(?:\s*+=\s*+("[^"]*+"|'[^']*+'|[^\s>]++))?+""")
+
+/** Tags dropped, leaving what they hold as plain markup: active, loading or parsed in another way. */
+private val DROPPED_TAGS = setOf(
+    "script", "style", "iframe", "object", "noscript", "template", "textarea", "title", "xmp", "noembed", "noframes",
+    "plaintext", "embed", "frame", "frameset", "applet", "param", "portal", "form", "base", "meta", "link", "svg", "math",
+)
+private val URL_ATTRS = setOf(
+    "href", "src", "srcset", "xlink:href", "action", "formaction", "background", "poster", "cite", "data", "ping",
+    "longdesc", "lowsrc", "dynsrc",
+)
+/** http(s), mailto, an `img:` key, an image, or a relative URL: no scheme before its first `/`, `?` or `#`. */
+private val SAFE_URL = Regex("^(https?:|mailto:|img:|data:image/|[^:&]*([/?#]|$))")
+
+/** A MIME type safe to write into a `data:` URI. */
+private val MIME = Regex("[a-z]+/[a-z0-9.+-]+", RegexOption.IGNORE_CASE)
+
 private val IMG = Regex("<img\\b[^>]*>", RegexOption.IGNORE_CASE)
 private val IMG_SRC = Regex("\\s(src|srcset)\\s*=\\s*(\"[^\"]*\"|'[^']*'|[^\\s>]+)", RegexOption.IGNORE_CASE)
 
@@ -143,8 +197,8 @@ private val IMG_SRC = Regex("\\s(src|srcset)\\s*=\\s*(\"[^\"]*\"|'[^']*'|[^\\s>]
  * Writes a guide as one self-contained HTML file: a contents list linking `#s1` … `#sN`, one
  * `<section id="sK">` per page, [images] inlined as `data:` URIs and the [credit] HTML as the footer. Colours
  * and fonts come from the `guide.css` the viewer serves. An `<img>` whose `src` isn't in [images] loses its
- * `src` (and any `srcset`), so the file never loads anything from the network. Streams to [out], so large
- * images aren't held twice.
+ * `src` (and any `srcset`), so the file never loads anything from the network. Each section goes through
+ * [safeHtml]. Streams to [out], so large images aren't held twice.
  */
 fun writeHtmlGuide(
     out: Writer,
@@ -161,9 +215,10 @@ fun writeHtmlGuide(
     out.write("</ol></nav>\n")
     sections.forEachIndexed { i, s ->
         out.write("<section id=\"s${i + 1}\">" + (if (s.heading) "<h2>${escapeHtml(s.title)}</h2>" else "") + "\n")
+        val html = safeHtml(s.html)
         var at = 0
-        for (img in IMG.scan(s.html)) {
-            out.write(s.html, at, img.start() - at)
+        for (img in IMG.scan(html)) {
+            out.write(html, at, img.start() - at)
             val tag = img.group()
             val key = IMG_SRC.findAll(tag).firstOrNull { it.groupValues[1].equals("src", true) }
                 ?.groupValues?.get(2)?.trim('"', '\'')
@@ -172,13 +227,13 @@ fun writeHtmlGuide(
             if (image == null) {
                 out.write(rest)
             } else {
-                out.write("<img src=\"data:${image.mime};base64,")
+                out.write("<img src=\"data:${image.mime.takeIf(MIME::matches) ?: "image/png"};base64,")
                 out.write(Base64.getEncoder().encodeToString(image.bytes))
                 out.write("\"" + rest.substring("<img".length))
             }
             at = img.end()
         }
-        out.write(s.html, at, s.html.length - at)
+        out.write(html, at, html.length - at)
         out.write("\n</section>\n")
     }
     out.write("<footer>$credit</footer>\n</body></html>\n")

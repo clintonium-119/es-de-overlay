@@ -2,16 +2,24 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- The overlay service, which holds the screen capture; the capture type is only enforced from target 34. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <!-- Capture results and the offer to start after boot. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- The menu, guide viewer and browser over the game. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- System screenshots (Power + Volume down), filed under the game in front. -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- Game sound in clips: the capture's playback audio only, never the microphone. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Asks to keep the service running in the background. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- The one-tap notification to start after a restart, when that setting is on. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- Find guides: StrategyWiki and VGMaps, only when the user picks it. -->
+    <!-- Find Guides and the guide browser, only when the user opens them. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Which app is in front. The user grants it in Usage access, which Lint can't see, so it calls it protected. -->
     <uses-permission
         android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
@@ -28,7 +36,10 @@
         <package android:name="org.es_de.frontend" />
     </queries>
 
+    <!-- No backup or device transfer: the picked folders' grants don't survive one, and the browser's cookies stay here. -->
     <application
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@android:drawable/ic_menu_camera"
         android:label="ES-DE Overlay">
 
@@ -37,6 +48,7 @@
             android:name="android.webkit.WebView.MetricsOptOut"
             android:value="true" />
 
+        <!-- Exported as the launcher. The capture-consent extra only opens Android's own consent dialog. -->
         <activity
             android:name=".SettingsActivity"
             android:exported="true"
@@ -64,6 +76,7 @@
             android:exported="false"
             android:process=":viewer" />
 
+        <!-- Exported for Quick Settings, which alone holds the bind permission. -->
         <service
             android:name=".CaptureTile"
             android:exported="true"
@@ -78,6 +91,7 @@
                 android:value="true" />
         </service>
 
+        <!-- Exported for Android's accessibility manager, which alone holds the bind permission. -->
         <service
             android:name=".ButtonService"
             android:exported="true"
@@ -91,7 +105,8 @@
                 android:resource="@xml/button_service" />
         </service>
 
-        <!-- Receives Shizuku's binder, which Quit Game and leaving with Home end games through. -->
+        <!-- Receives Shizuku's binder, which Quit Game and leaving with Home end games through. Exported with the
+             permission Shizuku's documentation gives, which only the system and the shell user hold. -->
         <provider
             android:name="rikka.shizuku.ShizukuProvider"
             android:authorities="${applicationId}.shizuku"
@@ -100,6 +115,7 @@
             android:multiprocess="false"
             android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
+        <!-- Exported for BOOT_COMPLETED, which only the system can send; it ignores any other action. -->
         <receiver
             android:name=".BootReceiver"
             android:exported="true">

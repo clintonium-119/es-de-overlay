@@ -3,6 +3,7 @@ package com.clintonium.es_de_overlay
 import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
+import com.clintonium.es_de_overlay.core.PACKAGE_NAME
 import rikka.shizuku.Shizuku
 import rikka.shizuku.ShizukuRemoteProcess
 import java.util.concurrent.TimeUnit
@@ -35,16 +36,25 @@ object ShizukuShell {
     /** Shows Shizuku's dialog asking whether this app may use it. */
     fun requestPermission() = Shizuku.requestPermission(0)
 
-    /** Off the main thread: runs `am force-stop [pkg]` through Shizuku, and returns whether it worked. */
-    fun forceStop(pkg: String): Boolean = try {
-        val process = process("am", "force-stop", pkg)
-        // Its own timed wait: Process.waitFor(timeout) polls exitValue(), whose "still running" doesn't cross the binder.
-        val exited = process.waitForTimeout(5, TimeUnit.SECONDS)
-        if (!exited) process.destroy()
-        exited && process.exitValue() == 0
-    } catch (e: Exception) {
-        Log.w(TAG, "force stop through Shizuku failed", e)
-        false
+    /** Whether [pkg] may be force-stopped: a package name, and not the overlay, ES-DE or Shizuku themselves. */
+    fun mayEnd(pkg: String) = PACKAGE_NAME.matches(pkg) && pkg !in setOf(BuildConfig.APPLICATION_ID, ESDE, PACKAGE)
+
+    /** Off the main thread: runs `am force-stop [pkg]` through Shizuku, and returns whether it worked; only if [mayEnd]. */
+    fun forceStop(pkg: String): Boolean {
+        if (!mayEnd(pkg)) {
+            Log.w(TAG, "force stop refused for $pkg")
+            return false
+        }
+        return try {
+            val process = process("am", "force-stop", pkg)
+            // Its own timed wait: Process.waitFor(timeout) polls exitValue(), whose "still running" doesn't cross the binder.
+            val exited = process.waitForTimeout(5, TimeUnit.SECONDS)
+            if (!exited) process.destroy()
+            exited && process.exitValue() == 0
+        } catch (e: Exception) {
+            Log.w(TAG, "force stop through Shizuku failed", e)
+            false
+        }
     }
 
     /**

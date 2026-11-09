@@ -1,10 +1,8 @@
 package com.clintonium.es_de_overlay.core
 
+import java.io.IOException
 import java.io.InputStream
-import java.io.StringReader
-import javax.xml.parsers.DocumentBuilderFactory
 import org.w3c.dom.Element
-import org.xml.sax.InputSource
 
 /** A game's gamelist.xml metadata; a field is null when its tag is missing or empty. [released] is an ISO date. */
 data class GameInfo(
@@ -20,8 +18,8 @@ private fun games(xml: InputStream): List<Element> {
     // A system with an alternative emulator set has an <alternativeEmulator> element before <gameList>: two root
     // elements, which a strict parser rejects. One wrapping root parses both forms.
     val body = xml.reader().readText().removePrefix("\uFEFF").replaceFirst(Regex("""^\s*<\?xml[^?]*\?>"""), "")
-    val games = DocumentBuilderFactory.newInstance().newDocumentBuilder()
-        .parse(InputSource(StringReader("<root>$body</root>"))).getElementsByTagName("game")
+    val doc = xmlDocument("<root>$body</root>") ?: throw IOException("gamelist.xml isn't well-formed or has a DOCTYPE")
+    val games = doc.getElementsByTagName("game")
     return (0 until games.length).map { games.item(it) as Element }
 }
 

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Filters keys only to catch the controller's Back; reads windows only to press Force stop in Settings. -->
+<!-- Filters keys only to catch the controller's Back. Reads windows, finding buttons by their view ids, only to press
+     Force stop and OK on a game's App Info page in Settings when Shizuku can't end the game. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagReportViewIds|flagRequestFilterKeyEvents"

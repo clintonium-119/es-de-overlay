@@ -13,6 +13,9 @@ data class Launch(
 
 private val LAUNCH = Regex("""^(\S+ +\d+ [\d:]+) +Info: +Launching game "(.*)" from system ".*\((\S+)\)"\.\.\.$""")
 private val PACKAGE = Regex("""Info: +Package: (\S+)""")
+
+/** An Android package name: dot-separated parts that each start with a letter. */
+val PACKAGE_NAME = Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+")
 private val DEBUG = Regex("""^\S+ +\d+ [\d:]+ +Debug:""")
 private val ESCAPES = Regex("(%[0-9A-Fa-f]{2})+")
 
@@ -24,7 +27,8 @@ fun nextLaunch(latest: Launch?, line: String): Launch? {
     // Debug lines only come with ES-DE's Debug Mode; its game-start event line holds an escaped copy of the ROM path.
     if (latest == null || !line.startsWith(latest.stamp) || DEBUG.containsMatchIn(line)) return latest
     return latest.copy(
-        pkg = latest.pkg ?: PACKAGE.find(line)?.groupValues?.get(1),
+        // The log is a file in shared storage; only a package name goes on to force-stop.
+        pkg = latest.pkg ?: PACKAGE.find(line)?.groupValues?.get(1)?.takeIf(PACKAGE_NAME::matches),
         lines = latest.lines + line,
     )
 }

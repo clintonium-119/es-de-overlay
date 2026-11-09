@@ -67,6 +67,46 @@ class HtmlGuideTest {
         assertFalse(out.contains("<script", ignoreCase = true))
     }
 
+    private fun section(out: String) = Regex("<section id=\"s1\">(.*)</section>", RegexOption.DOT_MATCHES_ALL).find(out)!!.groupValues[1]
+
+    @Test
+    fun `saved page drops scripts handlers and javascript links`() {
+        val png = byteArrayOf(1, 2, 3)
+        val page = "<p onclick=\"steal()\">Go <b>left</b> at the fork.</p><script>alert(1)</script>" +
+            "<a href=\"javascript:alert(2)\">Map</a> <a href=' JaVa&#115;cript:alert(3)'>Again</a> <a href=\"java&Tab;script:x\">Tab</a>" +
+            "<img src=\"img:0\" alt=\"Fork\" ONERROR=\"alert(4)\"><a href=\"#s2\">Next</a><img/src=\"x\"/onerror=alert(5)>"
+        val out = section(html(listOf(GuideSection("Forest", page)), mapOf("img:0" to GuideImage("image/png", png))))
+        assertTrue(out.contains("<p>Go <b>left</b> at the fork.</p>"))
+        assertTrue(out.contains("<a>Map</a> <a>Again</a> <a>Tab</a>"))
+        assertTrue(out.contains("<img src=\"data:image/png;base64,${Base64.getEncoder().encodeToString(png)}\" alt=\"Fork\">"))
+        assertTrue(out.contains("<a href=\"#s2\">Next</a>"))
+        for (bad in listOf("<script", "alert", "onclick", "onerror", "javascript", "steal")) assertFalse(bad, out.contains(bad, ignoreCase = true))
+    }
+
+    @Test
+    fun `saved page drops iframes objects forms and base`() {
+        val page = "<base href=\"https://evil.example/\"><meta http-equiv=\"refresh\" content=\"0;url=https://evil.example\">" +
+            "<iframe src=\"https://evil.example\">frame text</iframe><object data=\"x.swf\"><embed src=\"x.swf\"></object>" +
+            "<form action=\"https://evil.example\"><p>Inside a form</p><button formaction=\"javascript:alert(1)\">Go</button></form>" +
+            "<svg><a xlink:href=\"javascript:alert(2)\">Svg</a></svg><noembed><img title=\"</noembed><img src onerror=alert(3)>\"></noembed>" +
+            "<p>Text</p><!-- <script>alert(4)</script> --><scr<script>ipt>alert(5)</script><a href=\"data:text/html,x\">Data</a>"
+        val out = section(html(listOf(GuideSection("Traps", page))))
+        assertTrue(out.contains("<p>Inside a form</p><button>Go</button>"))
+        assertTrue(out.contains("<a>Svg</a>") && out.contains("<p>Text</p>") && out.contains("<a>Data</a>"))
+        val bad = listOf("<base", "<meta", "<iframe", "frame text", "<object", "<embed", "<form", "<svg", "<noembed", "<script", "evil", "alert")
+        for (b in bad) assertFalse(b, out.contains(b, ignoreCase = true))
+    }
+
+    @Test
+    fun `an image type that isn't one is written as png`() {
+        val out = html(
+            listOf(GuideSection("Map", "<img src=\"img:0\">")),
+            mapOf("img:0" to GuideImage("image/png\" onload=\"alert(1)", byteArrayOf(1))),
+        )
+        assertTrue(out.contains("<img src=\"data:image/png;base64,AQ==\">"))
+        assertFalse(out.contains("alert"))
+    }
+
     @Test
     fun `guidePicture reads back each embedded picture in file order, skipping SVG`() {
         val a = ByteArray(70_000) { (it * 7).toByte() }

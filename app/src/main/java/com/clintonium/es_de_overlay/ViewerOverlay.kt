@@ -678,7 +678,9 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 val url = request.url
                 if (url.host == HOST) {
                     when (url.path) {
-                        "/guide.html" -> return WebResourceResponse("text/html", "utf-8", page())
+                        "/guide.html" -> return WebResourceResponse(
+                            "text/html", "utf-8", 200, "OK", mapOf("Content-Security-Policy" to GUIDE_CSP), page(),
+                        )
                         "/guide.css" -> return WebResourceResponse("text/css", "utf-8", ByteArrayInputStream(css))
                         // The theme's list and guide text fonts; none (a 404) leaves the CSS to fall through to sans-serif.
                         "/font.otf" -> font(theme.look.fontPath)?.let { return WebResourceResponse("font/otf", null, it) }
@@ -853,6 +855,13 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
 
         /** A made-up origin, so the guide's relative `guide.css` and `font.otf` resolve to the viewer. */
         const val HOST = "guide.local"
+
+        /**
+         * The saved guide's Content Security Policy: none of the page's own scripts run, and nothing loads but its
+         * embedded pictures and the viewer's CSS and fonts. The viewer's JavaScript isn't the page's and still runs.
+         */
+        private const val GUIDE_CSP =
+            "default-src 'none'; img-src data:; style-src 'self' 'unsafe-inline'; font-src 'self'; base-uri 'none'; form-action 'none'"
 
         /** The bar's text for a `"n m"` answer from the page: section n of m, or the guide's [name] without sections. */
         fun sectionText(answer: String, name: String): String {

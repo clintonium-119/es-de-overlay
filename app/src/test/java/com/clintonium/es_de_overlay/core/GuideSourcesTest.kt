@@ -3,6 +3,7 @@ package com.clintonium.es_de_overlay.core
 import java.io.File
 import java.nio.charset.Charset
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -226,5 +227,27 @@ class GuideSourcesTest {
         val long = guideFileName(GuideSite.NEOSEEKER.label, "x".repeat(200))
         assertEquals(120, long.length)
         assertTrue(long.startsWith("Neoseeker - xxx") && long.endsWith("x.html"))
+    }
+
+    @Test
+    fun `describe json bounds title url scheme host and page count`() {
+        val here = "https://www.example.com/guide/"
+        val pages = listOf(
+            "http://www.example.com/guide/a" to "Plain",
+            "https://other.example/guide/b" to "Elsewhere",
+            "https://www.example.com.evil.example/guide/c" to "Lookalike",
+            "javascript:alert(1)" to "Script",
+            "file:///sdcard/x" to "File",
+            "not a url" to "Broken",
+        ) + (1..200).map { "https://www.example.com/guide/?page=$it" to "Page $it" }
+        val kept = guidePageList(here, pages)
+        assertEquals(MAX_GUIDE_PAGES, kept.size)
+        assertEquals("https://www.example.com/guide/?page=1" to "Page 1", kept.first())
+        assertEquals("https://www.example.com/guide/?page=50" to "Page 50", kept.last())
+        assertFalse(onSameSite(here, "http://www.example.com/guide/next"))
+        assertFalse(onSameSite("about:blank", "https://www.example.com/"))
+        assertEquals("x".repeat(200), guideText("x".repeat(1000)))
+        assertEquals("A title", guideText("A\u0000 title\n"))
+        assertEquals(listOf("Long" to "y".repeat(200)), guidePageList(here, listOf("https://www.example.com/l" to "y".repeat(300))).map { "Long" to it.second })
     }
 }

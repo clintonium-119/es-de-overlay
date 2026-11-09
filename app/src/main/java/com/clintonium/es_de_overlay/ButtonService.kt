@@ -115,6 +115,10 @@ class ButtonService : AccessibilityService() {
 
     /** Main thread: ends [pkg] through Shizuku when it's usable, else on its App Info page, and goes home. */
     private fun stop(pkg: String) {
+        if (!ShizukuShell.mayEnd(pkg)) {
+            Log.w(TAG, "force stop refused for $pkg")
+            return
+        }
         Log.i(TAG, "force-stopping $pkg")
         io.execute {
             val stopped = ShizukuShell.ready && ShizukuShell.forceStop(pkg)

@@ -145,4 +145,34 @@ class GuidesTest {
         val games = listOf(GamelistGame("Game.zip", "First", null), GamelistGame("Game.7z", "Second", null))
         assertEquals("First", guideGames("gb", listOf(file("Game.pdf")), games).single().name)
     }
+
+    @Test
+    fun `fileName rejects dot dot separators and control characters`() {
+        for (name in listOf("..", ".", "...", "", "  ", "\u0000")) assertEquals(name, "_", fileName(name))
+        assertEquals("a_b", fileName("a/b"))
+        assertEquals("a_b", fileName("a\\b"))
+        assertEquals("a_.._b", fileName("a/../b"))
+        assertEquals("ab", fileName("a\u0000b\n"))
+        assertEquals("x".repeat(120), fileName("x".repeat(300)))
+        // A character outside the BMP that the cap would cut in half goes whole.
+        assertEquals("x".repeat(119), fileName("x".repeat(119) + "\uD83D\uDE00"))
+    }
+
+    @Test
+    fun `map entry names keep the atlas's names but make no folders`() {
+        assertEquals("038 L1: Dribble Fountain Labyrinth.png", mapEntryName(37, "L1: Dribble Fountain Labyrinth", "png"))
+        assertEquals("001 .._.._x.png_y", mapEntryName(0, "../../x", "png/y"))
+        assertEquals("002 ab.png", mapEntryName(1, "a\u0000b", "png"))
+    }
+
+    @Test
+    fun `fileName keeps existing guide names`() {
+        assertEquals("StrategyWiki - Super Metroid.html", "StrategyWiki - ${fileName("Super Metroid")}.html")
+        assertEquals(
+            "GameFAQs - Shantae – Guide and Walkthrough by DEngel.html",
+            guideFileName(GuideSite.GAMEFAQS.label, "Shantae – Guide and Walkthrough by DEngel"),
+        )
+        assertEquals("003 Tail Cave.png", mapEntryName(2, "Tail Cave", "png"))
+        assertEquals("Zelda - Link's Awakening", fileName("Zelda: Link's Awakening"))
+    }
 }

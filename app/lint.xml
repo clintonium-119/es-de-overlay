@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Lint's security checks fail the build; one the app accepts is suppressed where it's used, with the reason. -->
+<lint>
+    <issue id="Security" severity="fatal" />
+</lint>

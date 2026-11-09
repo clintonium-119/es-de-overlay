@@ -1,11 +1,11 @@
 package com.clintonium.es_de_overlay.core
 
+import java.io.IOException
 import java.io.InputStream
 import java.net.URI
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.text.Normalizer
-import javax.xml.parsers.DocumentBuilderFactory
 import org.w3c.dom.Element
 
 /**
@@ -34,8 +34,25 @@ fun matchKey(name: String): String {
     return Normalizer.normalize(decoded, Normalizer.Form.NFD).lowercase().filter { it in 'a'..'z' || it in '0'..'9' }
 }
 
-/** [title] as a file name the SD card accepts: "A: B" becomes "A - B", other reserved characters "_". */
-fun fileName(title: String) = title.replace(": ", " - ").replace(Regex("[\\\\/:*?\"<>|]"), "_")
+/**
+ * [title] as a file name the SD card accepts, which stays in its folder: "A: B" becomes "A - B", other reserved
+ * characters and both slashes "_", control characters go, and it keeps to 120 characters; one of only dots or
+ * spaces, such as "..", is "_".
+ */
+fun fileName(title: String): String {
+    val name = title.filterNot(Char::isISOControl).replace(": ", " - ").replace(Regex("[\\\\/:*?\"<>|]"), "_").take(120)
+        .let { if (it.lastOrNull()?.isHighSurrogate() == true) it.dropLast(1) else it }
+    return if (name.all { it == '.' || it == ' ' }) "_" else name
+}
+
+/**
+ * The zip entry for map [index] (from 0) of an atlas, `NNN <name>.<ext>`: the names stay as the atlas page writes
+ * them, but without a slash, which would make a folder in the zip, or a control character.
+ */
+fun mapEntryName(index: Int, name: String, ext: String): String {
+    fun part(text: String) = text.filterNot(Char::isISOControl).replace(Regex("[/\\\\]"), "_")
+    return "%03d %s.%s".format(index + 1, part(name), part(ext))
+}
 
 /** The guide sites only a browser gets into, which Find Guides opens in the touch browser. */
 enum class GuideSite(val label: String, val host: String) {
@@ -116,6 +133,22 @@ fun isGuidePage(url: String): Boolean {
     return pattern.matches(path)
 }
 
+/** The most pages a guide page's own list is kept to: a page can list thousands. */
+const val MAX_GUIDE_PAGES = 50
+
+/** Whether [url], which a page at [here] reported, is an https page on [here]'s host. */
+fun onSameSite(here: String, url: String): Boolean {
+    val host = runCatching { URI(here).host }.getOrNull() ?: return false
+    return runCatching { URI(url) }.getOrNull()?.let { it.scheme == "https" && it.host == host } == true
+}
+
+/** The pages a guide page at [here] listed, as URL and title: those [onSameSite], at most [MAX_GUIDE_PAGES]. */
+fun guidePageList(here: String, pages: List<Pair<String, String>>) =
+    pages.filter { onSameSite(here, it.first) }.take(MAX_GUIDE_PAGES).map { (url, title) -> url to guideText(title) }
+
+/** A title or author a page reported: no control characters, at most 200 characters. */
+fun guideText(text: String) = text.filterNot(Char::isISOControl).take(200)
+
 private val GAMEFAQS_GUIDE = Regex("/[^/]+/\\d+-[^/]+/faqs/\\d+(/[^/]+)?/?")
 private val NEOSEEKER_GUIDE = Regex("/[^/]+/(faqs/\\d+-[^/]+\\.html|walkthrough(/.*)?|[A-Z][^/]*)")
 private val ZELDADUNGEON_GUIDE = Regex("/[a-z0-9-]+-walkthrough(-guide)?/.*")
@@ -193,7 +226,7 @@ fun parsedText(xml: InputStream): String? = parsedPage(xml)?.second
 
 /** The page title (after redirects) and article HTML in an `action=parse` XML response; null for an `<error>`. */
 fun parsedPage(xml: InputStream): Pair<String, String>? {
-    val doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(xml)
+    val doc = xmlDocument(xml.reader().readText()) ?: throw IOException("StrategyWiki's answer isn't well-formed or has a DOCTYPE")
     if (doc.getElementsByTagName("error").length > 0) return null
     val parse = doc.getElementsByTagName("parse").item(0) as? Element ?: return null
     return parse.getAttribute("title") to (parse.getElementsByTagName("text").item(0)?.textContent ?: return null)

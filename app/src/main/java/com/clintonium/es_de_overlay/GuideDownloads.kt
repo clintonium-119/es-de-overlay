@@ -11,6 +11,7 @@ import com.clintonium.es_de_overlay.core.cleanName
 import com.clintonium.es_de_overlay.core.fileName
 import com.clintonium.es_de_overlay.core.guidePages
 import com.clintonium.es_de_overlay.core.guidePath
+import com.clintonium.es_de_overlay.core.mapEntryName
 import com.clintonium.es_de_overlay.core.parsedPage
 import com.clintonium.es_de_overlay.core.strategyWikiParseUrl
 import com.clintonium.es_de_overlay.core.vgmapsMaps
@@ -113,8 +114,7 @@ fun saveVgmaps(
                 progress("Saving map ${i + 1} of ${maps.size}")
                 val path = map.href.replace("&amp;", "&")
                 val bytes = get(if (path.startsWith("http")) path else URI("https", "www.vgmaps.com", "/Atlas/$folder/$path", null).toASCIIString())
-                // A slash would make a folder in the zip.
-                val entry = "%03d %s.%s".format(i + 1, map.name.replace(Regex("[/\\\\]"), "_"), path.substringAfterLast('.'))
+                val entry = mapEntryName(i, map.name, path.substringAfterLast('.'))
                 zip.putNextEntry(ZipEntry(entry).apply {
                     method = ZipEntry.STORED
                     size = bytes.size.toLong()

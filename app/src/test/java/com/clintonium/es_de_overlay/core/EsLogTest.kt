@@ -110,4 +110,20 @@ class EsLogTest {
         assertEquals(false, reportsScreensaver(on.replace("""DebugMode" value="true""", """DebugMode" value="false""")))
         assertEquals(false, reportsScreensaver(on.replace("CustomEventScripts", "CustomEventScriptsBrowsing")))
     }
+
+    @Test
+    fun `package that is not a package name is dropped`() {
+        fun pkg(value: String) = parse(
+            listOf(
+                "Oct 28 15:57:40 Info:   Launching game \"Easyland\" from system \"Nintendo SNES (Super Nintendo) (snes)\"...",
+                "Oct 28 15:57:40 Info:   Package: $value",
+            ),
+        ).pkg
+        assertNull(pkg("../x"))
+        assertNull(pkg("com.foo;rm -rf /"))
+        assertNull(pkg("retroarch"))
+        assertNull(pkg("com.1foo"))
+        assertEquals("com.retroarch", pkg("com.retroarch"))
+        assertEquals("dev.eden.eden_emulator", pkg("dev.eden.eden_emulator"))
+    }
 }

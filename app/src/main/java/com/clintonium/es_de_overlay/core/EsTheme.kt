@@ -1,13 +1,9 @@
 package com.clintonium.es_de_overlay.core
 
 import java.io.InputStream
-import java.io.StringReader
-import javax.xml.parsers.DocumentBuilderFactory
 import kotlin.math.abs
 import kotlin.math.roundToInt
-import org.w3c.dom.Document
 import org.w3c.dom.Element
-import org.xml.sax.InputSource
 
 /** The theme keys of ES-DE's es_settings.xml; a missing key takes ES-DE's default (`Settings.cpp`). */
 data class ThemeSettings(
@@ -20,7 +16,7 @@ data class ThemeSettings(
 
 /** The theme keys of an es_settings.xml, whose `<string name="…" value="…"/>` entries have no root element. */
 fun themeSettings(xml: InputStream): ThemeSettings {
-    val body = xml.reader().readText().removePrefix("﻿").replaceFirst(Regex("""^\s*<\?xml[^?]*\?>"""), "")
+    val body = xml.reader().readText().removePrefix("\uFEFF").replaceFirst(Regex("""^\s*<\?xml[^?]*\?>"""), "")
     val values = xmlDocument("<root>$body</root>")?.documentElement
         ?.let { root -> root.children("string").associate { it.getAttribute("name") to it.getAttribute("value") } }
         .orEmpty()
@@ -248,17 +244,6 @@ fun unpackFiles(stream: InputStream, write: (path: String, bytes: ByteArray) -> 
         }
     }
 }
-
-/**
- * [xml] parsed, or null when it isn't well-formed or declares a DOCTYPE. A theme is downloaded third-party content,
- * and refusing the DOCTYPE keeps out entity expansion and external entities on every parser, including Android's,
- * whose DocumentBuilderFactory rejects the features that would switch them off.
- */
-fun xmlDocument(xml: String): Document? =
-    if (xml.contains("<!DOCTYPE", ignoreCase = true)) null
-    else runCatching {
-        DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(InputSource(StringReader(xml.removePrefix("﻿"))))
-    }.getOrNull()
 
 // ES-DE's supported aspect ratios as width / height (ThemeData.cpp's sAspectRatioMap).
 private val ASPECT_RATIOS = mapOf(
