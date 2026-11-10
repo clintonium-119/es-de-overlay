@@ -60,7 +60,8 @@ jobs:
       - env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          # A variable, not a secret: it equals the repo name, which logs would otherwise mask.
+          KEY_ALIAS: ${{ vars.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         # The mv fails on an unsigned build (app-release-unsigned.apk), so nothing unsigned is released.
         run: |
