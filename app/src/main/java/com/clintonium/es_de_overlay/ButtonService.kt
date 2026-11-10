@@ -94,8 +94,10 @@ class ButtonService : AccessibilityService() {
         if (event.keyCode == KeyEvent.KEYCODE_MOVE_HOME && event.action == KeyEvent.ACTION_UP && event.isFromSource(InputDevice.SOURCE_GAMEPAD)) {
             main.post(HelperService::closeMenuNow)
         }
-        // The controller's Back only: the back swipe and other apps' Back have no gamepad source.
-        if (event.keyCode != KeyEvent.KEYCODE_BACK || !event.isFromSource(InputDevice.SOURCE_GAMEPAD)) return false
+        // The controller's Back only: the back swipe and other apps' Back have no gamepad source. The controller's
+        // Menu counts as Back too, so controllers like the GuliKit Elves 2 can open the menu with it.
+        if (event.keyCode != KeyEvent.KEYCODE_BACK && event.keyCode != KeyEvent.KEYCODE_MENU) return false
+        if (!event.isFromSource(InputDevice.SOURCE_GAMEPAD)) return false
         // Decide on the first down and keep that answer for repeats and the up, so the app never gets half a press.
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
             val start = SystemClock.uptimeMillis()
