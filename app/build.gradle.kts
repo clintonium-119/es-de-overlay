@@ -12,8 +12,24 @@ android {
         minSdk = 33
         // Pinned: Android 14 (34) requires a new MediaProjection consent per capture.
         targetSdk = 33
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "1.0.0"
+    }
+
+    buildTypes {
+        release {
+            // Unminified: ShizukuShell reaches Shizuku's newProcess by reflection.
+            isMinifyEnabled = false
+            // Set by the release workflow; a local build without them stays unsigned.
+            System.getenv("KEYSTORE_FILE")?.let { keystore ->
+                signingConfig = signingConfigs.create("release") {
+                    storeFile = file(keystore)
+                    storePassword = System.getenv("KEYSTORE_PASSWORD")
+                    keyAlias = System.getenv("KEY_ALIAS")
+                    keyPassword = System.getenv("KEY_PASSWORD")
+                }
+            }
+        }
     }
 
     buildFeatures {
