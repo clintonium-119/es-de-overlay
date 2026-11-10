@@ -181,9 +181,9 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                     web.scrollTo((left + by).coerceIn(0, range.coerceAtLeast(0)), web.scrollY)
                 }
                 fun chrome() {
-                    help.text = if (contentsOpen) "✚ MOVE   A GO   B CLOSE"
-                    else (if (zoomed()) "✚ PAN" else "✚ SCROLL") + "   L1/R1 ZOOM   L2/R2 SECTION   Y CONTENTS" +
-                        if (pictureInView) "   A IMAGE" else ""
+                    help.text = if (contentsOpen) "✚ MOVE   ${theme.label("A")} GO   ${theme.label("B")} CLOSE"
+                    else (if (zoomed()) "✚ PAN" else "✚ SCROLL") + "   L1/R1 ZOOM   L2/R2 SECTION   ${theme.label("Y")} CONTENTS" +
+                        if (pictureInView) "   ${theme.label("A")} IMAGE" else ""
                 }
                 /** Shows the guide's picture [n] of [of] in the page viewer, which turns through the others. */
                 fun openPicture(n: Int, of: Int) {
@@ -316,7 +316,8 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
             descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
             isFocusable = true
             isFocusableInTouchMode = true
-            setOnKeyListener { _, code, event ->
+            setOnKeyListener { _, sent, event ->
+                val code = theme.button(sent)
                 if (code == KeyEvent.KEYCODE_BUTTON_B || code == KeyEvent.KEYCODE_BACK) {
                     if (event.action == KeyEvent.ACTION_DOWN && !back()) { close(); onClose() }
                     return@setOnKeyListener true
@@ -379,7 +380,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         fun zoomed() = pw > 0 && scale > fit * 1.01f
         fun maxScale() = maxOf(fit * 4, 2f)
         fun chrome() {
-            val y = if (named) "   Y MAPS" else ""
+            val y = if (named) "   ${theme.label("Y")} MAPS" else ""
             label.text = when {
                 // The number first, so a long name is what gets cut.
                 named -> "${page + 1} OF ${doc.count}   ${doc.names[page]}"
@@ -387,7 +388,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 else -> name
             }
             help.text = when {
-                list != null -> "✚ MOVE   A GO   B CLOSE"
+                list != null -> "✚ MOVE   ${theme.label("A")} GO   ${theme.label("B")} CLOSE"
                 zoomed() -> "✚ PAN   L2/R2 RESET   L1/R1 ZOOM$y"
                 doc.count > 1 -> "✚ BROWSE   L2 FIRST   R2 LAST   L1/R1 ZOOM$y"
                 else -> "L1/R1 ZOOM"

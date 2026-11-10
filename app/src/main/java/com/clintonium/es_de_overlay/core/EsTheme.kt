@@ -5,20 +5,24 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import org.w3c.dom.Element
 
-/** The theme keys of ES-DE's es_settings.xml; a missing key takes ES-DE's default (`Settings.cpp`). */
+/**
+ * The theme keys of ES-DE's es_settings.xml, and its "Swap the A/B and X/Y buttons" ([swapButtons]); a missing key
+ * takes ES-DE's default (`Settings.cpp`).
+ */
 data class ThemeSettings(
     val theme: String = "linear-es-de",
     val variant: String = "",
     val colorScheme: String = "",
     val fontSize: String = "",
     val aspectRatio: String = "automatic",
+    val swapButtons: Boolean = false,
 )
 
-/** The theme keys of an es_settings.xml, whose `<string name="…" value="…"/>` entries have no root element. */
+/** The [ThemeSettings] of an es_settings.xml, whose `<string|bool name="…" value="…"/>` entries have no root element. */
 fun themeSettings(xml: InputStream): ThemeSettings {
     val body = xml.reader().readText().removePrefix("\uFEFF").replaceFirst(Regex("""^\s*<\?xml[^?]*\?>"""), "")
     val values = xmlDocument("<root>$body</root>")?.documentElement
-        ?.let { root -> root.children("string").associate { it.getAttribute("name") to it.getAttribute("value") } }
+        ?.let { root -> (root.children("string") + root.children("bool")).associate { it.getAttribute("name") to it.getAttribute("value") } }
         .orEmpty()
     val defaults = ThemeSettings()
     return ThemeSettings(
@@ -27,6 +31,7 @@ fun themeSettings(xml: InputStream): ThemeSettings {
         colorScheme = values["ThemeColorScheme"] ?: defaults.colorScheme,
         fontSize = values["ThemeFontSize"] ?: defaults.fontSize,
         aspectRatio = values["ThemeAspectRatio"] ?: defaults.aspectRatio,
+        swapButtons = values["InputSwapButtons"] == "true",
     )
 }
 

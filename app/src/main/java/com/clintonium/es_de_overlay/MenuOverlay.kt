@@ -247,7 +247,9 @@ class MenuOverlay(private val context: Context) {
                 KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER ->
                     if (rows.isNotEmpty()) onPick(list.selected)
                 // Always used: Android's gamepad key map turns an unused X into DPAD_CENTER, which would pick the row.
+                // Y too: with ES-DE's buttons swapped, the X button arrives as Y.
                 KeyEvent.KEYCODE_BUTTON_X -> if (alt != null && rows.isNotEmpty()) alt.second(list.selected)
+                KeyEvent.KEYCODE_BUTTON_Y -> {}
                 KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK -> { close(); onClose() }
                 else -> return@open false
             }
@@ -372,16 +374,18 @@ class MenuOverlay(private val context: Context) {
                 topMargin = (screenH * 0.44166667f).toInt() - artH / 2 - padTop
             })
             addView(
-                helpPill(context, look, font, textPx, *help.toTypedArray()),
+                helpPill(context, look, font, textPx, *help.map { (button, action) -> theme.label(button) to action }.toTypedArray()),
                 FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END),
             )
             // Keep focus on the root so the ScrollView doesn't take the D-pad.
             descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
             isFocusable = true
             isFocusableInTouchMode = true
-            setOnKeyListener { _, code, event ->
+            setOnKeyListener { _, sent, event ->
+                val code = theme.button(sent)
                 if (BuildConfig.DEBUG && event.action == KeyEvent.ACTION_DOWN) {
-                    Log.d(TAG, "key delivered ${SystemClock.uptimeMillis() - event.eventTime} ms: ${KeyEvent.keyCodeToString(code)}")
+                    val swapped = if (code != sent) " as ${KeyEvent.keyCodeToString(code)}" else ""
+                    Log.d(TAG, "key delivered ${SystemClock.uptimeMillis() - event.eventTime} ms: ${KeyEvent.keyCodeToString(sent)}$swapped")
                 }
                 if (event.action == KeyEvent.ACTION_DOWN) onKey(code) else code in KEYS
             }
@@ -440,7 +444,8 @@ class MenuOverlay(private val context: Context) {
     private companion object {
         val KEYS = setOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER,
-            KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK,
+            KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_BUTTON_B,
+            KeyEvent.KEYCODE_BACK,
         )
     }
 }

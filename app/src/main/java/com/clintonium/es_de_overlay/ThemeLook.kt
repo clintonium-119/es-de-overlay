@@ -7,6 +7,7 @@ import android.graphics.fonts.FontFamily
 import android.net.Uri
 import android.os.SystemClock
 import android.util.Log
+import android.view.KeyEvent
 import android.view.WindowManager
 import java.io.File
 import java.io.InputStream
@@ -35,8 +36,34 @@ class ThemeLook(private val context: Context, private val prefs: Prefs) {
     /**
      * A look with its fonts: the theme's, or sans-serif when it has none or it can't be read. [open] opens one of the
      * look's files by its path below the ES-DE folder, from wherever the theme was read; null when it's missing.
+     * With ES-DE's "Swap the A/B and X/Y buttons" on ([swapButtons]), a gamepad's A works as B and X as Y, and the
+     * other way round, in ES-DE's input and its help alike.
      */
-    class Current(val look: Look, val font: Typeface, val bodyFont: Typeface, val open: (String) -> InputStream?)
+    class Current(
+        val look: Look,
+        val font: Typeface,
+        val bodyFont: Typeface,
+        val swapButtons: Boolean = false,
+        val open: (String) -> InputStream?,
+    ) {
+        /** Key [code] as ES-DE reads it. */
+        fun button(code: Int) = if (!swapButtons) code else when (code) {
+            KeyEvent.KEYCODE_BUTTON_A -> KeyEvent.KEYCODE_BUTTON_B
+            KeyEvent.KEYCODE_BUTTON_B -> KeyEvent.KEYCODE_BUTTON_A
+            KeyEvent.KEYCODE_BUTTON_X -> KeyEvent.KEYCODE_BUTTON_Y
+            KeyEvent.KEYCODE_BUTTON_Y -> KeyEvent.KEYCODE_BUTTON_X
+            else -> code
+        }
+
+        /** The help's name for the button that does ES-DE's [letter] (A, B, X or Y). */
+        fun label(letter: String) = if (!swapButtons) letter else when (letter) {
+            "A" -> "B"
+            "B" -> "A"
+            "X" -> "Y"
+            "Y" -> "X"
+            else -> letter
+        }
+    }
 
     private var cached: Pair<List<Any?>, Current>? = null
 
@@ -59,7 +86,8 @@ class ThemeLook(private val context: Context, private val prefs: Prefs) {
                 return current
             }
         }
-        val (base, files) = if (tree == null) look(null, "", "", "no ES-DE folder") to NO_FILES else themed(tree, settings, system, mediaType)
+        val parsed = settings?.let { themeSettings(it.byteInputStream()) } ?: ThemeSettings()
+        val (base, files) = if (tree == null) look(null, "", "", "no ES-DE folder") to NO_FILES else themed(tree, parsed, system, mediaType)
         // A theme's file from where the theme was read, else from the ES-DE folder itself (an overlay-theme.xml font).
         val open = { path: String ->
             files(path) ?: tree?.let { runCatching { context.contentResolver.openInputStream(treeChild(it, path)) }.getOrNull() }
@@ -67,7 +95,7 @@ class ThemeLook(private val context: Context, private val prefs: Prefs) {
         val look = (overrides?.let { base.with(overlayTheme(it.byteInputStream())) } ?: base)
             .let { it.copy(fontSize = it.fontSize * scale / 100f, bodyFontSize = it.bodyFontSize * scale / 100f) }
         val font = typeface(open, look.fontPath)
-        val current = Current(look, font, if (look.bodyFontPath == look.fontPath) font else typeface(open, look.bodyFontPath), open)
+        val current = Current(look, font, if (look.bodyFontPath == look.fontPath) font else typeface(open, look.bodyFontPath), parsed.swapButtons, open)
         cached = key to current
         val loaded = if (look.fontPath != null && font === Typeface.SANS_SERIF) " (not loaded)" else ""
         Log.i(TAG, "look: ${look.source}, font ${look.fontPath}$loaded, ${SystemClock.uptimeMillis() - started} ms")
@@ -75,8 +103,7 @@ class ThemeLook(private val context: Context, private val prefs: Prefs) {
     }
 
     // The active theme's look and its files by path below the ES-DE folder; the default look when it can't be read.
-    private fun themed(tree: Uri, settingsXml: String?, system: String, mediaType: String): Pair<Look, (String) -> InputStream?> {
-        val settings = settingsXml?.let { themeSettings(it.byteInputStream()) } ?: ThemeSettings()
+    private fun themed(tree: Uri, settings: ThemeSettings, system: String, mediaType: String): Pair<Look, (String) -> InputStream?> {
         val own = if (isFolderName(settings.theme)) themeFiles(tree, settings.theme) else null
         // ES-DE loads its built-in Linear when the configured theme is gone. Without Shizuku a downloaded theme can't be
         // told from a gone one, so that gets the default look and a reason instead.

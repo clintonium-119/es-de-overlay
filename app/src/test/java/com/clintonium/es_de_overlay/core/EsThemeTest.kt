@@ -25,6 +25,7 @@ class EsThemeTest {
     fun `settings read with defaults`() {
         val all = """
             <?xml version="1.0"?>
+            <bool name="InputSwapButtons" value="true" />
             <bool name="ThemeTransitions" value="true" />
             <string name="Theme" value="minui-menu-es-de-custom" />
             <string name="ThemeAspectRatio" value="16:9" />
@@ -33,8 +34,12 @@ class EsThemeTest {
             <string name="ThemeVariant" value="gamelist-list-screenshot" />
         """.trimIndent()
         assertEquals(
-            ThemeSettings("minui-menu-es-de-custom", "gamelist-list-screenshot", "dark-bold", "small", "16:9"),
+            ThemeSettings("minui-menu-es-de-custom", "gamelist-list-screenshot", "dark-bold", "small", "16:9", swapButtons = true),
             themeSettings(all.byteInputStream()),
+        )
+        assertEquals(
+            false,
+            themeSettings("""<bool name="InputSwapButtons" value="false" />""".byteInputStream()).swapButtons,
         )
         assertEquals(
             ThemeSettings("linear-es-de", "", "", "", "automatic"),

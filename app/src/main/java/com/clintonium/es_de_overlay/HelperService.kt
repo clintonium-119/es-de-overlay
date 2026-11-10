@@ -21,6 +21,8 @@ import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.ParcelFileDescriptor
+import android.os.StrictMode
 import android.os.SystemClock
 import android.provider.DocumentsContract
 import android.util.Log
@@ -45,7 +47,6 @@ import com.clintonium.es_de_overlay.core.resolveGame
 import com.clintonium.es_de_overlay.core.startUrl
 import com.clintonium.es_de_overlay.core.webSearchUrl
 import java.io.File
-import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.util.concurrent.CancellationException
 import java.util.concurrent.Executors
@@ -89,8 +90,9 @@ class EsLogTail {
 
     /** The new lines below the ES-DE folder [tree]; [onNewLog] runs first when ES-DE started a new log, read from its start. */
     fun read(context: Context, tree: Uri, onNewLog: () -> Unit): List<String> {
-        context.contentResolver.openFileDescriptor(treeChild(tree, "logs/es_log.txt"), "r")!!.use { pfd ->
-            val ch = FileInputStream(pfd.fileDescriptor).channel
+        val pfd = context.contentResolver.openFileDescriptor(treeChild(tree, "logs/es_log.txt"), "r")!!
+        // Closing the channel closes its stream, which closes the descriptor.
+        ParcelFileDescriptor.AutoCloseInputStream(pfd).channel.use { ch ->
             val size = ch.size()
             val first = ByteBuffer.allocate(minOf(size, 64L).toInt()).also { ch.read(it, 0) }.array().decodeToString()
             if (first != head || size < offset) {
@@ -173,6 +175,8 @@ class HelperService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        // Logs where each stream, cursor or descriptor that was never closed was opened.
+        if (BuildConfig.DEBUG) StrictMode.setVmPolicy(StrictMode.VmPolicy.Builder().detectLeakedClosableObjects().penaltyLog().build())
         instance = this
         prefs = Prefs(this)
         windowContext = overlayContext(this)
