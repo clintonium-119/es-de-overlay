@@ -1,0 +1,11 @@
+---
+---
+
+@import "minima";
+
+// On a phone, a wide table scrolls on its own instead of widening the page, and long paths and commands in
+// running text wrap.
+@media (max-width: 600px) {
+  table { display: block; overflow-x: auto; }
+  p code, li code { overflow-wrap: anywhere; }
+}

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  An example overlay-theme.xml for ES-DE Overlay. Save it as overlay-theme.xml in
+  your ES-DE folder, the one that holds downloaded_media, and delete the lines you
+  don't want. Each line replaces one value the overlay takes from your ES-DE theme;
+  the rest still follow the theme. Changes show from the next game ES-DE starts.
+
+  Colours are RRGGBB or RRGGBBAA, as in ES-DE's themes. The font paths name font
+  files below the ES-DE folder, here a fonts folder you make there; delete those two
+  lines to keep the theme's fonts. Every key is described on the Theme page:
+  https://clintonium-119.github.io/es-de-overlay/theme.html
+-->
+<overlay>
+    <!-- The rows and the cursor: a thin bar at the left and a faint pill. -->
+    <background>F2F0E6</background>
+    <text>4A4A4A</text>
+    <selectedText>1E4E66</selectedText>
+    <selectedBackground>2E6E8E33</selectedBackground>
+    <selectedCornerRadius>0.01</selectedCornerRadius>
+    <selector>2E6E8E</selector>
+    <selectorWidth>0.004</selectorWidth>
+    <selectorCornerRadius>0.5</selectorCornerRadius>
+    <fontPath>fonts/overlay-list.ttf</fontPath>
+    <fontSize>0.04</fontSize>
+    <lineSpacing>1.6</lineSpacing>
+
+    <!-- The help prompts at the bottom. -->
+    <helpBackground>DDDACC</helpBackground>
+    <helpIcon>2E6E8E</helpIcon>
+    <helpText>4A4A4A</helpText>
+
+    <!-- Guide text. -->
+    <bodyText>202020</bodyText>
+    <bodyFontPath>fonts/overlay-guide.ttf</bodyFontPath>
+    <bodyFontSize>0.03</bodyFontSize>
+    <bodyLineSpacing>1.4</bodyLineSpacing>
+
+    <!-- The game art's corners, and all text 10 % larger. -->
+    <artCornerRadius>0.008</artCornerRadius>
+    <textScale>110</textScale>
+</overlay>

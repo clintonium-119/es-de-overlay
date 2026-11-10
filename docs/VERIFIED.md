@@ -1,3 +1,6 @@
+---
+---
+
 # Verified device facts
 
 Device: Retroid Pocket Nova (`kalama`), checked over adb on 2026-10-28.
@@ -28,7 +31,7 @@ Device: Retroid Pocket Nova (`kalama`), checked over adb on 2026-10-28.
 | A6 | Verified | One consent at service start covered several captures in a row across app switches. Reinstalling or restarting the service needs a new consent. | Two back-to-back captures, no dialog |
 | A7 | Verified | ES-DE plays the app's H.264 MP4 from `videos/`. | User observation |
 | A8 | Partly | Clips now carry game audio (playback capture): an Easyland clip had AAC 48 kHz stereo, 14.89 s for 14.88 s of video, mean -23.3 dB. Whether the theme plays it in the gamelist is up to ES-DE's video-audio settings. All installed games/emulators have `ALLOW_AUDIO_PLAYBACK_CAPTURE`. | `ffprobe`, `ffmpeg -af volumedetect`, `dumpsys package` |
-| A9 | Superseded | Gamepad combo through an AccessibilityService (PLAN.md Phase 4). The menu opened on Retroid's Home message from 2026-10-29, and since 2026-11-03 opens on the controller's Back through a key filter; see [Back button menu](#back-button-menu). | — |
+| A9 | Superseded | Gamepad combo through an AccessibilityService (the original plan's Phase 4). The menu opened on Retroid's Home message from 2026-10-29, and since 2026-11-03 opens on the controller's Back through a key filter; see [Back button menu](#back-button-menu). | — |
 
 ## Game resolution
 

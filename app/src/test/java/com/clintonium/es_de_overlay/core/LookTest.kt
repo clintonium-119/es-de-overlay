@@ -1,6 +1,8 @@
 package com.clintonium.es_de_overlay.core
 
+import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -219,6 +221,22 @@ class LookTest {
         assertEquals(0.06f, LINEAR.with(overrides("<overlay><fontSize>0.04</fontSize><textScale>150</textScale></overlay>")).fontSize, 0.00001f)
         assertEquals(LINEAR.fontSize, LINEAR.with(overrides("<overlay><textScale>big</textScale></overlay>")).fontSize)
         assertEquals(LINEAR.fontSize, LINEAR.with(overrides("<overlay><textScale>-50</textScale></overlay>")).fontSize)
+    }
+
+    @Test
+    fun `docs example override file parses and sets every key`() {
+        val example = File("../docs/overlay-theme.example.xml").inputStream().use(::overlayTheme)
+        assertEquals(
+            setOf(
+                "background", "text", "selectedText", "selectedBackground", "selectedCornerRadius", "selector", "selectorWidth",
+                "selectorCornerRadius", "helpBackground", "helpIcon", "helpText", "fontPath", "fontSize", "lineSpacing", "bodyText",
+                "bodyFontPath", "bodyFontSize", "bodyLineSpacing", "artCornerRadius", "textScale",
+            ),
+            example.keys,
+        )
+        // Each value parses: on its own it changes Linear's look.
+        val unchanged = LINEAR.with(emptyMap())
+        example.forEach { (key, value) -> assertNotEquals(key, unchanged, LINEAR.with(mapOf(key to value))) }
     }
 
     @Test

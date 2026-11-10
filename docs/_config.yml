@@ -1,0 +1,16 @@
+title: ES-DE Overlay
+description: An in-game menu for ES-DE on Android, drawn in your ES-DE theme's look.
+baseurl: /es-de-overlay
+url: https://clintonium-119.github.io
+theme: minima
+header_pages:
+  - setup.md
+  - use.md
+  - theme.md
+  - shizuku.md
+  - privacy.md
+  - limitations.md
+  - credits.md
+# Each page's first heading is its title, shown once.
+titles_from_headings:
+  strip_title: true
