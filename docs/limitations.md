@@ -64,7 +64,7 @@ Turning the screen off when ES-DE is idle needs ES-DE's *Debug Mode*.
   - A site that changes its layout can break Save guide until the app is updated. A site could also block the in-app browser outright.
   - Elsewhere, Reader View's rules decide what the main content is, and the guide's other pages are guessed from its links. Check the list before saving.
   - Chapters found beside a chapter page come after it, not in the guide's order.
-- **Older VGMaps saves show file names.** A CBZ saved from VGMaps before maps were named shows each map's file name (`Shantae-DribbleFountain`). Saving it again from Find Guides names them.
+- **Older VGMaps saves show file names.** A CBZ saved from VGMaps before maps were named shows each map's file name, not its title. Saving it again from Find Guides names them.
 - **A text guide with no contents tags or rule lines** stays one section.
 - **Ads show in the live browser.** Saved guides leave them out.
 - **Guides with many large images make large files.** Super Metroid's GameFAQs guide with 264 images is 58 MB.

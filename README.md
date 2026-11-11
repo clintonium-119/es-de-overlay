@@ -9,11 +9,13 @@
 
 An in-game menu for [ES-DE](https://es-de.org) on Android. Press the controller's **Back** button during a game you launched from ES-DE, and a menu opens over the game, drawn in your ES-DE theme's colours and font. It captures into ES-DE's media, opens the game's manual and guides, shows its ES-DE info and quits the game.
 
-| MinUI Menu (Overlay) | Modern | Slate |
+| MinUI Menu (Overlay) | Art Book Next | Iconic |
 | --- | --- | --- |
-| ![The menu over Shantae under MinUI Menu (Overlay)](docs/images/menu.png) | ![The same menu under Modern](docs/images/menu-modern.png) | ![The same menu under Slate](docs/images/menu-slate.png) |
+| ![The menu over Super Mario World under MinUI Menu (Overlay)](docs/images/menu.png) | ![The same menu under Art Book Next](docs/images/menu-art-book-next.png) | ![The same menu under Iconic](docs/images/menu-iconic.png) |
+| **TechDweeb** | **Canvas** | **Linear** |
+| ![The same menu under TechDweeb](docs/images/menu-techdweeb.png) | ![The same menu under Canvas](docs/images/menu-canvas.png) | ![The same menu under Linear](docs/images/menu-linear.png) |
 
-The same menu under three ES-DE themes; the first is a [fork of minui-menu-es-de](https://github.com/clintonium-119/minui-menu-overlay-es-de). **Documentation:** [clintonium-119.github.io/es-de-overlay](https://clintonium-119.github.io/es-de-overlay/), including [how the look works](https://clintonium-119.github.io/es-de-overlay/theme.html).
+The same menu under six ES-DE themes; the first is a [fork of minui-menu-es-de](https://github.com/clintonium-119/minui-menu-overlay-es-de). **Documentation:** [clintonium-119.github.io/es-de-overlay](https://clintonium-119.github.io/es-de-overlay/), including [how the look works](https://clintonium-119.github.io/es-de-overlay/theme.html).
 
 ## What it adds
 

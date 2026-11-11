@@ -10,15 +10,20 @@ The menu, the guide viewer and the guide browser take their colours and font fro
 - the rows and the cursor from its text list;
 - guide text from its game description text;
 - the help pill from its help prompts;
-- the background from its background.
+- the background from its background. A wallpaper picture counts as its average colour.
 
 The overlay keeps its own layout and draws solid colours, not the theme's images. Change the theme in ES-DE and the overlay follows from the next game you start.
 
-![The menu under MinUI Menu (Overlay)](images/menu.png)
+Six themes, each with ES-DE's own gamelist on the left and the overlay's menu on the right:
 
-![The menu under Modern](images/menu-modern.png)
-
-![The menu under Slate](images/menu-slate.png)
+| ES-DE's gamelist | The overlay's menu |
+| --- | --- |
+| ![ES-DE's gamelist under MinUI Menu (Overlay)](images/esde-gamelist.png) | ![The menu under MinUI Menu (Overlay)](images/menu.png) |
+| ![ES-DE's gamelist under Art Book Next](images/esde-art-book-next.png) | ![The menu under Art Book Next](images/menu-art-book-next.png) |
+| ![ES-DE's gamelist under Iconic](images/esde-iconic.png) | ![The menu under Iconic](images/menu-iconic.png) |
+| ![ES-DE's gamelist under TechDweeb](images/esde-techdweeb.png) | ![The menu under TechDweeb](images/menu-techdweeb.png) |
+| ![ES-DE's gamelist under Canvas](images/esde-canvas.png) | ![The menu under Canvas](images/menu-canvas.png) |
+| ![ES-DE's gamelist under Linear](images/esde-linear.png) | ![The menu under Linear](images/menu-linear.png) |
 
 ## Where it reads the theme from
 
@@ -110,4 +115,4 @@ To use it:
 
 These are the settings on the Retroid Pocket Nova in the screenshots. Use Small. This fork tightens Small's line spacing so ten whole rows fill the list, which keeps ES-DE's scroll jumps landing on full rows.
 
-Modern and Slate, the other two themes above, come from ES-DE's theme downloader.
+Of the other five themes above, Art Book Next, Iconic, TechDweeb and Canvas come from ES-DE's theme downloader, and Linear is built into ES-DE.

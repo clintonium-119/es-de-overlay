@@ -5,7 +5,7 @@
 
 An in-game menu for [ES-DE](https://es-de.org) on Android. Press the controller's **Back** button during a game you launched from ES-DE, and a menu opens over the game. It's laid out like a gamelist and drawn in the colours and font of your ES-DE theme.
 
-![The overlay's menu over Shantae, in the MinUI Menu (Overlay) theme](images/menu.png)
+![The overlay's menu over Super Mario World, in the MinUI Menu (Overlay) theme](images/menu.png)
 
 ## What it does
 
@@ -15,11 +15,11 @@ An in-game menu for [ES-DE](https://es-de.org) on Android. Press the controller'
 
 **Manuals and guides in the game.** Read the game's scraped manual, or guides you add next to ES-DE's media: PDF, text, images, CBZ map packs and saved web pages. **Find Guides** gets maps from VGMaps and walkthroughs from StrategyWiki. It can also open GameFAQs, Neoseeker and ZeldaDungeon in a browser over the game and save a guide for reading offline. The viewer works like ES-DE's own manual viewer.
 
-![A VGMaps map of Shantae in the viewer](images/viewer-map.png)
+![A VGMaps map of Super Mario World in the viewer](images/viewer-map.png)
 
 **Your theme's look.** The menu, the guide viewer and the browser take their colours and font from the ES-DE theme you use. Change the theme in ES-DE and the overlay follows.
 
-![The same menu under ES-DE's Modern theme](images/menu-modern.png)
+![The same menu under the Canvas theme](images/menu-canvas.png)
 
 It also shows the game's ES-DE info and can quit the game. See [Use](use.md) for every feature and [Theme](theme.md) for how the look works.
 

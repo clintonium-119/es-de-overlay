@@ -14,9 +14,10 @@ Launch a game from ES-DE and press **Back** on the controller. The menu opens ov
 - **Capture** saves a screenshot, a clip, or both, into ES-DE's media folders.
 - **Quit Game** ends the game's app and returns to ES-DE.
 
-![The menu over Shantae](images/menu.png)
+![The menu over Super Mario World](images/menu.png)
 
 - The menu opens on **Resume**. The D-pad moves, **A** opens, and **B** closes the menu and returns to the game, as Resume does. The cursor stops at the first and last rows.
+- With ES-DE's **Swap the A/B and X/Y buttons** setting on, the overlay swaps them too. The screenshots here are from a device with it on, so their hints read `B OPEN` and `A BACK`.
 - **B** in any screen opened from the menu comes back to the row that opened it.
 - **Back** again closes everything the menu has open, a guide or the browser too, and returns to the game.
 - Home closes the menu and anything open over it, and goes to ES-DE. The game keeps running unless **Quit games left with Home** is on (see [Shizuku](shizuku.md)).
@@ -40,6 +41,8 @@ A toast and a notification name the saved files, e.g. `Saved: snes/screenshots/0
 System screenshots (Power + Volume down) taken during a game are filed the same way. ES-DE shows new media when you return to the gamelist; no reload is needed.
 
 ![The Capture menu](images/capture.png)
+
+![The toast naming the saved screenshot](images/capture-saved.png)
 
 ![ES-DE's gamelist showing a captured screenshot](images/esde-gamelist.png)
 
@@ -66,7 +69,7 @@ System screenshots (Power + Volume down) taken during a game are filed the same 
 
 ### Find Guides
 
-**Find Guides** checks VGMaps and StrategyWiki for the game and lists the ones that have it, e.g. `VGMaps: 56 Maps` and `StrategyWiki: Shantae (2 Pages)`.
+**Find Guides** checks VGMaps and StrategyWiki for the game and lists the ones that have it, e.g. `VGMaps: 76 Maps` and `StrategyWiki: Super Mario World (98 Pages)`.
 
 - Picking one saves it, with progress in the menu (**B** cancels and saves nothing), and then opens it. The main menu shows Guides from then on.
 - Picking a source again replaces the saved file.
@@ -162,9 +165,9 @@ Add guides next to ES-DE's other media, named like the ROM, or let **Find Guides
 Find Guides saves into the folder form, for example:
 
 ```
-<ES-DE>/downloaded_media/gbc/guides/Shantae/VGMaps - Shantae.cbz
+<ES-DE>/downloaded_media/snes/guides/Super Mario World/VGMaps - Super Mario World.cbz
 <ES-DE>/downloaded_media/snes/guides/Super Metroid/StrategyWiki - Super Metroid.html
-<ES-DE>/downloaded_media/gbc/guides/Shantae/GameFAQs - Shantae – Guide and Walkthrough by DEngel.html
+<ES-DE>/downloaded_media/snes/guides/Super Mario World/GameFAQs - Super Mario World – Guide and Walkthrough by Crazyreyn.html
 ```
 
 What each kind of save holds:

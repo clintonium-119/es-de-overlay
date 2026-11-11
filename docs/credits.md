@@ -17,11 +17,16 @@ ES-DE Overlay is MIT-licensed. It builds on, reads from and borrows ideas from t
 - **Your ES-DE theme.** The menu, guides and browser take the colours and fonts of the theme you use, read from the theme's own files. No theme files or fonts ship with the app, VAG Rounded included.
 - **[Linear](https://gitlab.com/es-de/emulationstation-de/-/tree/master/themes/linear-es-de)**, ES-DE's bundled theme, by Northwestern Software AB, Leon Styhre and Weestuarty. Licence: MIT. Its dark colour values are the overlay's built-in look, used when the active theme can't be read.
 
-## The theme in the screenshots
+## The themes in the screenshots
 
 - **[minui-menu-es-de](https://github.com/anthonycaccese/minui-menu-es-de)** by Anthony Caccese, a port of Shaun Inman's MinUI menu. Licence: CC BY-NC-SA, as stated in its `theme.xml`. The screenshots use a fork by ES-DE Overlay's author, **[minui-menu-overlay-es-de](https://github.com/clintonium-119/minui-menu-overlay-es-de)**, under the same licence; see [Theme](theme.md).
 - **[MinUI](https://github.com/shauninman/MinUI)** by Shaun Inman. Its repository states no licence. Its menu is where the theme's layout, and so the screenshots' look, comes from. No MinUI code is used.
-- **[Modern](https://gitlab.com/es-de/themes/modern-es-de)** and **[Slate](https://gitlab.com/es-de/themes/slate-es-de)**, ES-DE's themes from its theme downloader. Licence: CC BY-NC-SA 4.0. They appear only in screenshots.
+- **[Art Book Next](https://github.com/anthonycaccese/art-book-next-es-de)** by Anthony Caccese. Licence: CC BY-NC-SA, as stated in its `theme.xml`.
+- **[Iconic](https://github.com/Siddy212/iconic-es-de)** by Siddy212. Licence: its `theme.xml` states CC BY-NC-SA 2.0; its `LICENSE` file is CC0 1.0.
+- **[TechDweeb](https://github.com/anthonycaccese/techdweeb-es-de)**, designed by TechDweeb and ported to ES-DE by Anthony Caccese. Licence: CC BY-NC-SA, as stated in its `theme.xml`.
+- **[Canvas](https://github.com/Siddy212/canvas-es-de)** by Siddy212. Licence: its `theme.xml` states CC BY-NC-SA 2.0; its `LICENSE` file is CC0 1.0.
+
+These four come from ES-DE's theme downloader and appear only in screenshots, as does Linear, credited above. The ES-DE gamelist screenshots show each theme's own artwork.
 
 ## Inspiration
 

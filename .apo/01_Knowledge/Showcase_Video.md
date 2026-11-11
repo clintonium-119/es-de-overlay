@@ -8,7 +8,7 @@ title: "Showcase Video"
 status: planned
 owner: ""
 created: '2026-11-09'
-updated: '2026-11-09'
+updated: '2026-11-10'
 reviewed_on: ""
 related_notes: []
 tags: [apovault, knowledge, playbooks]
@@ -22,8 +22,8 @@ How to record the two-to-three-minute showcase video on the Retroid Pocket Nova.
 
 ### Before recording
 
-- Use Shantae (`gbc`). It has a manual, a VGMaps CBZ, StrategyWiki, GameFAQs and IGN guides, and scraped media.
-- Start from the MinUI Menu (Custom) theme. Shot 11 switches to Modern, so have Modern installed from ES-DE's theme downloader.
+- Use Super Mario World (`snes`). On the Nova it has a manual, `VGMaps - Super Mario World.cbz` (76 maps), a StrategyWiki guide (98 pages), a GameFAQs guide (Crazyreyn's), an IGN guide, and scraped media.
+- Start from the MinUI Menu (Overlay) theme. Shot 11 switches to Canvas, so have Canvas installed from ES-DE's theme downloader. Art Book Next, Iconic, TechDweeb and Linear are the other themes the site shows.
 - Keep the Nova on Wi-Fi: shots 7 and 8 download guides.
 - Set ES-DE's screensaver to never (UI Settings > Screensaver settings) and set it back afterwards. The Nova's is at 1 minute.
 - Have the overlay service running with capture consent (Start Now in its settings).
@@ -82,26 +82,30 @@ For screenrecord takes, replace the `-af … -ar 48000` part with `-an`.
 
 | # | Shot | Length |
 |---|---|---|
-| 1 | ES-DE gamelist on Shantae; launch it. | 0:10 |
+| 1 | ES-DE gamelist on Super Mario World; launch it. | 0:10 |
 | 2 | Back opens the menu; D-pad over the rows; B returns to the game. | 0:10 |
 | 3 | Capture > Screenshot and Video; play for the 15 s clip; the Saved toast. | 0:25 |
 | 4 | Home: the overlay ends the game and ES-DE shows the new screenshot, then plays the clip. | 0:10 |
 | 5 | Relaunch; Manual; turn a page; R1 to zoom and pan. | 0:15 |
-| 6 | Guides > VGMaps - Shantae.cbz; Y for the maps list; jump to a map; zoom and pan. | 0:20 |
+| 6 | Guides > VGMaps - Super Mario World.cbz; Y for the maps list; jump to Yoshi's Island 1; zoom and pan. | 0:20 |
 | 7 | Find Guides > StrategyWiki; the progress; it opens; Y for the contents. | 0:25 |
-| 8 | Find Guides > Search GameFAQs; pick DEngel's guide; Save Guide; it opens in the viewer. Trim the page loads. | 0:30 |
+| 8 | Find Guides > Search GameFAQs; pick Crazyreyn's guide; Save Guide; it opens in the viewer. Trim the page loads. | 0:30 |
 | 9 | Game Info: scroll the description. | 0:05 |
 | 10 | Quit Game: ES-DE is back at once. | 0:05 |
-| 11 | ES-DE UI Settings > Theme > Modern; launch Shantae; Back: the menu now matches Modern. | 0:20 |
+| 11 | ES-DE UI Settings > Theme > Canvas; launch Super Mario World; Back: the menu now matches Canvas. | 0:20 |
 
+- **Buttons are named as ES-DE's defaults.** With ES-DE's button swap on (as on the Nova on 2026-11-10), A and B trade places, and so do X and Y; follow the hints on screen.
+- **Turn RetroArch's shader off before shot 3.** With a shader on, the captured screenshot and clip come out with wrong colours (seen 2026-11-10). The menu's picture and ES-DE's gamelist then show that capture.
+- **Shot 3 replaces the game's scraped screenshot and video in ES-DE.** Copy `snes/screenshots/Super Mario World.png` and `snes/videos/Super Mario World.mp4` off the Nova first and put them back afterwards.
+- **If Back doesn't open the menu after a launch, quit the game and launch it again.** Overlay 1.0.0 misses a launch whose log lines cross a second.
 - **Shot 4 and shot 10 both end the game.** Save in-game before them if the progress matters.
 - **Shot 8: GameFAQs may show Cloudflare's "Verify you are human" box.** Tap it yourself and cut the wait from the take.
-- **DEngel's guide is a single page**, so it saves without a progress counter. To show "Saving page N of M", use an IGN guide through Search the Web instead.
-- **Find Guides and Save Guide replace the guide files Shantae already has.** No extra files are left behind.
+- **Crazyreyn's guide is a single page**, so it saves without a progress counter. To show "Saving page N of M", use IGN's Super Mario World guide (14 pages) through Search the Web instead.
+- **Find Guides and Save Guide replace the guide files Super Mario World already has.** No extra files are left behind.
 
 ### After recording
 
-- Switch the theme back to MinUI Menu (Custom) and set the screensaver back.
+- Switch the theme back to MinUI Menu (Overlay) and set the screensaver back.
 - Keep video files out of the repo. Upload the cut, then link it from the README.
 - No title cards or music yet; add them in an editor later if wanted.
 
