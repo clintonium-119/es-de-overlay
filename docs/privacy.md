@@ -7,20 +7,23 @@ ES-DE Overlay is written with an AI coding assistant and reviewed by its author.
 
 ## What the app can access
 
-Each of these needs your consent in Android's settings or permission dialogs. The app works without the optional ones.
+You grant each of these yourself, in Android's settings or permission dialogs, and the app works without the optional ones.
 
-- **The screen and game sound** while the overlay service runs, for screenshots and clips. Only the game's playback is captured, never the microphone.
+- **The screen and sound**, for screenshots and clips.
+  - The app holds Android's capture permission while its service runs, but records only when you pick Capture.
+  - A capture copies the whole screen, so a notification or system dialog showing at that moment is in it.
+  - Clips can include sound from any app that allows playback capture, so other audio playing at the same time may be recorded. The microphone is never recorded.
 - **The ES-DE and ROMs folders you pick.** It reads ES-DE's settings, log, gamelists and themes, and saves screenshots, clips and guides into `downloaded_media`.
-- **System screenshots** (Power + Volume down), to file them under the game in front.
+- **System screenshots** (Power + Volume down), to save them under the game in front, if you turn on Read screenshots.
 - **Which app is in front** (Usage access), to tell a game ES-DE launched from anything else.
-- **The controller's Back button**, through an accessibility service.
-  - It holds Back only during a game ES-DE launched, a capture or the open menu. Every other key goes straight on.
+- **The controller's Back or Menu button**, through an accessibility service.
+  - It intercepts Back or Menu only during a game ES-DE launched, a capture or the open menu. Every other button is passed on to the app in front.
   - The same service turns the screen off when ES-DE's screensaver has run for the time you set.
   - Without Shizuku, it presses Force stop on a game's App Info page for Quit Game.
 - **Drawing over other apps**, for the menu, the guide viewer and the guide browser.
 - **With [Shizuku](shizuku.md)** (optional):
   - ending a game's app for Quit Game and Quit games left with Home, but never ES-DE Overlay, ES-DE or Shizuku themselves;
-  - copying the theme in use from ES-DE's own app storage, where its theme downloader puts themes.
+  - copying your current theme from ES-DE's own app storage, where its theme downloader puts themes.
 
 ## When it goes online
 
@@ -29,13 +32,13 @@ Each of these needs your consent in Android's settings or permission dialogs. Th
   - The browser is a normal Android WebView.
   - Like any WebView, it uses Google Safe Browsing, which checks the pages it opens against Google's lists of dangerous sites.
 - **Saved guides open offline.** The viewer blocks all network access and runs none of a saved page's scripts.
-  - The one way out is a link to a YouTube video, when you pick it: YouTube's page for that video opens in the guide browser.
+  - The one exception: if you open a YouTube link in a saved guide, YouTube's page for that video opens in the guide browser.
 
-There are no analytics, no accounts and no ads, and nothing is sent anywhere else.
+ES-DE Overlay adds no analytics, ads or accounts of its own. Guide sites you open in the browser can load their own ads, trackers and embedded content, and keep cookies. Find Guides sends the game's title to StrategyWiki, and a guide search in the browser sends it to the site you pick.
 
 ## How it's checked
 
-Before it went public, the code was swept for the ways an app like this could be misused:
+Before the app went public, its code was checked for the ways an app like this could be misused:
 
 - its manifest and exported components;
 - the accessibility service;
@@ -44,8 +47,8 @@ Before it went public, the code was swept for the ways an app like this could be
 - its XML parsing;
 - its dependencies and secrets.
 
-What the sweep found was fixed. Every change now runs the unit tests and Android Lint in CI, and the code is scanned with CodeQL and OpenSSF Scorecard. None of that is a guarantee.
+Each finding was fixed or accepted with a reason. Every change now runs the unit tests and Android Lint in CI, and the code is scanned with CodeQL and OpenSSF Scorecard. None of that is a guarantee.
 
 ## Reporting a vulnerability
 
-See the [security policy](https://github.com/clintonium-119/es-de-overlay/security/policy). Please report privately through GitHub's **Report a vulnerability** button on the repository's **Security** tab.
+To report a security problem privately, use [GitHub's reporting form](https://github.com/clintonium-119/es-de-overlay/security/advisories/new). The [security policy](https://github.com/clintonium-119/es-de-overlay/security/policy) says what to include.

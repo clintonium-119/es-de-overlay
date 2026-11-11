@@ -5,12 +5,16 @@ url: https://clintonium-119.github.io
 # The layout's {% seo %} tag; minima used to switch this plugin on.
 plugins:
   - jekyll-seo-tag
+# Developer test notes stay in the repository, off the site.
+exclude:
+  - VERIFIED.md
 header_pages:
   - setup.md
   - use.md
   - theme.md
   - shizuku.md
   - privacy.md
+  - troubleshooting.md
   - limitations.md
   - credits.md
 # Each page's first heading is its title, shown once.

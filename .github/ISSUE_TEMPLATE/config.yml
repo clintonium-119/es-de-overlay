@@ -1,5 +1,8 @@
 blank_issues_enabled: true
 contact_links:
+  - name: Troubleshooting
+    url: https://clintonium-119.github.io/es-de-overlay/troubleshooting.html
+    about: Check Troubleshooting first; it lists the usual causes for each problem.
   - name: Known limitations
     url: https://clintonium-119.github.io/es-de-overlay/limitations.html
     about: Check the known limitations first; your problem may already be described there.

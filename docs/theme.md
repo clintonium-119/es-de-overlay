@@ -5,18 +5,18 @@
 
 ## The look follows your ES-DE theme
 
-The menu, the guide viewer and the guide browser take their colours and font from the ES-DE theme in use. They also follow the variant, colour scheme, font size and aspect ratio set in ES-DE. Each part comes from a part of the theme's gamelist:
+The menu, the guide viewer and the guide browser take their colours and font from your current ES-DE theme. They also follow the variant, colour scheme, font size and aspect ratio you set in ES-DE. Each part comes from a part of the theme's gamelist:
 
 - the rows and the cursor from its text list;
 - guide text from its game description text;
 - the help pill from its help prompts;
-- the background from its background. A wallpaper picture counts as its average colour.
+- the background from its background colour (or, for a wallpaper image, the image's average colour).
 
-The overlay keeps its own layout and draws solid colours, not the theme's images. Change the theme in ES-DE and the overlay follows from the next game you start.
+The app borrows colours and fonts only. The layout is its own, and it doesn't draw the theme's images. Change the theme in ES-DE and the app follows from the next game you start.
 
-Six themes, each with ES-DE's own gamelist on the left and the overlay's menu on the right:
+Six themes, each with ES-DE's own gamelist on the left and the app's menu on the right:
 
-| ES-DE's gamelist | The overlay's menu |
+| ES-DE's gamelist | The app's menu |
 | --- | --- |
 | ![ES-DE's gamelist under MinUI Menu (Overlay)](images/esde-gamelist.png) | ![The menu under MinUI Menu (Overlay)](images/menu.png) |
 | ![ES-DE's gamelist under Art Book Next](images/esde-art-book-next.png) | ![The menu under Art Book Next](images/menu-art-book-next.png) |
@@ -25,22 +25,22 @@ Six themes, each with ES-DE's own gamelist on the left and the overlay's menu on
 | ![ES-DE's gamelist under Canvas](images/esde-canvas.png) | ![The menu under Canvas](images/menu-canvas.png) |
 | ![ES-DE's gamelist under Linear](images/esde-linear.png) | ![The menu under Linear](images/menu-linear.png) |
 
-## Where it reads the theme from
+## Where the app reads the theme from
 
 - **Themes in `ES-DE/themes/`**: any theme there works.
-- **Themes from ES-DE's theme downloader**: these live in ES-DE's own app storage, which other apps can't read. The overlay reads them through [Shizuku](shizuku.md), copying a theme's XML, font and SVG files when a game starts after the theme changed.
-  - Without Shizuku, copy the theme's folder from `Android/data/org.es_de.frontend/files/themes/` into `ES-DE/themes/`. Do it from a computer over USB, for example, since Android keeps most file managers out of that folder.
+- **Themes from ES-DE's theme downloader**: these live in ES-DE's own app storage, which other apps can't read. The app reads them through [Shizuku](shizuku.md), copying a theme's XML, font and SVG files when a game starts after the theme changed.
+  - Without Shizuku, copy the theme's folder from `Android/data/org.es_de.frontend/files/themes/` into `ES-DE/themes/`. Do it from a computer over USB, for example, because Android keeps most file managers out of that folder.
   - Copy it again after the theme updates.
 - **Themes built into ES-DE, such as Linear**: read from ES-DE's app, so their colour scheme and fonts follow too.
 
-If ES-DE itself can't be read, the overlay uses a default look in Linear's dark colours with the system font.
+If ES-DE itself can't be read, the app uses a default look in Linear's dark colours with the system font.
 
 ## The Look settings
 
 In ES-DE Overlay's settings, under **Look**:
 
-- **Theme** says which look is in use. It shows the theme and colour scheme it follows, or the default look and why, or `overlay-theme.xml over` either.
-- **Text size** scales the theme's text in the menu and guides, from 90 % to 200 %. It's for themes whose small text suits ES-DE's busy screens but reads small in the overlay. The menu takes it from the next game you start.
+- **Theme** names the theme and colour scheme the app follows. If it has fallen back to the default look, it says so and why, and it starts with `overlay-theme.xml over` when an `overlay-theme.xml` is applied.
+- **Text size** scales the theme's text in the menu and guides, from 90 % to 200 %. It's useful when a theme's text is too small to read comfortably in the menu. The menu takes it from the next game you start.
 
 ## overlay-theme.xml
 
@@ -113,6 +113,6 @@ To use it:
 | Theme font size | Small |
 | Theme aspect ratio | Automatic |
 
-These are the settings on the Retroid Pocket Nova in the screenshots. Use Small. This fork tightens Small's line spacing so ten whole rows fill the list, which keeps ES-DE's scroll jumps landing on full rows.
+These are the settings used for the screenshots, on the Retroid Pocket Nova. With this theme, use Small: the fork tightens Small's line spacing so ten whole rows fill the list, which keeps ES-DE's scroll jumps landing on full rows.
 
 Of the other five themes above, Art Book Next, Iconic, TechDweeb and Canvas come from ES-DE's theme downloader, and Linear is built into ES-DE.
