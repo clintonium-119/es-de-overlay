@@ -40,6 +40,7 @@ import com.clintonium.es_de_overlay.core.isOneTextSection
 import com.clintonium.es_de_overlay.core.splitTextGuide
 import com.clintonium.es_de_overlay.core.textSections
 import com.clintonium.es_de_overlay.core.writeHtmlGuide
+import com.clintonium.es_de_overlay.core.youtubeVideo
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -112,7 +113,7 @@ private class Rendered(val page: Int, val width: Int, val height: Int, val rect:
  * the first or last page; zoomed in, the D-pad pans and L2/R2 reset; L1/R1 zoom; Y lists a CBZ's maps by
  * name. Saved HTML guides
  * scroll in an offline WebView styled like the theme, with their contents on Y; A or a tap opens their
- * pictures in the page viewer. Text guides show the same
+ * pictures in the page viewer, and hands their links to YouTube videos on to be played. Text guides show the same
  * way, split into sections at their headings. Only the
  * current page's bitmaps are held, and everything is released on [close].
  */
@@ -137,14 +138,18 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
     /** B steps back (through a guide's links, or out of a list) before it closes; false when there's nothing to step back from. */
     private var back: () -> Boolean = { false }
     private var key: String? = null
+    /** Plays the YouTube video at this address, from a guide's link. */
+    private var onVideo: (String) -> Unit = {}
 
     /**
      * Opens [uri], picking the format from [name]'s extension, at the position and zoom saved under [key] (its
-     * path below the ES-DE folder), drawn with [theme]; [onClose] runs when B closes it.
+     * path below the ES-DE folder), drawn with [theme]; [onVideo] gets the YouTube page of a video link picked in
+     * a guide; [onClose] runs when B closes it.
      */
-    fun open(uri: Uri, name: String, key: String, theme: ThemeLook.Current, onClose: () -> Unit) {
+    fun open(uri: Uri, name: String, key: String, theme: ThemeLook.Current, onVideo: (String) -> Unit, onClose: () -> Unit) {
         close()
         this.theme = theme
+        this.onVideo = onVideo
         try {
             build(uri, name, prefs.position(key), prefs.view(key), onClose)
             this.key = key
@@ -165,8 +170,9 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 val box = FrameLayout(context)
                 // Y shows the guide's contents over it; while they're up, the D-pad, A, B and Y work the list.
                 var contentsOpen = false
-                // Whether one of the guide's pictures is in view, for A.
+                // Whether one of the guide's pictures is in view, for A; else a link to a YouTube video, and its page.
                 var pictureInView = false
+                var videoInView: String? = null
                 // The picture A or a tap opened, over the guide, and its key handler; B goes back to the guide.
                 var picture: ((Int) -> Boolean)? = null
                 lateinit var web: WebView
@@ -183,7 +189,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 fun chrome() {
                     help.text = if (contentsOpen) "✚ MOVE   ${theme.label("A")} GO   ${theme.label("B")} CLOSE"
                     else (if (zoomed()) "✚ PAN" else "✚ SCROLL") + "   L1/R1 ZOOM   L2/R2 SECTION   ${theme.label("Y")} CONTENTS" +
-                        if (pictureInView) "   ${theme.label("A")} IMAGE" else ""
+                        if (pictureInView) "   ${theme.label("A")} IMAGE" else if (videoInView != null) "   ${theme.label("A")} VIDEO" else ""
                 }
                 /** Shows the guide's picture [n] of [of] in the page viewer, which turns through the others. */
                 fun openPicture(n: Int, of: Int) {
@@ -224,7 +230,9 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 web = this.web(page, name, saved, savedView, { answer ->
                     if (picture == null) {
                         label.text = sectionText(answer, name)
-                        pictureInView = (answer.trim('"').split(' ').getOrNull(2)?.toIntOrNull() ?: -1) >= 0
+                        val parts = answer.trim('"').split(' ')
+                        pictureInView = (parts.getOrNull(2)?.toIntOrNull() ?: -1) >= 0
+                        videoInView = parts.getOrNull(3)?.let(::youtubeVideo)
                         chrome()
                     }
                 }, ::openPicture, onClose)
@@ -267,9 +275,10 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                                 chrome()
                             }
                         }
-                        KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER -> web.evaluateJavascript("(function(){$PICTURES return p+' '+g.length})()") {
-                            val (n, of) = it.trim('"').split(' ').map { s -> s.toIntOrNull() ?: -1 } + listOf(-1, -1)
-                            openPicture(n, of)
+                        KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER -> web.evaluateJavascript("(function(){$PICTURES $VIDEOS return p+' '+g.length+' '+v})()") {
+                            val parts = it.trim('"').split(' ')
+                            val (n, of) = parts.map { s -> s.toIntOrNull() ?: -1 } + listOf(-1, -1)
+                            parts.getOrNull(2)?.let(::youtubeVideo)?.let(onVideo) ?: openPicture(n, of)
                         }
                         KeyEvent.KEYCODE_DPAD_UP -> web.scrollBy(0, -viewH / 4)
                         KeyEvent.KEYCODE_DPAD_DOWN -> web.scrollBy(0, viewH / 4)
@@ -671,8 +680,9 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
      * A WebView for a saved guide that never reaches the network: the [page], `guide.css` and the theme's
      * font are served from it and the ES-DE folder, every other request gets a 404, and only `#` links
      * within the page are followed. JavaScript is on for the viewer's own section lookups, contents list
-     * and picture taps; there is no bridge. After a scroll, [refreshed] gets `"n m p"`: section n of m at the
-     * top, and the picture in view (-1 for none). A tap on picture n of m calls [onPicture].
+     * and picture taps; there is no bridge. After a scroll, [refreshed] gets `"n m p v"`: section n of m at the
+     * top, and the picture in view (-1 for none) or else the address of the YouTube link in view. A tap on picture
+     * n of m calls [onPicture]; a tap on a link to a YouTube video, [onVideo].
      */
     @SuppressLint("SetJavaScriptEnabled")
     private fun web(
@@ -694,7 +704,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         }
         web.setBackgroundColor(theme.look.background)
         web.isVerticalScrollBarEnabled = false
-        val refresh = Runnable { web.evaluateJavascript("(function(){$SECTIONS $PICTURES return n+' '+s.length+' '+p})()", refreshed) }
+        val refresh = Runnable { web.evaluateJavascript("(function(){$SECTIONS $PICTURES $VIDEOS return n+' '+s.length+' '+p+' '+v})()", refreshed) }
         web.setOnScrollChangeListener { _, _, _, _, _ ->
             main.removeCallbacks(refresh)
             main.postDelayed(refresh, 100)
@@ -722,6 +732,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 if (url.host == HOST && url.path == "/picture") {
                     onPicture(url.getQueryParameter("n")?.toIntOrNull() ?: -1, url.getQueryParameter("of")?.toIntOrNull() ?: 0)
                 }
+                youtubeVideo(url.toString())?.let(onVideo)
                 return !(url.host == HOST && url.path == "/guide.html" && url.fragment != null)
             }
 
@@ -911,6 +922,15 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         /** JavaScript: `g` the guide's pictures, `p` the first one in view or -1. */
         const val PICTURES = "var g=document.querySelectorAll('$PICTURE'),p=-1;for(var i=0;i<g.length;i++){" +
             "var r=g[i].getBoundingClientRect();if(r.width>0&&r.bottom>0&&r.top<innerHeight&&r.right>0&&r.left<innerWidth){p=i;break}}"
+
+        /**
+         * JavaScript after [PICTURES]: `v` the address of the first link to a YouTube video in view, or ''. Of that
+         * link and the picture in view, the higher one stays: `v` is '' below a picture, `p` -1 below a link.
+         */
+        const val VIDEOS = "var y=document.querySelectorAll('a[href*=\"youtu\"]'),v='';for(var i=0;i<y.length;i++){" +
+            "var r=y[i].getBoundingClientRect();if(r.width>0&&r.bottom>0&&r.top<innerHeight&&" +
+            "/youtu\\.be\\/|youtube(-nocookie)?\\.com\\/(watch|shorts|embed|live)/.test(y[i].href)){" +
+            "if(p<0||r.top<g[p].getBoundingClientRect().top){p=-1;v=y[i].href}break}}"
 
         /** JavaScript that turns a tap on picture p of m into a load of `picture?n=p&of=m`, which the viewer opens instead. */
         const val PICTURE_TAPS = "document.addEventListener('click',function(e){var g=document.querySelectorAll('$PICTURE')," +

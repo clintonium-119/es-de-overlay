@@ -10,6 +10,7 @@ import android.os.SystemClock
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
@@ -91,8 +92,9 @@ class Picked(val pages: List<Pair<String, String>>, val followNext: Boolean)
  * guide page, and Close. Off the guide sites, Save guide is offered where Firefox's Reader View would be, and
  * first lists the guide's other pages it found to untick. Save guide loads each of the guide's pages in turn in
  * this same visible WebView, waits for the user on a bot check, and writes the guide as one HTML file in the
- * game's guides folder. Built on [open] and destroyed on [close]; it runs in the viewer's process, which ends
- * when it closes.
+ * game's guides folder. It also plays a guide's YouTube link over the viewer, with the gamepad: A pauses, the
+ * D-pad's left and right skip ten seconds, B closes. Built on [open] and destroyed on [close]; it runs in the
+ * viewer's process, which ends when it closes.
  */
 class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
     private val wm = context.getSystemService(WindowManager::class.java)
@@ -122,11 +124,15 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
 
     /**
      * Opens [url] in [look]'s colours. A saved guide of [game]'s goes to [onSaved] as its path below the ES-DE folder;
-     * [onClose] runs when Back runs out of history, Close is tapped or the page's renderer dies.
+     * [onClose] runs when Back runs out of history, Close is tapped or the page's renderer dies. With no [game] the
+     * page is a video from a guide: nothing to save, it plays without a tap, and the gamepad works it, its buttons
+     * read and named as [gamepad] has ES-DE's.
      */
     // The guide sites and their bot checks need JavaScript; pages get no bridge into the app and no files.
     @SuppressLint("SetJavaScriptEnabled")
-    fun open(url: String, game: GameRef, look: Look, onSaved: (String) -> Unit, onClose: () -> Unit) {
+    fun open(
+        url: String, game: GameRef?, look: Look, onSaved: (String) -> Unit, gamepad: ThemeLook.Current? = null, onClose: () -> Unit,
+    ) {
         close()
         this.look = look
         val done = {
@@ -144,6 +150,8 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
             allowContentAccess = false
             // Search finds any site, so Android's phishing and malware checks stay on; they look pages up with Google.
             safeBrowsingEnabled = true
+            // A video starts by itself, and A's pause and play count without a tap on the page.
+            if (game == null) mediaPlaybackRequiresUserGesture = false
         }
         val title = barText(context, barH, Gravity.CENTER)
         fun button(label: String, onTap: () -> Unit) = barText(context, barH, Gravity.CENTER).apply {
@@ -157,7 +165,7 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
             val picked = picking
             when {
                 saving -> cancelled = true
-                picked != null -> startSave(game, title, save, picked(), onSaved)
+                picked != null -> startSave(game ?: return@button, title, save, picked(), onSaved)
                 else -> web.evaluateJavascript("$script;esdeGuide.describe()") { json ->
                     val here = web.url.orEmpty()
                     val d = runCatching { JSONObject(json) }.getOrNull()
@@ -171,7 +179,7 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
                     if (d?.optBoolean("generic") == true && (pages.size > 1 || next != null)) {
                         pick(view, web, title, pages, unticked, next != null)
                     } else {
-                        startSave(game, title, save, null, onSaved)
+                        startSave(game ?: return@evaluateJavascript, title, save, null, onSaved)
                     }
                 }
             }
@@ -196,7 +204,7 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
                 }
                 if (saving || picking != null) return
                 save.visibility = View.GONE
-                if (isGuidePage(url)) {
+                if (game != null && isGuidePage(url)) {
                     view.evaluateJavascript("$script;esdeGuide.describe().kind") { kind ->
                         if (!saving && kind.trim('"') in setOf("text", "html")) save.visibility = View.VISIBLE
                     }
@@ -229,9 +237,41 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
             }, fill)
             addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
             addView(save, fill)
+            if (gamepad != null) {
+                addView(barText(context, barH, Gravity.CENTER).apply {
+                    text = "${gamepad.label("A")} PAUSE   ✚ SKIP   ${gamepad.label("B")} CLOSE"
+                    setPadding(barH, 0, barH, 0)
+                }, fill)
+            }
             addView(button("Close", done), fill)
         }
-        view = LinearLayout(context).apply {
+        view = object : LinearLayout(context) {
+            // B's press seen here, so the release of a press that began in the window below doesn't close this one.
+            var closing = false
+
+            // A video's keys, before the page gets them.
+            override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+                val js = if (gamepad == null) null else when (gamepad.button(event.keyCode, event.device?.name)) {
+                    KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK -> ""
+                    // YouTube starts a video muted when the browser won't let it start with sound, under a button of
+                    // its own to unmute it (`.ytp-unmute`, seen 2026-11-11); the first A is that button.
+                    KeyEvent.KEYCODE_BUTTON_A -> "if(v.muted){var u=document.querySelector('.ytp-unmute');u?u.click():v.muted=false}" +
+                        "else v.paused?v.play():v.pause()"
+                    KeyEvent.KEYCODE_DPAD_LEFT -> "v.currentTime-=10"
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> "v.currentTime+=10"
+                    else -> null
+                }
+                if (js == null) return super.dispatchKeyEvent(event)
+                val down = event.action == KeyEvent.ACTION_DOWN
+                when {
+                    js.isEmpty() -> if (down) closing = true else if (closing) done()
+                    // Skipping repeats while held; a held A doesn't flicker.
+                    down && (event.repeatCount == 0 || event.keyCode != KeyEvent.KEYCODE_BUTTON_A) ->
+                        web.evaluateJavascript("(function(){var v=document.querySelector('video');if(v){$js}})()", null)
+                }
+                return true
+            }
+        }.apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(look.background)
             addView(web, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))

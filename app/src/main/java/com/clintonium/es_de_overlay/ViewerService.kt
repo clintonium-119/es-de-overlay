@@ -12,7 +12,8 @@ import com.clintonium.es_de_overlay.core.GameRef
  * Runs the viewer and the guide browser in their own `:viewer` process. A WebView's library, and the GPU and
  * heap memory big pages leave behind, can't be released from a live process, so the process ends when the
  * viewer or browser closes. Started with [intent] for a document or [browse] for a web page; a guide saved
- * from the browser opens in the viewer. Stopping the service closes them.
+ * from the browser opens in the viewer, and a guide's YouTube link in the browser over it. Stopping the service
+ * closes them.
  */
 class ViewerService : Service() {
     private lateinit var prefs: Prefs
@@ -42,7 +43,10 @@ class ViewerService : Service() {
             url != null && system != null && rom != null -> show(url) {
                 browser.open(url, GameRef(system, rom), theme(system).look, ::showSaved) { stopSelf() }
             }
-            uri != null && name != null && key != null -> show(name) { viewer.open(uri, name, key, theme(systemOf(key))) { stopSelf() } }
+            uri != null && name != null && key != null -> show(name) {
+                val theme = theme(systemOf(key))
+                viewer.open(uri, name, key, theme, { video(it, theme) }) { stopSelf() }
+            }
             else -> stopSelf()
         }
         return START_NOT_STICKY
@@ -56,11 +60,17 @@ class ViewerService : Service() {
         browser.close()
         val name = path.substringAfterLast('/')
         show(name) {
-            viewer.open(treeChild(prefs.esdeTree!!, path), name, path, theme(systemOf(path))) {
+            val theme = theme(systemOf(path))
+            viewer.open(treeChild(prefs.esdeTree!!, path), name, path, theme, { video(it, theme) }) {
                 startService(Intent(this, HelperService::class.java).setAction(HelperService.ACTION_GUIDE_SAVED))
                 stopSelf()
             }
         }
+    }
+
+    /** Plays the YouTube page [url] in the browser, over the guide whose link it was; closing it shows the guide again. */
+    private fun video(url: String, theme: ThemeLook.Current) {
+        runCatching { browser.open(url, null, theme.look, {}, theme) { } }.onFailure { Log.e(TAG, "opening $url failed", it) }
     }
 
     // The look for a game of [system], before its window is up; the default if the theme can't be read.

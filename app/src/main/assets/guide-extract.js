@@ -10,6 +10,15 @@
   // Ad, share and comment blocks, by a word in their id or class: "adthrive-ad", "neoseeker-primis-inline", "disqus_thread".
   const JUNK = /(^|[\s_-])(ad|ads|adthrive|advert\w*|primis\w*|prms\w*|sponsor\w*|share\w*|social\w*|disqus\w*|comments?|readmore)(?=[\s_-]|$)/i;
   const KEEP = new Set(['href', 'src', 'alt', 'id', 'name', 'colspan', 'rowspan', 'title']);
+  // A link to a YouTube video stays a link: the viewer plays it over the guide.
+  const YOUTUBE = /^https?:\/\/((www|m)\.)?(youtube\.com\/(watch\?|shorts\/|embed\/|live\/)|youtu\.be\/)/;
+  // Whether an element is in the page's own parts rather than its content, as a screen reader's landmarks have it:
+  // navigation anywhere; a header, footer or sidebar outside any article, section or main content. (ZeldaDungeon
+  // keeps each chapter's enemy list, hearts and all, in an <aside> inside the chapter's <section>.)
+  const inSitePart = e => {
+    const part = e.closest('nav,header,footer,aside');
+    return !!part && (part.matches('nav') || !part.closest('article,main,section'));
+  };
 
   const $ = (s, root = document) => root.querySelector(s);
   const $$ = (s, root = document) => [...root.querySelectorAll(s)];
@@ -142,12 +151,26 @@
     return parsed.guide;
   }
 
+  // Sites off the guide list whose guide block is known: it is saved as it stands, in place of Reader View's pick.
+  // IGN's wiki pages are short on prose, so Reader View takes the whole page, with "Was this guide helpful?" and the
+  // footer; seen 2026-11-11.
+  const BLOCKS = { 'www.ign.com': '.wiki-html' };
+
   function readable(force) {
     if (!/^https?:$/.test(location.protocol) || !(force || isProbablyReaderable(document) || guideFront())) return null;
-    const article = new Readability(document.cloneNode(true)).parse();
+    const page = document.cloneNode(true);
+    // Reader View drops what a page hides from screen readers, and some pages mark their pictures so (IGN's wiki
+    // does): a picture the page shows at picture size counts as shown. The copy's images are in the page's order.
+    const shown = $$('img');
+    $$('img', page).forEach((img, i) => {
+      const r = shown[i] && shown[i].getBoundingClientRect();
+      if (r && r.width >= 100 && r.height >= 60) img.removeAttribute('aria-hidden');
+    });
+    const article = new Readability(page).parse();
     if (!article || !article.content) return null;
+    const block = $(BLOCKS[location.host] || ':not(*)');
     // Parsed inert: no images load and no handlers run until the content is cleaned.
-    let content = new DOMParser().parseFromString(article.content, 'text/html').body;
+    let content = block || new DOMParser().parseFromString(article.content, 'text/html').body;
     // Reader View weighs text, so on a page of maps with captions it can pick a footer instead. When its pick has
     // little text and none of the page's big pictures, the guide is the smallest block holding all of them.
     const big = $$('img').filter(i => {
@@ -155,7 +178,7 @@
       return r.width >= 200 && r.height >= 100 && !i.closest('header,nav,aside,footer');
     });
     const kept = new Set($$('img', content).map(i => i.getAttribute('src')));
-    if (article.length < 500 && big.length >= 2 && !big.some(i => kept.has(i.getAttribute('src')))) {
+    if (!block && article.length < 500 && big.length >= 2 && !big.some(i => kept.has(i.getAttribute('src')))) {
       let around = big[0].parentElement;
       while (around && !big.every(i => around.contains(i))) around = around.parentElement;
       if (around && around !== document.body && around !== document.documentElement) content = around;
@@ -217,8 +240,9 @@
 
     /**
      * Keeps the guide's cleaned HTML for part(): no scripts, frames, forms, ads or share blocks; only plain
-     * attributes; links to the guide's [pages] become #sK, other links their text; each image src img:N, for its
-     * srcset's biggest picture if it lists any. Returns its length and the number of images.
+     * attributes; links to the guide's [pages] become #sK, links to YouTube videos stay, other links become their
+     * text; the site's own images (logos, icons) go; each image src img:N, for its srcset's biggest picture if it
+     * lists any. Returns its length and the number of images.
      */
     html(pages) {
       const g = guide();
@@ -232,12 +256,31 @@
       for (const a of $$('a', c)) {
         const href = a.getAttribute('href') || '';
         if (href.startsWith('#')) continue;
+        if (href && YOUTUBE.test(a.href)) {
+          a.setAttribute('href', a.href);
+          // IGN's wikis show their old <youtube> tag as text around the bare URL.
+          for (const t of [a.previousSibling, a.nextSibling]) if (t && t.nodeType === 3 && /^\s*<\/?youtube>\s*$/.test(t.data)) t.remove();
+          if (/^https?:/.test(a.textContent.trim())) a.textContent = 'YouTube video';
+          continue;
+        }
         const i = href ? index.get(bare(a.href)) : undefined;
         if (i === undefined) a.replaceWith(...a.childNodes);
         else a.setAttribute('href', '#s' + (i + 1));
       }
+      // A site's own image: every copy of it on the page sits in the page's own parts. Reader View's pick can hold
+      // those too (IGN's whole page, with the logos in its <nav>).
+      // ponytail: by where the page puts it, so a logo in a plain <div> stays. Compare the guide's pages for images
+      // they all share if one turns up.
+      const siteImage = new Map();
+      for (const i of $$('img')) {
+        for (const u of new Set([i.src, i.currentSrc])) if (u) siteImage.set(u, siteImage.get(u) !== false && inSitePart(i));
+      }
       images = [];
       for (const img of $$('img', c)) {
+        if (siteImage.get(img.src)) {
+          img.remove();
+          continue;
+        }
         const src = largest(img.getAttribute('srcset')) || img.getAttribute('src');
         if (!src || src.startsWith('data:')) {
           img.removeAttribute('src');

@@ -243,6 +243,25 @@ class GuideSourcesTest {
     }
 
     @Test
+    fun `only a YouTube video address is a video, opened as YouTube's own page for its id`() {
+        val page = "https://www.youtube.com/watch?v=GIc8uHGR2dM"
+        for (url in listOf(
+            page, "http://youtube.com/watch?feature=share&v=GIc8uHGR2dM", "https://m.youtube.com/watch?v=GIc8uHGR2dM&list=PL1",
+            "https://youtu.be/GIc8uHGR2dM", "https://www.youtube.com/embed/GIc8uHGR2dM", "https://www.youtube.com/shorts/GIc8uHGR2dM",
+            "https://www.youtube.com/live/GIc8uHGR2dM/", "https://www.youtube-nocookie.com/embed/GIc8uHGR2dM?rel=0",
+        )) assertEquals(url, page, youtubeVideo(url))
+        assertEquals("$page&t=1m30s", youtubeVideo("https://youtu.be/GIc8uHGR2dM?t=1m30s"))
+        assertEquals("$page&t=90", youtubeVideo("https://www.youtube.com/embed/GIc8uHGR2dM?start=90"))
+        assertEquals(page, youtubeVideo("$page&t=1%26autoplay"))
+        for (url in listOf(
+            "https://www.youtube.com/channel/UCKy1dAqELo0zrOtPkf0eTMw", "https://www.youtube.com/watch?v=short", "https://www.youtube.com/",
+            "https://www.youtube.com.evil.example/watch?v=GIc8uHGR2dM", "https://www.youtube.com@evil.example/watch?v=GIc8uHGR2dM",
+            "https://evil.example/?u=https://youtu.be/GIc8uHGR2dM", "https://youtu.be/GIc8uHGR2dM/extra",
+            "https://www.youtube.com/watch?v=GIc8uHGR2dM%26x", "javascript:alert(1)", "intent://youtu.be/GIc8uHGR2dM", "not a url", "",
+        )) assertNull(url, youtubeVideo(url))
+    }
+
+    @Test
     fun `describe json bounds title url scheme host and page count`() {
         val here = "https://www.example.com/guide/"
         val pages = listOf(

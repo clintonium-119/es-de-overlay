@@ -84,6 +84,12 @@ class HtmlGuideTest {
     }
 
     @Test
+    fun `a link to a YouTube video is saved as a link`() {
+        val link = "<a href=\"https://www.youtube.com/watch?v=GIc8uHGR2dM\">YouTube video</a>"
+        assertTrue(section(html(listOf(GuideSection("Donut Plains", "<p>$link</p>")), emptyMap())).contains(link))
+    }
+
+    @Test
     fun `saved page drops iframes objects forms and base`() {
         val page = "<base href=\"https://evil.example/\"><meta http-equiv=\"refresh\" content=\"0;url=https://evil.example\">" +
             "<iframe src=\"https://evil.example\">frame text</iframe><object data=\"x.swf\"><embed src=\"x.swf\"></object>" +

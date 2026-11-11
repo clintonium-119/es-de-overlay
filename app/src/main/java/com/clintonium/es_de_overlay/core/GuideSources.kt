@@ -164,6 +164,30 @@ private val GAMEFAQS_GUIDE = Regex("/[^/]+/\\d+-[^/]+/faqs/\\d+(/[^/]+)?/?")
 private val NEOSEEKER_GUIDE = Regex("/[^/]+/(faqs/\\d+-[^/]+\\.html|walkthrough(/.*)?|[A-Z][^/]*)")
 private val ZELDADUNGEON_GUIDE = Regex("/[a-z0-9-]+-walkthrough(-guide)?/.*")
 
+/**
+ * YouTube's page for the video [url] links to (a watch, youtu.be, shorts, embed or live address), from its start
+ * time if it names one; null for anything else. Built from the video's id alone, so whatever a saved guide's link
+ * says, it can only open a YouTube video.
+ */
+fun youtubeVideo(url: String): String? {
+    val uri = runCatching { URI(url.trim()) }.getOrNull() ?: return null
+    if (uri.scheme?.lowercase() !in setOf("http", "https")) return null
+    val path = uri.path.orEmpty()
+    val query = uri.rawQuery.orEmpty().split('&').associate { it.substringBefore('=') to it.substringAfter('=', "") }
+    val id = when (uri.host?.lowercase()?.removePrefix("www.")?.removePrefix("m.")) {
+        "youtu.be" -> path.removePrefix("/")
+        "youtube.com", "youtube-nocookie.com" -> if (path == "/watch") query["v"] else YOUTUBE_PATH.matchEntire(path)?.groupValues?.get(1)
+        else -> null
+    }
+    if (id == null || !YOUTUBE_ID.matches(id)) return null
+    val start = (query["t"] ?: query["start"])?.takeIf(YOUTUBE_TIME::matches)
+    return "https://www.youtube.com/watch?v=$id" + start?.let { "&t=$it" }.orEmpty()
+}
+
+private val YOUTUBE_PATH = Regex("/(?:shorts|embed|live)/([^/]+)/?")
+private val YOUTUBE_ID = Regex("[A-Za-z0-9_-]{11}")
+private val YOUTUBE_TIME = Regex("[0-9hms]{1,12}")
+
 /** Whether a page titled [title] is a bot check waiting on the browser or the user, as the sites showed them on 2026-10-30. */
 fun isBotCheck(title: String): Boolean = BOT_CHECK_TITLES.any { title.trim().startsWith(it, ignoreCase = true) }
 
