@@ -103,6 +103,9 @@ When the page links to more pages of the same guide, Save guide first lists them
 - Every page is ticked except ones that look like the site's own (contributors, edit, log in).
 - Untick or tick any and tap **Save guide** again, or **Back** to return to the page.
 - Next links are followed page by page, up to 50 pages.
+- A listed page the site turns out not to have (it answers "not found") is left out of the save.
+
+The site's own images, such as its logo, are left out. Links to YouTube videos are kept.
 
 ![A GameFAQs guide in the browser](images/browser.png)
 
@@ -124,7 +127,7 @@ The viewer works like ES-DE's own manual viewer:
 **Maps (CBZ):**
 
 - The bar shows the page's number and name, e.g. `3 OF 9   TAIL CAVE`.
-- **Y** lists the maps by name with the current one picked. The D-pad moves, **A** jumps to the map, and **B** or **Y** closes the list.
+- **Y** lists the maps by name with the current one picked. The D-pad moves, L1/R1 move a screenful, L2/R2 go to the first and last map, **A** jumps to the map, and **B** or **Y** closes the list.
 
 **Saved web guides (`.html`) and text guides (`.txt`):**
 
@@ -133,6 +136,7 @@ The viewer works like ES-DE's own manual viewer:
 - Above 100 %, a text guide's lines run off the right edge rather than wrap, and left/right pan the guide sideways instead (the bar shows `✚ PAN`).
 - **Y** shows their contents over the guide, with the section in view picked, and works the same way as the maps list.
 - While a picture is in view the bar shows `A IMAGE`. **A**, or a tap on a picture, opens it in the viewer above. There, left/right turn through the guide's other pictures, and **B** goes back to the guide where it was.
+- While a link to a YouTube video is in view the bar shows `A VIDEO`. **A**, or a tap on the link, plays it in the guide browser over the guide. There, **A** pauses (the first press unmutes), D-pad left/right skip ten seconds, and **B** goes back to the guide where it was.
 - Otherwise **B** first steps back through tapped links, then closes.
 
 ![A map in the viewer](images/viewer-map.png)

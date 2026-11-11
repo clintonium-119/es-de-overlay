@@ -42,7 +42,7 @@ body:
     attributes:
       label: Overlay version
       description: Shown in Obtainium, or in Android's Settings > Apps > ES-DE Overlay. Leave blank if you're not sure.
-      placeholder: 1.0.0
+      placeholder: 1.1.0
   - type: dropdown
     id: shizuku
     attributes:

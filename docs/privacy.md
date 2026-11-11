@@ -29,6 +29,7 @@ Each of these needs your consent in Android's settings or permission dialogs. Th
   - The browser is a normal Android WebView.
   - Like any WebView, it uses Google Safe Browsing, which checks the pages it opens against Google's lists of dangerous sites.
 - **Saved guides open offline.** The viewer blocks all network access and runs none of a saved page's scripts.
+  - The one way out is a link to a YouTube video, when you pick it: YouTube's page for that video opens in the guide browser.
 
 There are no analytics, no accounts and no ads, and nothing is sent anywhere else.
 

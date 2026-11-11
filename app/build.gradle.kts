@@ -12,8 +12,8 @@ android {
         minSdk = 33
         // Pinned: Android 14 (34) requires a new MediaProjection consent per capture.
         targetSdk = 33
-        versionCode = 2
-        versionName = "1.0.0"
+        versionCode = 3
+        versionName = "1.1.0"
     }
 
     buildTypes {
