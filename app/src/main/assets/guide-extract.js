@@ -225,6 +225,8 @@
   let out = '';
   let images = [];
   const results = {};
+  // The addresses check() found the site doesn't have; null while it runs.
+  let gone = null;
 
   window.esdeGuide = {
     describe(force) {
@@ -321,6 +323,23 @@
         }))
         .then(data => { results[n] = { data }; }, e => { results[n] = { error: String(e) }; });
       return images[n];
+    },
+
+    /**
+     * Starts asking the site whether it has each of [urls] (the browser sends a few at a time); missing() has the
+     * answer. A contents list can link pages that aren't there (IGN's wikis do), and a "not found" page reads as a
+     * guide page of footer text. An address that gives no answer counts as there.
+     */
+    check(urls) {
+      gone = null;
+      Promise.all(urls.map(u => fetch(u, { method: 'HEAD' }).then(r => r.status === 404 || r.status === 410, () => false)))
+        .then(not => { gone = urls.filter((u, i) => not[i]); });
+      return urls.length;
+    },
+
+    /** Null while check() runs; then the addresses the site answered "not found" or "gone" for. */
+    missing() {
+      return gone;
     },
 
     /** Null while image n loads; then its error, or its type and length with the base64 kept for part(). */

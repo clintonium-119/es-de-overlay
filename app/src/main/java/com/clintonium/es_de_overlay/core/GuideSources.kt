@@ -146,6 +146,13 @@ fun onSameSite(here: String, url: String): Boolean {
 fun guidePageList(here: String, pages: List<Pair<String, String>>) =
     pages.filter { onSameSite(here, it.first) }.take(MAX_GUIDE_PAGES).map { (url, title) -> url to guideText(title) }
 
+/**
+ * The [pages] of a save without those the site says it doesn't have ([missing] addresses); the page on screen, at
+ * [here], always stays, and so does every page when the site gave no answer ([missing] null).
+ */
+fun pagesPresent(pages: List<Pair<String, String>>, here: String, missing: Collection<String>?) =
+    if (missing == null) pages else pages.filter { it.first == here || it.first !in missing }
+
 /** A title or author a page reported: no control characters, at most 200 characters. */
 fun guideText(text: String) = text.filterNot(Char::isISOControl).take(200)
 

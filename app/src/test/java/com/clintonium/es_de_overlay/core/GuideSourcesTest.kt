@@ -262,6 +262,17 @@ class GuideSourcesTest {
     }
 
     @Test
+    fun `a save leaves out the pages the site doesn't have, but never the page on screen`() {
+        val pages = listOf("https://x.example/g" to "Front", "https://x.example/g/a" to "A", "https://x.example/g/b" to "B", "https://x.example/g/c" to "C")
+        val here = "https://x.example/g"
+        assertEquals(listOf("Front", "A", "C"), pagesPresent(pages, here, listOf("https://x.example/g/b")).map { it.second })
+        assertEquals(listOf("Front", "C"), pagesPresent(pages, here, setOf(here, "https://x.example/g/a", "https://x.example/g/b")).map { it.second })
+        assertEquals(pages, pagesPresent(pages, here, emptyList()))
+        assertEquals(pages, pagesPresent(pages, here, null))
+        assertEquals(pages, pagesPresent(pages, here, listOf("https://elsewhere.example/g/a")))
+    }
+
+    @Test
     fun `describe json bounds title url scheme host and page count`() {
         val here = "https://www.example.com/guide/"
         val pages = listOf(

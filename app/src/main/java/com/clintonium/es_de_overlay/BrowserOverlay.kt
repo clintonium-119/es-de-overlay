@@ -39,6 +39,7 @@ import com.clintonium.es_de_overlay.core.guideText
 import com.clintonium.es_de_overlay.core.isBotCheck
 import com.clintonium.es_de_overlay.core.isGuidePage
 import com.clintonium.es_de_overlay.core.onSameSite
+import com.clintonium.es_de_overlay.core.pagesPresent
 import com.clintonium.es_de_overlay.core.siteOf
 import com.clintonium.es_de_overlay.core.textSections
 import com.clintonium.es_de_overlay.core.writeHtmlGuide
@@ -347,8 +348,9 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
      * arrived. Each page of an HTML guide, or each [picked] one and those its Next links lead to, loads in turn in
      * this browser. Returns the path written.
      */
-    private fun saveGuide(game: GameRef, picked: Picked?, progress: (String) -> Unit): String {
+    private fun saveGuide(game: GameRef, ticked: Picked?, progress: (String) -> Unit): String {
         val here = string(eval("location.href")).substringBefore('#')
+        val picked = ticked?.let { Picked(present(it.pages, here, progress), it.followNext) }
         val guide = extract(picked?.pages) ?: throw IOException("no guide on $here")
         // A page off the guide sites is credited to its host.
         val site = siteOf(here)?.label ?: URI(here).host.removePrefix("www.")
@@ -401,6 +403,30 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
         return saveVia(MediaWriter(context, prefs.esdeTree!!), context.cacheDir, game, dir, name, "text/html", { cancelled }) { file ->
             file.bufferedWriter().use { writeHtmlGuide(it, guide.title, sections, images, credit) }
         }.also { Log.i(TAG, "browser: saved $it: ${sections.size} sections, ${images.size} images") }
+    }
+
+    /**
+     * Save thread: the ticked [pages] the site has, asked from inside the page before any of them loads, so the save's
+     * sections and the links between them are numbered from the pages that exist. A contents list can link pages that
+     * aren't there (IGN's wikis do), and each saved as a section of the site's footer text.
+     */
+    private fun present(pages: List<Pair<String, String>>, here: String, progress: (String) -> Unit): List<Pair<String, String>> {
+        if (pages.size < 2) return pages
+        progress("Checking ${pages.size} pages")
+        eval(script)
+        eval("esdeGuide.check(${JSONArray(pages.map { it.first })})")
+        // A minute for the lot; past that every page stays, as before the check.
+        val until = SystemClock.uptimeMillis() + 60_000
+        var answer = "null"
+        while (answer == "null" && SystemClock.uptimeMillis() < until) {
+            if (cancelled) throw CancellationException()
+            Thread.sleep(200)
+            answer = eval("esdeGuide.missing()")
+        }
+        val missing = runCatching { JSONArray(answer) }.getOrNull()?.let { a -> (0 until a.length()).map(a::optString) }
+        return pagesPresent(pages, here, missing).also {
+            Log.i(TAG, "browser: ${pages.size - it.size} of ${pages.size} pages not on the site" + if (missing == null) " (no answer)" else "")
+        }
     }
 
     /**
