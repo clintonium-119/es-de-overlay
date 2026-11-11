@@ -67,7 +67,7 @@ ES-DE keeps the screen on while it's in front, even behind its screensaver, so a
 
 ### Manage Guides
 
-Under **Guides**, once the ES-DE folder is set, **Saved guides → Manage Guides** lists the guides you've saved, by game, and deletes the ones you no longer need. See [Manage Guides](use.md#manage-guides).
+Under **Guides**, once the ES-DE folder is set, **Saved guides → Manage Guides** lists the guides you've saved, by game, and deletes the ones you no longer need. See [Manage Guides](guides.md#manage-guides).
 
 ## Updating and uninstalling
 

@@ -49,15 +49,55 @@ body {
   gap: 4px 24px; padding-top: 14px; padding-bottom: 14px;
 }
 .site-name { color: var(--text); font-size: 20px; font-weight: 800; text-decoration: none; padding: 10px 0; display: flex; align-items: center; gap: 10px; }
-.masthead nav { display: flex; flex-wrap: wrap; gap: 0 20px; }
-.masthead nav a { color: var(--muted); font-size: 15px; font-weight: 600; text-decoration: none; padding: 10px 0; }
-.masthead nav a:hover { color: var(--text); }
-.masthead nav a[aria-current] {
-  color: var(--text); font-weight: 700;
-  text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 6px;
-}
+.masthead .repo { color: var(--muted); font-size: 15px; font-weight: 600; text-decoration: none; padding: 10px 0; }
+.masthead .repo:hover { color: var(--text); }
 footer { border-top: 1px solid var(--border); color: var(--muted); font-size: 15px; }
 footer .wrap { padding-top: 24px; padding-bottom: 32px; }
+
+/* Shown only while it has keyboard focus. */
+.skip {
+  position: absolute; left: 16px; top: 12px; z-index: 1;
+  padding: 8px 16px; border-radius: 8px;
+  background: var(--pill); color: var(--pill-text); font-weight: 700;
+}
+.skip:not(:focus) { width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+main:focus { outline: none; }
+
+/* Page list: a sidebar on wide screens, a closed disclosure above the page on narrow ones. */
+.sidebar, .nav-narrow nav { font-size: 15px; }
+.nav-group { margin: 20px 0 4px; color: var(--muted); font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.sidebar ul, .nav-narrow ul { margin: 0; padding: 0; list-style: none; }
+.sidebar a, .nav-narrow nav a { display: block; padding: 4px 0; color: var(--muted); text-decoration: none; }
+.sidebar a:hover, .nav-narrow nav a:hover { color: var(--text); }
+.sidebar a[aria-current], .nav-narrow a[aria-current] {
+  color: var(--text); font-weight: 700;
+  text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 5px;
+}
+ul.toc { margin: 2px 0 8px; padding-left: 12px; border-left: 2px solid var(--border); }
+.toc ul { padding-left: 12px; }
+.toc:empty { display: none; }
+.nav-narrow {
+  width: min(780px, 100% - 40px); margin: 24px auto 0;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+}
+.nav-narrow summary { padding: 12px 16px; font-weight: 700; cursor: pointer; }
+.nav-narrow summary:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; border-radius: 11px; }
+.nav-narrow nav { padding: 0 16px 12px; }
+.nav-narrow .nav-group:first-child { margin-top: 4px; }
+@media (max-width: 999px) {
+  .sidebar { display: none; }
+  .nav-narrow + .sidebar + main { padding-top: 32px; }
+}
+@media (min-width: 1000px) {
+  .nav-narrow { display: none; }
+  .with-sidebar {
+    display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 48px;
+    max-width: 1080px; margin: 0 auto; padding: 0 20px;
+  }
+  .with-sidebar main { max-width: 820px; margin: 0; padding-left: 0; padding-right: 0; }
+  /* Sticks while the page scrolls, and scrolls on its own when it's taller than the window. */
+  .sidebar { position: sticky; top: 0; align-self: start; max-height: 100vh; overflow-y: auto; scrollbar-width: thin; padding: 40px 4px 24px; }
+}
 
 /* Page text */
 main { max-width: 820px; margin: 0 auto; padding: 48px 20px 72px; }
