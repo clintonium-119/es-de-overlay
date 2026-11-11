@@ -1,3 +1,5 @@
+<img src="docs/assets/icon.svg" alt="" width="96" height="96">
+
 # ES-DE Overlay
 
 [![ci](https://github.com/clintonium-119/es-de-overlay/actions/workflows/ci.yml/badge.svg)](https://github.com/clintonium-119/es-de-overlay/actions/workflows/ci.yml)

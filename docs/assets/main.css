@@ -48,7 +48,7 @@ body {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
   gap: 4px 24px; padding-top: 14px; padding-bottom: 14px;
 }
-.site-name { color: var(--text); font-size: 20px; font-weight: 800; text-decoration: none; padding: 10px 0; }
+.site-name { color: var(--text); font-size: 20px; font-weight: 800; text-decoration: none; padding: 10px 0; display: flex; align-items: center; gap: 10px; }
 .masthead nav { display: flex; flex-wrap: wrap; gap: 0 20px; }
 .masthead nav a { color: var(--muted); font-size: 15px; font-weight: 600; text-decoration: none; padding: 10px 0; }
 .masthead nav a:hover { color: var(--text); }

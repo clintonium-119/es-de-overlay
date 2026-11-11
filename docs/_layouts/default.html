@@ -5,12 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 {% seo %}
+<link rel="icon" type="image/svg+xml" href="{{ '/assets/icon.svg' | relative_url }}">
 <link rel="stylesheet" href="{{ '/assets/main.css' | relative_url }}">
 </head>
 <body>
 <header class="masthead">
 <div class="wrap">
-<a class="site-name" href="{{ '/' | relative_url }}">{{ site.title | escape }}</a>
+<a class="site-name" href="{{ '/' | relative_url }}"><img src="{{ '/assets/icon.svg' | relative_url }}" alt="" width="28" height="28">{{ site.title | escape }}</a>
 <nav aria-label="Pages">
 {%- for path in site.header_pages -%}
 {%- assign item = site.pages | where: "path", path | first -%}

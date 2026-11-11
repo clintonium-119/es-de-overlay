@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launcher icon's art, on the adaptive icon's 108 dp canvas (the middle 72 dp shows): a screen outline with the
+     menu's rows, a white pill above two grey bars shaped like an E, breaking out past its left edge. The rows sit on
+     shapes in the background colour, which cut the outline where they cross it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M44,34h24a8,8 0 0 1 8,8v24a8,8 0 0 1 -8,8h-24a8,8 0 0 1 -8,-8v-24a8,8 0 0 1 8,-8z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4.5" />
+    <path
+        android:pathData="M32.5,42.5h27.75a8.5,8.5 0 0 1 8.5,8.5v0a8.5,8.5 0 0 1 -8.5,8.5h-27.75a8.5,8.5 0 0 1 -8.5,-8.5v-0a8.5,8.5 0 0 1 8.5,-8.5z"
+        android:fillColor="#0E1014" />
+    <path
+        android:pathData="M30,58h14.25a6,6 0 0 1 6,6v0a6,6 0 0 1 -6,6h-14.25a6,6 0 0 1 -6,-6v-0a6,6 0 0 1 6,-6z"
+        android:fillColor="#0E1014" />
+    <path
+        android:pathData="M30,68h24.25a6,6 0 0 1 6,6v0a6,6 0 0 1 -6,6h-24.25a6,6 0 0 1 -6,-6v-0a6,6 0 0 1 6,-6z"
+        android:fillColor="#0E1014" />
+    <path
+        android:pathData="M35.25,45.5h25a5.5,5.5 0 0 1 5.5,5.5v0a5.5,5.5 0 0 1 -5.5,5.5h-25a5.5,5.5 0 0 1 -5.5,-5.5v-0a5.5,5.5 0 0 1 5.5,-5.5z"
+        android:fillColor="#FFFFFF" />
+    <path
+        android:pathData="M32.25,61.5h12a2.5,2.5 0 0 1 2.5,2.5v0a2.5,2.5 0 0 1 -2.5,2.5h-12a2.5,2.5 0 0 1 -2.5,-2.5v-0a2.5,2.5 0 0 1 2.5,-2.5z"
+        android:fillColor="#5C6472" />
+    <path
+        android:pathData="M32.25,71.5h22a2.5,2.5 0 0 1 2.5,2.5v0a2.5,2.5 0 0 1 -2.5,2.5h-22a2.5,2.5 0 0 1 -2.5,-2.5v-0a2.5,2.5 0 0 1 2.5,-2.5z"
+        android:fillColor="#5C6472" />
+</vector>
