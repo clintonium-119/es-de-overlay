@@ -2,7 +2,9 @@ title: ES-DE Overlay
 description: An in-game menu for ES-DE on Android, drawn in your ES-DE theme's look.
 baseurl: /es-de-overlay
 url: https://clintonium-119.github.io
-theme: minima
+# The layout's {% seo %} tag; minima used to switch this plugin on.
+plugins:
+  - jekyll-seo-tag
 header_pages:
   - setup.md
   - use.md
@@ -14,3 +16,9 @@ header_pages:
 # Each page's first heading is its title, shown once.
 titles_from_headings:
   strip_title: true
+# The site's own layout (_layouts/default.html) frames every page.
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="{{ page.lang | default: site.lang | default: 'en' }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+{% seo %}
+<link rel="stylesheet" href="{{ '/assets/main.css' | relative_url }}">
+</head>
+<body>
+<header class="masthead">
+<div class="wrap">
+<a class="site-name" href="{{ '/' | relative_url }}">{{ site.title | escape }}</a>
+<nav aria-label="Pages">
+{%- for path in site.header_pages -%}
+{%- assign item = site.pages | where: "path", path | first -%}
+{%- if item %}
+<a href="{{ item.url | relative_url }}"{% if item.url == page.url %} aria-current="page"{% endif %}>{{ item.title | escape }}</a>
+{%- endif -%}
+{%- endfor %}
+</nav>
+</div>
+</header>
+<main{% if page.wide %} class="wide"{% endif %}>
+{% unless page.wide %}<h1>{{ page.title | escape }}</h1>{% endunless %}
+{{ content }}
+</main>
+<footer>
+<div class="wrap">{{ site.title | escape }} · <a href="https://github.com/clintonium-119/es-de-overlay">Source on GitHub</a></div>
+</footer>
+</body>
+</html>
