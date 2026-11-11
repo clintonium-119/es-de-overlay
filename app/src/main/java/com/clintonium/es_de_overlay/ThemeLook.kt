@@ -17,6 +17,9 @@ import com.clintonium.es_de_overlay.core.LINEAR
 import com.clintonium.es_de_overlay.core.Look
 import com.clintonium.es_de_overlay.core.ThemeSettings
 import com.clintonium.es_de_overlay.core.averageColor
+import com.clintonium.es_de_overlay.core.buttonLabel
+import com.clintonium.es_de_overlay.core.esButton
+import com.clintonium.es_de_overlay.core.esInputButtons
 import com.clintonium.es_de_overlay.core.look
 import com.clintonium.es_de_overlay.core.overlayTheme
 import com.clintonium.es_de_overlay.core.resolveTheme
@@ -27,8 +30,8 @@ import com.clintonium.es_de_overlay.core.with
 /**
  * The overlay's [Look] from ES-DE's theme settings, the active theme's files and an optional overlay-theme.xml in the
  * ES-DE folder, with the list and body fonts loaded. Read when ES-DE launches a game ([warm]), which the in-game menu
- * then keeps, and when the settings screen or the viewer opens; kept while es_settings.xml, overlay-theme.xml, the
- * system and the media type stay the same.
+ * then keeps, and when the settings screen or the viewer opens; kept while es_settings.xml, es_input.xml,
+ * overlay-theme.xml, the system and the media type stay the same.
  * A theme's files come from the first place that has it: `ES-DE/themes/`, ES-DE's own app (its built-in themes, as
  * assets), or a copy of a theme from ES-DE's theme downloader, which lives in ES-DE's app storage where only Shizuku
  * can read it and which [warm] makes in the cache.
@@ -38,33 +41,27 @@ class ThemeLook(private val context: Context, private val prefs: Prefs) {
     /**
      * A look with its fonts: the theme's, or sans-serif when it has none or it can't be read. [open] opens one of the
      * look's files by its path below the ES-DE folder, from wherever the theme was read; null when it's missing.
-     * With ES-DE's "Swap the A/B and X/Y buttons" on ([swapButtons]), a gamepad's A works as B and X as Y, and the
-     * other way round, in ES-DE's input and its help alike.
+     * A gamepad's A, B, X and Y work as ES-DE's [inputs] (its es_input.xml, by device name) map them, then as ES-DE's
+     * "Swap the A/B and X/Y buttons" ([swapButtons]) swaps them; the help names them as ES-DE's does for its
+     * [controllerType].
      */
     class Current(
         val look: Look,
         val font: Typeface,
         val bodyFont: Typeface,
         val swapButtons: Boolean = false,
+        val controllerType: String = "xbox",
+        val inputs: Map<String, Map<String, Int>> = emptyMap(),
         val open: (String) -> InputStream?,
     ) {
-        /** Key [code] as ES-DE reads it. */
-        fun button(code: Int) = if (!swapButtons) code else when (code) {
-            KeyEvent.KEYCODE_BUTTON_A -> KeyEvent.KEYCODE_BUTTON_B
-            KeyEvent.KEYCODE_BUTTON_B -> KeyEvent.KEYCODE_BUTTON_A
-            KeyEvent.KEYCODE_BUTTON_X -> KeyEvent.KEYCODE_BUTTON_Y
-            KeyEvent.KEYCODE_BUTTON_Y -> KeyEvent.KEYCODE_BUTTON_X
-            else -> code
+        /** Key [code] from the gamepad called [device] as ES-DE reads it. */
+        fun button(code: Int, device: String?): Int {
+            val letter = LETTERS[code] ?: return code
+            return CODES.getValue(esButton(letter, inputs[device].orEmpty(), swapButtons))
         }
 
         /** The help's name for the button that does ES-DE's [letter] (A, B, X or Y). */
-        fun label(letter: String) = if (!swapButtons) letter else when (letter) {
-            "A" -> "B"
-            "B" -> "A"
-            "X" -> "Y"
-            "Y" -> "X"
-            else -> letter
-        }
+        fun label(letter: String) = buttonLabel(letter, swapButtons, controllerType)
     }
 
     private var cached: Pair<List<Any?>, Current>? = null
@@ -79,9 +76,10 @@ class ThemeLook(private val context: Context, private val prefs: Prefs) {
         val started = SystemClock.uptimeMillis()
         val tree = prefs.esdeTree
         val settings = tree?.let { read(it, "settings/es_settings.xml") }
+        val input = tree?.let { read(it, "settings/es_input.xml") }
         val overrides = tree?.let { read(it, "overlay-theme.xml") }
         val scale = prefs.textScale
-        val key = listOf(tree, settings, system, mediaType, overrides, scale)
+        val key = listOf(tree, settings, input, system, mediaType, overrides, scale)
         cached?.let { (cachedKey, current) ->
             if (cachedKey == key) {
                 Log.i(TAG, "look: cached, ${SystemClock.uptimeMillis() - started} ms")
@@ -97,7 +95,9 @@ class ThemeLook(private val context: Context, private val prefs: Prefs) {
         val look = (overrides?.let { base.with(overlayTheme(it.byteInputStream())) } ?: base)
             .let { it.copy(fontSize = it.fontSize * scale / 100f, bodyFontSize = it.bodyFontSize * scale / 100f) }
         val font = typeface(open, look.fontPath)
-        val current = Current(look, font, if (look.bodyFontPath == look.fontPath) font else typeface(open, look.bodyFontPath), parsed.swapButtons, open)
+        val inputs = input?.let { runCatching { esInputButtons(it.byteInputStream()) }.getOrNull() }.orEmpty()
+        val bodyFont = if (look.bodyFontPath == look.fontPath) font else typeface(open, look.bodyFontPath)
+        val current = Current(look, font, bodyFont, parsed.swapButtons, parsed.controllerType, inputs, open)
         cached = key to current
         val loaded = if (look.fontPath != null && font === Typeface.SANS_SERIF) " (not loaded)" else ""
         Log.i(TAG, "look: ${look.source}, font ${look.fontPath}$loaded, ${SystemClock.uptimeMillis() - started} ms")
@@ -231,6 +231,12 @@ class ThemeLook(private val context: Context, private val prefs: Prefs) {
     companion object {
         /** Before anything is read: the default look in sans-serif. */
         val DEFAULT = Current(LINEAR, Typeface.SANS_SERIF, Typeface.SANS_SERIF) { null }
+
+        private val LETTERS = mapOf(
+            KeyEvent.KEYCODE_BUTTON_A to "A", KeyEvent.KEYCODE_BUTTON_B to "B",
+            KeyEvent.KEYCODE_BUTTON_X to "X", KeyEvent.KEYCODE_BUTTON_Y to "Y",
+        )
+        private val CODES = LETTERS.entries.associate { (code, letter) -> letter to code }
 
         // ES-DE's package, where its theme downloader installs themes, and the theme it falls back to (built in).
         private const val ESDE = "org.es_de.frontend"

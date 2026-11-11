@@ -422,4 +422,59 @@ class EsThemeTest {
         assertNull(xmlDocument("""<!doctype x SYSTEM "file:///etc/passwd"><x/>"""))
         assertEquals("x", xmlDocument("<x/>")!!.documentElement.tagName)
     }
+
+    @Test
+    fun `the controller type is read, xbox by default`() {
+        assertEquals("switchpro", themeSettings("""<string name="InputControllerType" value="switchpro" />""".byteInputStream()).controllerType)
+        assertEquals("xbox", themeSettings("""<bool name="InputSwapButtons" value="true" />""".byteInputStream()).controllerType)
+    }
+
+    @Test
+    fun `buttons work as ES-DE's input mapping and swap set them`() {
+        // The Nova's own controller as the user mapped it in ES-DE on 2026-11-10, a and b, x and y each the other way.
+        val xml = """
+            <?xml version="1.0"?>
+            <inputList>
+              <inputConfig type="controller" deviceName="Xbox Wireless Controller" deviceGUID="0500a0192220000002300000ffff3f00">
+                <input name="a" type="button" id="1" value="1" />
+                <input name="b" type="button" id="0" value="1" />
+                <input name="lefttrigger" type="axis" id="4" value="1" />
+                <input name="start" type="button" id="6" value="1" />
+                <input name="x" type="button" id="3" value="1" />
+                <input name="y" type="button" id="2" value="1" />
+              </inputConfig>
+              <inputConfig type="keyboard" deviceName="Keyboard">
+                <input name="a" type="key" id="13" value="1" />
+              </inputConfig>
+            </inputList>
+        """.trimIndent()
+        val inputs = esInputButtons(xml.byteInputStream())
+        assertEquals(mapOf("Xbox Wireless Controller" to mapOf("a" to 1, "b" to 0, "x" to 3, "y" to 2)), inputs)
+        val nova = inputs.getValue("Xbox Wireless Controller")
+        assertEquals(listOf("B", "A", "Y", "X"), "ABXY".map { esButton(it.toString(), nova, swap = false) })
+        // Swap on top of the mapping trades them back.
+        assertEquals(listOf("A", "B", "X", "Y"), "ABXY".map { esButton(it.toString(), nova, swap = true) })
+        // A controller ES-DE has no mapping for: as sent, or swapped.
+        assertEquals(listOf("A", "B", "X", "Y"), "ABXY".map { esButton(it.toString(), emptyMap(), swap = false) })
+        assertEquals(listOf("B", "A", "Y", "X"), "ABXY".map { esButton(it.toString(), emptyMap(), swap = true) })
+        assertEquals("L1", esButton("L1", nova, swap = true))
+        assertEquals(emptyMap<String, Map<String, Int>>(), esInputButtons("not xml".byteInputStream()))
+    }
+
+    @Test
+    fun `help names buttons as ES-DE's pictures for its controller type`() {
+        // ES-DE 3's help pictures for a, b, x and y, rendered from its APK on 2026-11-10.
+        val names = mapOf(
+            "xbox" to "ABXY", "xbox360" to "ABXY", "switchpro" to "ABXY", "snes" to "BAYX",
+            "ps123" to "✕○□△", "ps4" to "✕○□△", "ps5" to "✕○□△", "something-new" to "ABXY",
+        )
+        for ((type, expected) in names) {
+            assertEquals(type, expected.map { it.toString() }, "ABXY".map { buttonLabel(it.toString(), swap = false, type) })
+        }
+        // Swapped, ES-DE's A is the B button, named as the type names it.
+        assertEquals(listOf("B", "A", "Y", "X"), "ABXY".map { buttonLabel(it.toString(), swap = true, "switchpro") })
+        assertEquals(listOf("A", "B", "X", "Y"), "ABXY".map { buttonLabel(it.toString(), swap = true, "snes") })
+        assertEquals("○", buttonLabel("A", swap = true, "ps5"))
+        assertEquals("✚", buttonLabel("✚", swap = true, "ps5"))
+    }
 }

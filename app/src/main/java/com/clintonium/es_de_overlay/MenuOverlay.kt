@@ -239,7 +239,7 @@ class MenuOverlay(private val context: Context) {
         reshow = { show(items, onPick, onClose, alt, start) }
         val list = PillList(context, theme.look, theme.font, screenW, screenH, items, start)
         val rows = list.rows
-        val help = listOfNotNull("A" to "Open", alt?.let { "X" to it.first }, "B" to "Back")
+        val help = listOfNotNull("A" to "Select", alt?.let { "X" to it.first }, "B" to "Back")
         open(ScrollView(context).apply { addView(list.view) }, help) { code ->
             when (code) {
                 KeyEvent.KEYCODE_DPAD_UP -> list.move(-1)
@@ -382,7 +382,7 @@ class MenuOverlay(private val context: Context) {
             isFocusable = true
             isFocusableInTouchMode = true
             setOnKeyListener { _, sent, event ->
-                val code = theme.button(sent)
+                val code = theme.button(sent, event.device?.name)
                 if (BuildConfig.DEBUG && event.action == KeyEvent.ACTION_DOWN) {
                     val swapped = if (code != sent) " as ${KeyEvent.keyCodeToString(code)}" else ""
                     Log.d(TAG, "key delivered ${SystemClock.uptimeMillis() - event.eventTime} ms: ${KeyEvent.keyCodeToString(sent)}$swapped")

@@ -6,8 +6,8 @@ import kotlin.math.roundToInt
 import org.w3c.dom.Element
 
 /**
- * The theme keys of ES-DE's es_settings.xml, and its "Swap the A/B and X/Y buttons" ([swapButtons]); a missing key
- * takes ES-DE's default (`Settings.cpp`).
+ * The theme keys of ES-DE's es_settings.xml, its "Swap the A/B and X/Y buttons" ([swapButtons]) and its Controller type
+ * for help prompts ([controllerType]); a missing key takes ES-DE's default (`Settings.cpp`).
  */
 data class ThemeSettings(
     val theme: String = "linear-es-de",
@@ -16,7 +16,52 @@ data class ThemeSettings(
     val fontSize: String = "",
     val aspectRatio: String = "automatic",
     val swapButtons: Boolean = false,
+    val controllerType: String = "xbox",
 )
+
+/**
+ * ES-DE's es_input.xml: for each controller, by its device name, the SDL button that ES-DE's a, b, x and y are mapped
+ * to (`<input name="a" type="button" id="1" …/>`). SDL numbers a gamepad's A, B, X and Y (Android's) 0 to 3.
+ */
+fun esInputButtons(xml: InputStream): Map<String, Map<String, Int>> {
+    val root = xmlDocument(xml.reader().readText().removePrefix("\uFEFF"))?.documentElement ?: return emptyMap()
+    return root.children("inputConfig").filter { it.getAttribute("type") == "controller" }.associate { config ->
+        config.getAttribute("deviceName") to config.children("input")
+            .filter { it.getAttribute("type") == "button" && it.getAttribute("name") in ES_BUTTONS }
+            .mapNotNull { input -> input.getAttribute("id").toIntOrNull()?.let { input.getAttribute("name") to it } }
+            .toMap()
+    }
+}
+
+private val ES_BUTTONS = setOf("a", "b", "x", "y")
+
+/**
+ * The ES-DE button (A, B, X or Y) that the gamepad's [letter] (A, B, X or Y as Android reports it) works as: the one a
+ * controller's [mapping] from es_input.xml puts on that button, else [letter]; then [swap] ("Swap the A/B and X/Y
+ * buttons") trades A for B and X for Y, as ES-DE does. Anything else is [letter] as it is.
+ */
+fun esButton(letter: String, mapping: Map<String, Int>, swap: Boolean): String {
+    val sdl = "ABXY".indexOf(letter).takeIf { letter.length == 1 } ?: -1
+    if (sdl < 0) return letter
+    val mapped = mapping.entries.firstOrNull { it.value == sdl }?.key?.uppercase() ?: letter
+    return if (swap) "BAYX"["ABXY".indexOf(mapped)].toString() else mapped
+}
+
+/**
+ * What ES-DE's help calls the button for its [letter] (A, B, X or Y): with [swap] the other of the pair, named as ES-DE's
+ * help pictures for [controllerType] draw it (read from ES-DE 3's own): the SNES type by Nintendo's letters for those
+ * places (its A is Xbox's B), the PlayStation types by their symbols, Xbox, Xbox 360 and Switch Pro as A, B, X and Y.
+ */
+fun buttonLabel(letter: String, swap: Boolean, controllerType: String): String {
+    val i = "ABXY".indexOf(letter).takeIf { letter.length == 1 } ?: -1
+    if (i < 0) return letter
+    val names = when {
+        controllerType.startsWith("ps") -> "✕○□△"
+        "snes" in controllerType -> "BAYX"
+        else -> "ABXY"
+    }
+    return names[if (swap) i xor 1 else i].toString()
+}
 
 /** The [ThemeSettings] of an es_settings.xml, whose `<string|bool name="…" value="…"/>` entries have no root element. */
 fun themeSettings(xml: InputStream): ThemeSettings {
@@ -32,6 +77,7 @@ fun themeSettings(xml: InputStream): ThemeSettings {
         fontSize = values["ThemeFontSize"] ?: defaults.fontSize,
         aspectRatio = values["ThemeAspectRatio"] ?: defaults.aspectRatio,
         swapButtons = values["InputSwapButtons"] == "true",
+        controllerType = values["InputControllerType"] ?: defaults.controllerType,
     )
 }
 

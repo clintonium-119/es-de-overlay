@@ -230,6 +230,19 @@ class GuideSourcesTest {
     }
 
     @Test
+    fun `a byline run together with its count and date keeps only the names`() {
+        // IGN's byline as Reader View reads it on its Super Mario Advance 2 wiki, 2026-11-10.
+        val ign = "By IGN-GameGuides, IGN-Cheats, +204 moreUpdated: Mar 27, 2012 12:37am ESTAdd IGN on Google"
+        assertEquals("IGN-GameGuides, IGN-Cheats", guideAuthor(ign))
+        assertEquals(
+            "ign.com - Super Mario World Guide - IGN by IGN-GameGuides, IGN-Cheats.html",
+            guideFileName("ign.com", "Super Mario World Guide - IGN by ${guideAuthor(ign)}"),
+        )
+        assertEquals("Jane Doe", guideAuthor("by Jane Doe Published 3 May 2020"))
+        for (name in listOf("Jane Doe", "Byron Smith", "")) assertEquals(name, guideAuthor(name))
+    }
+
+    @Test
     fun `describe json bounds title url scheme host and page count`() {
         val here = "https://www.example.com/guide/"
         val pages = listOf(

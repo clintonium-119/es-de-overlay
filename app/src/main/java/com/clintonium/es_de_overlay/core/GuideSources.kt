@@ -149,6 +149,17 @@ fun guidePageList(here: String, pages: List<Pair<String, String>>) =
 /** A title or author a page reported: no control characters, at most 200 characters. */
 fun guideText(text: String) = text.filterNot(Char::isISOControl).take(200)
 
+/**
+ * An author a page reported, as [guideText], with only the names. Reader View keeps a byline element's text
+ * whole, its parts run together: IGN's "By IGN-GameGuides, IGN-Cheats, +204 moreUpdated: Mar 27, 2012…" is
+ * "IGN-GameGuides, IGN-Cheats".
+ */
+fun guideAuthor(text: String) = guideText(text).replace(BYLINE_TAIL, "").replace(BYLINE_BY, "").trim()
+
+// ponytail: English words only; a byline in another language keeps its count and date.
+private val BYLINE_TAIL = Regex(",?\\s*\\+\\d+\\s*more.*|(updated|published|posted)\\b.*", RegexOption.IGNORE_CASE)
+private val BYLINE_BY = Regex("^\\s*by(\\s+|$)", RegexOption.IGNORE_CASE)
+
 private val GAMEFAQS_GUIDE = Regex("/[^/]+/\\d+-[^/]+/faqs/\\d+(/[^/]+)?/?")
 private val NEOSEEKER_GUIDE = Regex("/[^/]+/(faqs/\\d+-[^/]+\\.html|walkthrough(/.*)?|[A-Z][^/]*)")
 private val ZELDADUNGEON_GUIDE = Regex("/[a-z0-9-]+-walkthrough(-guide)?/.*")

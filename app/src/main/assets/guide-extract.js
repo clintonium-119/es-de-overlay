@@ -112,7 +112,26 @@
   const siteOwn = (u, title) => SITE_TEXT.test(title) || SITE_PAGE.test(u.pathname.split('/').pop().replace(/\.\w+$/, '')) ||
     /^(edit|history)$/i.test(u.searchParams.get('action') || '');
 
-  // Any other page, when Reader View would offer it: its main content, and the guide's other pages from its links.
+  // A guide's front page can be little more than its contents, which Reader View's test turns down (IGN's
+  // "/wikis/super-mario-world" has one paragraph and links 26 pages below it): a page two or more folders deep that
+  // links at least ten pages below its own path counts as a guide too. A site's section tabs are fewer (IGN's
+  // "/games/super-mario-world" links 8: reviews, videos and the like).
+  // ponytail: a count, not a reading of the page; a guide with under ten pages needs Reader View's test to pass.
+  function guideFront() {
+    const path = location.pathname.replace(/\/$/, '');
+    if (path.split('/').length <= 2) return false;
+    const below = new Set();
+    for (const a of $$('a[href]')) {
+      try {
+        const u = new URL(a.getAttribute('href'), location.href);
+        if (u.origin === location.origin && u.pathname.startsWith(path + '/')) below.add(u.pathname);
+      } catch (e) { /* not a URL */ }
+    }
+    return below.size >= 10;
+  }
+
+  // Any other page, when Reader View would offer it or it's a guide's front page: its main content, and the guide's
+  // other pages from its links.
   // Pages numbered ?page=N anywhere on the page; else links anywhere below this page's path, or in the content
   // beside it in a folder two or more deep ("/wikis/shantae/", not a flat "/wiki/"); also a rel="next" or "Next" link as
   // [next], which the save can follow page by page. Parsed once per URL. A page picked to save is read even
@@ -124,7 +143,7 @@
   }
 
   function readable(force) {
-    if (!/^https?:$/.test(location.protocol) || !(force || isProbablyReaderable(document))) return null;
+    if (!/^https?:$/.test(location.protocol) || !(force || isProbablyReaderable(document) || guideFront())) return null;
     const article = new Readability(document.cloneNode(true)).parse();
     if (!article || !article.content) return null;
     // Parsed inert: no images load and no handlers run until the content is cleaned.

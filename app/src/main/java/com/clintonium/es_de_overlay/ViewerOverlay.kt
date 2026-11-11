@@ -249,6 +249,11 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                     if (contentsOpen) when (code) {
                         KeyEvent.KEYCODE_DPAD_UP -> web.evaluateJavascript(CONTENTS_UP, null)
                         KeyEvent.KEYCODE_DPAD_DOWN -> web.evaluateJavascript(CONTENTS_DOWN, null)
+                        // ES-DE's list keys: the bumpers page, the triggers go to the ends.
+                        KeyEvent.KEYCODE_BUTTON_L1 -> web.evaluateJavascript(CONTENTS_PAGE_UP, null)
+                        KeyEvent.KEYCODE_BUTTON_R1 -> web.evaluateJavascript(CONTENTS_PAGE_DOWN, null)
+                        KeyEvent.KEYCODE_BUTTON_L2 -> web.evaluateJavascript(CONTENTS_FIRST, null)
+                        KeyEvent.KEYCODE_BUTTON_R2 -> web.evaluateJavascript(CONTENTS_LAST, null)
                         KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER -> {
                             web.evaluateJavascript(CONTENTS_PICK) { label.text = sectionText(it, name) }
                             contentsOpen = false
@@ -317,7 +322,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
             isFocusable = true
             isFocusableInTouchMode = true
             setOnKeyListener { _, sent, event ->
-                val code = theme.button(sent)
+                val code = theme.button(sent, event.device?.name)
                 if (code == KeyEvent.KEYCODE_BUTTON_B || code == KeyEvent.KEYCODE_BACK) {
                     if (event.action == KeyEvent.ACTION_DOWN && !back()) { close(); onClose() }
                     return@setOnKeyListener true
@@ -375,7 +380,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         var restore = startView?.takeIf { it.size == 3 }
         val named = doc.count > 1 && doc.names.size == doc.count
         var list: PillList? = null
-        var listView: View? = null
+        var listView: ScrollView? = null
 
         fun zoomed() = pw > 0 && scale > fit * 1.01f
         fun maxScale() = maxOf(fit * 4, 2f)
@@ -567,6 +572,21 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
             listView = v
             chrome()
         }
+        // A screenful of the list's rows: those that fit below its title.
+        fun screenful(l: PillList) = (((listView?.height ?: 0) - l.view.top) / (l.rows.firstOrNull()?.height ?: 1).coerceAtLeast(1)).coerceAtLeast(1)
+        /**
+         * Moves the list's pick [by] rows, stopping at the ends, with the pick in the middle of the screen as ES-DE's
+         * list puts it on a bumper, or the list at its end (the title in view on the first row). The list scrolls
+         * first, at once, so the pick's own scroll finds it in view; the smooth scroll of no distance stops one a
+         * D-pad move may have just started, which would otherwise carry on from where it was going.
+         */
+        fun jump(l: PillList, by: Int) {
+            val v = listView ?: return
+            val row = l.rows.getOrNull((l.selected + by).coerceAtMost(l.rows.lastIndex).coerceAtLeast(0)) ?: return
+            v.scrollTo(0, l.view.top + row.top + row.height / 2 - v.height / 2)
+            v.smoothScrollTo(0, v.scrollY)
+            l.move(by)
+        }
         fun closeList() {
             frame.removeView(listView)
             list = null
@@ -599,6 +619,11 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 when (code) {
                     KeyEvent.KEYCODE_DPAD_UP -> it.move(-1)
                     KeyEvent.KEYCODE_DPAD_DOWN -> it.move(1)
+                    // ES-DE's list keys: the bumpers page, the triggers go to the ends.
+                    KeyEvent.KEYCODE_BUTTON_L1 -> jump(it, -screenful(it))
+                    KeyEvent.KEYCODE_BUTTON_R1 -> jump(it, screenful(it))
+                    KeyEvent.KEYCODE_BUTTON_L2 -> jump(it, -it.rows.size)
+                    KeyEvent.KEYCODE_BUTTON_R2 -> jump(it, it.rows.size)
                     KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_ENTER -> {
                         closeList()
                         turnTo(it.selected)
@@ -898,9 +923,16 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         fun section(by: Int) = "(function(){$SECTIONS var to=n+$by;if(to<1){to=0;scrollTo(0,0)}" +
             "else if(to<=s.length)s[to-1].scrollIntoView();else to=n;n=to;$JUMPED return n+' '+s.length})()"
 
-        /** JavaScript that shows the contents list with the section in view picked; returns its rows, 0 for none. */
+        /**
+         * JavaScript that shows the contents list with the section in view picked; returns its rows, 0 for none. The
+         * list covers what's on screen (the visual viewport): WebView widens the layout viewport to fit a slightly
+         * wider page, and a list as tall as that ran below the screen, so its last rows could only show by moving
+         * the visible area, which then hid its title.
+         */
         const val CONTENTS_OPEN = "(function(){$SECTIONS var c=document.getElementById('contents'),l=c?c.querySelectorAll('li'):[];" +
             "if(!l.length)return 0;for(var i=0;i<l.length;i++)l[i].classList.toggle('on',i==Math.max(n,1)-1);" +
+            "var v=window.visualViewport;if(v){c.style.top=v.offsetTop+'px';c.style.bottom='auto';c.style.boxSizing='border-box';" +
+            "c.style.height=v.height+'px'}" +
             "c.classList.add('open');c.querySelector('.on').scrollIntoView({block:'nearest'});return l.length})()"
 
         /** JavaScript that moves the contents list's pick to the row before or after it, stopping at the ends. */
@@ -908,6 +940,20 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
             "if(e){o.classList.remove('on');e.classList.add('on');e.scrollIntoView({block:'nearest'})}})()"
         val CONTENTS_UP = contentsStep("previousElementSibling")
         val CONTENTS_DOWN = contentsStep("nextElementSibling")
+
+        /**
+         * JavaScript that moves the contents list's pick [by] rows, stopping at the ends, and scrolls the list to put
+         * the pick in the middle of the screen, as ES-DE's list does on a bumper, or as far as the list goes (the
+         * title in view on the first row). In [by], `p` is a screenful: the rows that fit below the title.
+         */
+        private fun contentsJump(by: String) = "(function(){var c=document.getElementById('contents'),l=c.querySelectorAll('li')," +
+            "o=c.querySelector('.on'),i=[].indexOf.call(l,o);if(i<0)return;var h=l.length>1?l[1].offsetTop-l[0].offsetTop:1," +
+            "p=Math.max(1,Math.floor((c.clientHeight-l[0].offsetTop)/h)),to=Math.max(0,Math.min(l.length-1,i+($by)));" +
+            "o.classList.remove('on');l[to].classList.add('on');c.scrollTop=l[to].offsetTop+(l[to].offsetHeight-c.clientHeight)/2})()"
+        val CONTENTS_PAGE_UP = contentsJump("-p")
+        val CONTENTS_PAGE_DOWN = contentsJump("p")
+        val CONTENTS_FIRST = contentsJump("-l.length")
+        val CONTENTS_LAST = contentsJump("l.length")
 
         /** JavaScript that hides the contents list and scrolls to the picked section; returns `"n m"`. */
         const val CONTENTS_PICK = "(function(){var c=document.getElementById('contents'),a=c.querySelector('.on a')," +

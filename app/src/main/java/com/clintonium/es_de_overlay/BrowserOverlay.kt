@@ -14,6 +14,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
 import android.view.WindowManager
+import android.webkit.CookieManager
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
 import android.webkit.WebChromeClient
@@ -25,10 +26,12 @@ import android.widget.ScrollView
 import android.widget.TextView
 import com.clintonium.es_de_overlay.core.GameRef
 import com.clintonium.es_de_overlay.core.GuideImage
+import com.clintonium.es_de_overlay.core.GuideSite
 import com.clintonium.es_de_overlay.core.GuideSection
 import com.clintonium.es_de_overlay.core.LINEAR
 import com.clintonium.es_de_overlay.core.Look
 import com.clintonium.es_de_overlay.core.escapeHtml
+import com.clintonium.es_de_overlay.core.guideAuthor
 import com.clintonium.es_de_overlay.core.guideFileName
 import com.clintonium.es_de_overlay.core.guidePageList
 import com.clintonium.es_de_overlay.core.guideText
@@ -173,6 +176,11 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
                 }
             }
         }.apply { visibility = View.GONE }
+        // GameFAQs shows a visitor without its gf_dvi cookie, as on a first visit, its blank search form and sets the
+        // cookie; the same search then lists its results. So a first visit loads its page again once the cookie is set.
+        val cookies = CookieManager.getInstance()
+        fun gameFaqsCookie(at: String) = cookies.getCookie(at).orEmpty().contains("gf_dvi=")
+        var firstVisit = siteOf(url) == GuideSite.GAMEFAQS && !gameFaqsCookie(url)
         web.webViewClient = object : WebViewClient() {
             // Web pages only: intent:, file:, content: and javascript: links do nothing.
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) =
@@ -180,6 +188,12 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
 
             override fun onPageFinished(view: WebView, url: String) {
                 finished.offer(url)
+                if (firstVisit && siteOf(url) == GuideSite.GAMEFAQS && gameFaqsCookie(url)) {
+                    Log.i(TAG, "browser: first GameFAQs visit, loading $url again")
+                    firstVisit = false
+                    view.reload()
+                    return
+                }
                 if (saving || picking != null) return
                 save.visibility = View.GONE
                 if (isGuidePage(url)) {
@@ -394,7 +408,7 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
         val generic = d.optBoolean("generic")
         val next = if (d.isNull("next")) null else d.optString("next").takeIf { onSameSite(here, it) }
         val title = guideText(d.optString("title"))
-        val author = guideText(d.optString("author"))
+        val author = guideAuthor(d.optString("author"))
         if (kind == "text") return PageGuide(kind, title, author, pages, read(eval("esdeGuide.text()").toInt()), null, 0, generic, next)
         val links = JSONArray((picked ?: pages).map { (url, name) -> JSONObject().put("url", url).put("title", name) })
         val html = JSONObject(eval("esdeGuide.html($links)"))
@@ -453,6 +467,10 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
             (it.parent as? ViewGroup)?.removeView(it)
             it.stopLoading()
             it.destroy()
+            // The process ends when the browser closes, and WebView writes cookies to disk only now and then: without
+            // this, the sites' cookies from the last seconds (sign-ins, bot checks passed, GameFAQs' visitor cookie)
+            // would be lost.
+            CookieManager.getInstance().flush()
         }
         web = null
         root?.let(wm::removeView)
