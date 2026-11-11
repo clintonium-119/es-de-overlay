@@ -73,6 +73,7 @@ data class ThemeStyle(
  * The gamelist style ES-DE draws for [system] with the theme whose files [read] returns by theme-relative path
  * (null when missing), or null when the theme has no readable theme.xml. [screenAspect] is width / height, used when
  * the aspect ratio setting is automatic; [mediaType] is the downloaded_media folder whose image the art box shows.
+ * [rasterColor] gives the average colour of the raster picture at a theme-relative path, null when it can't be read.
  */
 fun resolveTheme(
     read: (String) -> String?,
@@ -80,6 +81,7 @@ fun resolveTheme(
     system: String,
     screenAspect: Float,
     mediaType: String,
+    rasterColor: (String) -> Int? = { null },
 ): ThemeStyle? {
     val caps = read("capabilities.xml")?.let(::xmlDocument)?.documentElement
     fun listed(tag: String) = caps?.children(tag)?.map { it.textContent.trim() }.orEmpty()
@@ -115,18 +117,24 @@ fun resolveTheme(
     val description = of("text").firstOrNull { it["metadata"] == "description" }.orEmpty()
     // The gamelist's own help, not the one ES-DE's menus use or one switched off there.
     val help = of("helpsystem").firstOrNull { it["scope"] != "menu" && it["scope"] != "none" }.orEmpty()
+    fun atOpacity(color: Int, image: Map<String, String>): Int {
+        val opacity = image["opacity"]?.toFloatOrNull()?.coerceIn(0f, 1f) ?: 1f
+        return ((color ushr 24) * opacity).roundToInt() shl 24 or (color and 0xFFFFFF)
+    }
+    fun isSvg(path: String) = path.endsWith(".svg", ignoreCase = true)
     // An image's colour as ES-DE draws it, at its opacity: its color, else the fill of an SVG picture. A raster
     // picture without a color gives no colour to copy.
     fun painted(image: Map<String, String>) =
-        (image["color"]?.let(::themeColor) ?: image["path"]?.takeIf { it.endsWith(".svg", ignoreCase = true) }?.let(read)?.let(::svgFill))
-            ?.let { color ->
-                val opacity = image["opacity"]?.toFloatOrNull()?.coerceIn(0f, 1f) ?: 1f
-                ((color ushr 24) * opacity).roundToInt() shl 24 or (color and 0xFFFFFF)
-            }
+        (image["color"]?.let(::themeColor) ?: image["path"]?.takeIf(::isSvg)?.let(read)?.let(::svgFill))?.let { atOpacity(it, image) }
+    // A full-screen raster picture (a wallpaper) stands in with its average colour, so that a panel over it isn't
+    // blended over black instead.
+    fun backdrop(image: Map<String, String>) =
+        painted(image) ?: image["path"]?.takeUnless(::isSvg)?.let(rasterColor)?.let { atOpacity(it, image) }
     // The full-screen images ES-DE draws over its black, the lower zIndex first and equal ones in the theme's order.
     val screen = of("image")
-        .filter { image -> painted(image) != null && listOf("size", "cropSize").any { image[it]?.let(::pair) == listOf(1f, 1f) } }
+        .filter { image -> listOf("size", "cropSize").any { image[it]?.let(::pair) == listOf(1f, 1f) } }
         .sortedBy { it.zIndex(IMAGE_Z) }
+        .mapNotNull(::backdrop)
     // The topmost coloured image below [zIndex], smaller than the screen, whose box holds the point (x, y).
     fun panelAt(x: Float, y: Float, zIndex: Float) = of("image").filter { image ->
         painted(image) != null && image.zIndex(IMAGE_Z) < zIndex &&
@@ -143,7 +151,7 @@ fun resolveTheme(
     val arts = (of("image") + of("video")).filter { it["imageType"] != null }
     val art = arts.firstOrNull { imageType in names(it["imageType"]!!) } ?: arts.firstOrNull()
     return ThemeStyle(
-        background = screen.takeIf { it.isNotEmpty() }?.fold(BLACK) { below, image -> blend(painted(image)!!, below) },
+        background = screen.takeIf { it.isNotEmpty() }?.fold(BLACK) { below, color -> blend(color, below) },
         listBackground = panel?.let(::painted),
         fontPath = list["fontPath"],
         fontSize = list["fontSize"]?.toFloatOrNull(),
@@ -214,6 +222,18 @@ fun blend(top: Int, bottom: Int): Int {
     val a = (top ushr 24) / 255f
     fun channel(shift: Int) = ((top shr shift and 0xFF) * a + (bottom shr shift and 0xFF) * (1 - a)).roundToInt() shl shift
     return BLACK or channel(16) or channel(8) or channel(0)
+}
+
+/** The average of ARGB [pixels], each weighted by its alpha, at their average alpha; null for none or all clear. */
+fun averageColor(pixels: IntArray): Int? {
+    var a = 0L; var r = 0L; var g = 0L; var b = 0L
+    for (p in pixels) {
+        val alpha = p ushr 24
+        a += alpha; r += (p shr 16 and 0xFF) * alpha; g += (p shr 8 and 0xFF) * alpha; b += (p and 0xFF) * alpha
+    }
+    if (a == 0L) return null
+    fun channel(sum: Long) = (sum.toDouble() / a).roundToInt()
+    return (a.toDouble() / pixels.size).roundToInt() shl 24 or (channel(r) shl 16) or (channel(g) shl 8) or channel(b)
 }
 
 /** An ES-DE colour, `RRGGBB` or `RRGGBBAA`, as ARGB; null when it is neither. */

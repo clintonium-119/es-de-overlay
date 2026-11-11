@@ -2,7 +2,7 @@ package com.clintonium.es_de_overlay.core
 
 import java.net.URLDecoder
 
-/** One ES-DE launch: the "Launching game" line plus the lines logged in the same second. */
+/** One ES-DE launch: the "Launching game" line plus the lines logged within two seconds of it. */
 data class Launch(
     val name: String,
     val system: String,
@@ -25,12 +25,25 @@ fun nextLaunch(latest: Launch?, line: String): Launch? {
         return Launch(name = m.groupValues[2], system = m.groupValues[3], stamp = m.groupValues[1], lines = listOf(line))
     }
     // Debug lines only come with ES-DE's Debug Mode; its game-start event line holds an escaped copy of the ROM path.
-    if (latest == null || !line.startsWith(latest.stamp) || DEBUG.containsMatchIn(line)) return latest
+    if (latest == null || !sinceLaunch(latest.stamp, line) || DEBUG.containsMatchIn(line)) return latest
     return latest.copy(
         // The log is a file in shared storage; only a package name goes on to force-stop.
         pkg = latest.pkg ?: PACKAGE.find(line)?.groupValues?.get(1)?.takeIf(PACKAGE_NAME::matches),
         lines = latest.lines + line,
     )
+}
+
+// ES-DE writes a launch's lines in one go, but its clock can tick over between the first line and the rest.
+private const val LAUNCH_SECONDS = 2
+private val CLOCK = Regex("""^\S+ +\d+ (\d+):(\d+):(\d+)""")
+private fun secondOfDay(line: String) =
+    CLOCK.find(line)?.destructured?.let { (h, m, s) -> h.toInt() * 3600 + m.toInt() * 60 + s.toInt() }
+
+// Whether [line] was logged within LAUNCH_SECONDS after the launch line stamped [stamp], across midnight too.
+private fun sinceLaunch(stamp: String, line: String): Boolean {
+    val from = secondOfDay(stamp) ?: return false
+    val at = secondOfDay(line) ?: return false
+    return (at - from).mod(86400) <= LAUNCH_SECONDS
 }
 
 /**

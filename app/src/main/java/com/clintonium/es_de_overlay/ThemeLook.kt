@@ -1,6 +1,7 @@
 package com.clintonium.es_de_overlay
 
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.graphics.fonts.Font
 import android.graphics.fonts.FontFamily
@@ -15,6 +16,7 @@ import java.nio.ByteBuffer
 import com.clintonium.es_de_overlay.core.LINEAR
 import com.clintonium.es_de_overlay.core.Look
 import com.clintonium.es_de_overlay.core.ThemeSettings
+import com.clintonium.es_de_overlay.core.averageColor
 import com.clintonium.es_de_overlay.core.look
 import com.clintonium.es_de_overlay.core.overlayTheme
 import com.clintonium.es_de_overlay.core.resolveTheme
@@ -127,10 +129,28 @@ class ThemeLook(private val context: Context, private val prefs: Prefs) {
             system,
             bounds.width().toFloat() / bounds.height(),
             mediaType,
+            { path -> rasterColor(files, theme, path) },
         )
         val prefix = "themes/$theme/"
         return look(style, theme, settings.colorScheme, "theme.xml couldn't be read") to
             { path -> if (path.startsWith(prefix)) files(path.removePrefix(prefix)) else null }
+    }
+
+    // The average colour of the theme's picture at [path]. The copy of a downloaded theme holds no pictures, so
+    // that theme's comes through Shizuku.
+    private fun rasterColor(files: (String) -> InputStream?, theme: String, path: String): Int? {
+        val bytes = runCatching { files(path)?.use { it.readBytes() } }.getOrNull()
+            ?: (if (ShizukuShell.ready) ShizukuShell.output("cat ${quote("$APP_THEMES/$theme/$path")}") else null)
+            ?: return null
+        val size = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, size)
+        // Decoded down to about 64 pixels across: enough for an average, and a wallpaper is large.
+        val options = BitmapFactory.Options().apply { inSampleSize = maxOf(1, maxOf(size.outWidth, size.outHeight) / 64) }
+        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options) ?: return null
+        val pixels = IntArray(bitmap.width * bitmap.height)
+        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+        bitmap.recycle()
+        return averageColor(pixels)
     }
 
     /**

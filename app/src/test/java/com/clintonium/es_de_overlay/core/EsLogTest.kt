@@ -56,6 +56,23 @@ class EsLogTest {
     }
 
     @Test
+    fun `launch lines logged after the second ticks over still give the package and path`() {
+        val launch = parse(
+            listOf(
+                """Nov 10 23:59:59 Info:   Launching game "Super Mario World" from system "Nintendo SNES (Super Nintendo) (snes)"...""",
+                "Nov 11 00:00:00 Info:   Expanded emulator launch arguments:",
+                "Nov 11 00:00:00 Info:   Package: com.retroarch.aarch64",
+                "Nov 11 00:00:00 Info:   %ROM% expanded: /storage/7BEF-E760/ROMs/snes/Super Mario World.zip",
+                // Long after the launch: not part of it.
+                "Nov 11 00:00:09 Info:   Package: com.example.other",
+            ),
+        )
+        assertEquals("com.retroarch.aarch64", launch.pkg)
+        assertEquals("Super Mario World.zip", romPathHint(launch, roots))
+        assertEquals(4, launch.lines.size)
+    }
+
+    @Test
     fun `SAF document uri keeps plus signs and subfolders`() {
         val launch = parse(
             listOf(

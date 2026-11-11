@@ -197,6 +197,33 @@ class EsThemeTest {
     }
 
     @Test
+    fun `a full-screen raster picture counts with its average colour, and a panel blends over it`() {
+        // Shaped like Canvas: a clear background colour, a wallpaper picture, and a translucent white panel under the list.
+        val xml = """<theme><view name="gamelist">
+            <image name="background"><size>1 1</size><color>00000000</color><zIndex>0</zIndex></image>
+            <image name="art"><cropSize>1 1</cropSize><path>./wallpapers/retro.webp</path><zIndex>1</zIndex></image>
+            <image name="panel"><pos>0.05 0.1</pos><size>0.4 0.8</size><color>FFFFFF80</color><zIndex>4</zIndex></image>
+            <textlist name="list"><pos>0.05 0.1</pos><size>0.4 0.8</size></textlist>
+        </view></theme>"""
+        fun style(rasterColor: (String) -> Int?) =
+            resolveTheme(mapOf("theme.xml" to xml)::get, ThemeSettings(theme = "inline"), "snes", 16 / 9f, "screenshots", rasterColor)!!
+        val cream = style { path -> 0xFFE0C080.toInt().takeIf { path == "wallpapers/retro.webp" } }
+        assertEquals(0xFFE0C080.toInt(), cream.background)
+        assertEquals(0xFFF0E0C0.toInt(), look(cream, "inline", "", "").background)
+        // Unreadable, the picture gives nothing, as before.
+        assertEquals(0xFF000000.toInt(), style { null }.background)
+    }
+
+    @Test
+    fun `average colour weights by alpha`() {
+        assertEquals(0xFF804020.toInt(), averageColor(intArrayOf(0xFFFF8040.toInt(), 0xFF000000.toInt())))
+        // A clear pixel adds no colour but halves the alpha.
+        assertEquals(0x80FF8040.toInt(), averageColor(intArrayOf(0xFFFF8040.toInt(), 0x00123456)))
+        assertNull(averageColor(intArrayOf(0, 0)))
+        assertNull(averageColor(intArrayOf()))
+    }
+
+    @Test
     fun `svg pictures give a panel colour and a selector shape`() {
         // Shaped like Canvas: an Inkscape rounded rect for the selector, a translucent rounded panel without a color.
         val selector = """<svg height="26.67mm" viewBox="0 0 365.5 26.67"><inkscape:path-effect radius="150"/>
