@@ -74,9 +74,9 @@ gh attestation verify es-de-overlay-<version>.apk --repo clintonium-119/es-de-ov
 
 Every release is signed with the certificate whose SHA-256 is `c88e6bb16214286ce6c31f786c7c3d9441b3cf926cda43af0b85e6f4bd973a75`. [Check a download](https://clintonium-119.github.io/es-de-overlay/privacy.html#check-a-download) says how to compare it and the APK's checksum.
 
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/clintonium-119/es-de-overlay/badge)](https://scorecard.dev/viewer/?uri=github.com/clintonium-119/es-de-overlay)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/clintonium-119/es-de-overlay/badge)](https://scorecard.dev/viewer/?uri=github.com/clintonium-119/es-de-overlay) [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/16626/badge)](https://www.bestpractices.dev/projects/16626)
 
-OpenSSF Scorecard rates a repository's security practices. Several of its checks need a second maintainer reviewing each change or a repository with a longer history, so a new one-person project like this one scores lower on those.
+OpenSSF Scorecard rates a repository's security practices. Several of its checks need a second maintainer reviewing each change or a repository with a longer history, so a new one-person project like this one scores lower on those. The OpenSSF Best Practices badge links to the project's own answers to OpenSSF's checklist of practices, with the reason for each.
 
 ## Credits
 
