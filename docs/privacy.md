@@ -49,6 +49,24 @@ Before the app went public, its code was checked for the ways an app like this c
 
 Each finding was fixed or accepted with a reason. Every change now runs the unit tests and Android Lint in CI, and the code is scanned with CodeQL and OpenSSF Scorecard. None of that is a guarantee.
 
+## Check a download
+
+Releases after 1.1.0 are built and published by the repository's release workflow from a version tag, with a signed record of how they were built. To check that an APK you downloaded came from that workflow, install the [GitHub CLI](https://cli.github.com) and run:
+
+```sh
+gh attestation verify es-de-overlay-<version>.apk --repo clintonium-119/es-de-overlay
+```
+
+The release's notes also give the APK's SHA-256, which `sha256sum es-de-overlay-<version>.apk` should match. The record itself is attached to the release as `es-de-overlay-<version>.apk.sigstore.json`.
+
+Every release, 1.0.0 and 1.1.0 included, is signed with the same certificate. Its SHA-256 is:
+
+```
+c88e6bb16214286ce6c31f786c7c3d9441b3cf926cda43af0b85e6f4bd973a75
+```
+
+To compare, run `apksigner verify --print-certs es-de-overlay-<version>.apk` from the Android SDK's build tools and read the `Signer #1 certificate SHA-256 digest` line. Android refuses an update signed with a different certificate, so once the app is installed, updates can only come from the same key.
+
 ## Reporting a vulnerability
 
 To report a security problem privately, use [GitHub's reporting form](https://github.com/clintonium-119/es-de-overlay/security/advisories/new). The [security policy](https://github.com/clintonium-119/es-de-overlay/security/policy) says what to include.

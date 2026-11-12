@@ -58,11 +58,21 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb logcat -G 16M && adb logcat -s ESDEShot   # the app's debug log
 ```
 
+[CONTRIBUTING.md](CONTRIBUTING.md) says how to report how the app works on your device and how to send a change, and [CHANGELOG.md](CHANGELOG.md) lists what changed in each version.
+
 ## Safety
 
 ES-DE Overlay asks for broad permissions. It captures the screen and sound, intercepts one controller button (Back or Menu, or the one you choose) during games through an accessibility service, and draws over other apps. With Shizuku, it can also end other apps. [Privacy and safety](https://clintonium-119.github.io/es-de-overlay/privacy.html) lists what it can access and when it goes online. It adds no analytics, accounts or ads of its own.
 
 ES-DE Overlay is written with an AI coding assistant and reviewed by its author. The code has been checked for the ways an app with these permissions could be misused, and each finding was fixed or accepted with a reason; [Privacy and safety](https://clintonium-119.github.io/es-de-overlay/privacy.html) says what was checked. Every push runs the unit tests and Android Lint, and CodeQL and OpenSSF Scorecard scan the main branch. There's no warranty (it's MIT-licensed), so use it at your own risk. To report a security problem privately, see [SECURITY.md](SECURITY.md).
+
+Releases after 1.1.0 are built from a version tag by this repository's release workflow, which attaches a signed record of the build. To check that an APK you downloaded came from it, run:
+
+```sh
+gh attestation verify es-de-overlay-<version>.apk --repo clintonium-119/es-de-overlay
+```
+
+Every release is signed with the certificate whose SHA-256 is `c88e6bb16214286ce6c31f786c7c3d9441b3cf926cda43af0b85e6f4bd973a75`. [Check a download](https://clintonium-119.github.io/es-de-overlay/privacy.html#check-a-download) says how to compare it and the APK's checksum.
 
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/clintonium-119/es-de-overlay/badge)](https://scorecard.dev/viewer/?uri=github.com/clintonium-119/es-de-overlay)
 
