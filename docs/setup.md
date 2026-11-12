@@ -24,12 +24,12 @@ Open **ES-DE Overlay** (ES-DE also lists it under Android Apps), then:
    | Notifications | Capture results, the start-after-boot offer | Recommended |
    | Ignore battery optimization | Keeping the service alive in the background; Android can still end it when memory runs short | Recommended |
    | Game sound in clips | Sound in video clips; the microphone is not used | Optional |
-   | Read screenshots | Filing Power + Volume down screenshots under the game. Leave it off if you take screenshots for other reasons: with the default **Replace**, each one replaces the game's image | Optional |
+   | Read screenshots | Only **Use system screenshots as game images**, under [Capture](#capture) | Optional |
 
    **Back button menu → Enable** opens Android's accessibility settings, where you turn on *ES-DE Overlay*.
    - This is an accessibility service. Android shows it every controller button press. It passes them all through except Back and Menu, and takes those only during a game ES-DE launched, a capture or the open menu.
    - For Quit Game without Shizuku, it presses Force stop on the game's App Info page in Settings.
-   - Android 13 can refuse to turn on an accessibility service for an app installed from a browser or file manager, with a *Restricted setting* message. To get past it, open App Info for ES-DE Overlay, tap the menu at the top right, tap **Allow restricted settings**, then turn the service on. See [Google's help page](https://support.google.com/android/answer/12623953).
+   - Android 13 can refuse to turn on an accessibility service for an app installed from a browser or file manager, with a *Restricted setting* message. On the Nova it was tested on, it didn't: installed from a file manager, the service turned on after Android's usual question about full control. If you do see the message, open App Info for ES-DE Overlay, tap the menu at the top right, tap **Allow restricted settings**, then turn the service on. See [Google's help page](https://support.google.com/android/answer/12623953).
 3. Under **Service** at the top, tap **Start Service**, then **Start now** on Android's screen-capture prompt. The button then says **Stop Service**. Android asks once for permission to capture the screen, and that lasts until the service stops or the device restarts.
 4. Try it: launch a game from ES-DE and press Back or Menu on the controller. The menu opens over the game, and [Use](use.md) goes through it.
 
@@ -48,7 +48,8 @@ Under **Service**:
 
 - **Screenshot media type** lists ES-DE's image types (default Screenshots). Pick the one your theme shows in the gamelist, so captures show there and in the menu.
 - **Clip length** runs from 5 to 60 s in 5 s steps (default 15 s).
-- **If the media file already exists**: **Replace** (the default) saves over it, and **Skip** keeps it and drops the new capture.
+- **Use system screenshots as game images** (off by default) saves a system screenshot you take during a game (Power + Volume down, or the Screenshot tile in quick settings) as that game's image, as a capture would. It needs the **Read screenshots** permission. Leave it off if you take screenshots for other reasons, such as sharing them.
+- **If the media file already exists**: **Replace** (the default) puts the new capture in its place, **Ask** asks in the menu whether to replace it, and **Skip** keeps it and drops the new capture. [Capture](use.md#capture) has the details.
 
 ### Screen off when idle
 
@@ -63,7 +64,8 @@ ES-DE keeps the screen on while it's in front, even behind its screensaver, so a
 ![The Look and Quitting games sections of the settings screen](images/settings.png)
 
 - Under **Look**, the Theme row shows which ES-DE theme the app follows. **Text size** scales the theme's text in the menu and guides. The menu takes it from the next game you start. See [Theme](theme.md).
-- Under **Quitting games**, set up [Shizuku](shizuku.md), then tap **Allow** on the **Shizuku** row. With Shizuku, Quit Game ends a game without showing its App Info page, and you can turn on **Quit games left with Home**.
+- Under **Quitting games**, **Confirm before quitting** (off by default) makes Quit Game ask first, with **Keep Playing** selected.
+- Also under **Quitting games**, set up [Shizuku](shizuku.md), then tap **Allow** on the **Shizuku** row. With Shizuku, Quit Game ends a game without showing its App Info page, and you can turn on **Quit games left with Home**.
 
 ### Manage Guides
 

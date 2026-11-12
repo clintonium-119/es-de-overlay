@@ -27,9 +27,9 @@ Shizuku is optional. Android normally doesn't let one app end another, but [Shiz
    - On a rooted device, start it directly.
 3. Shizuku-Next only: turn on *Start on boot*, and *Watchdog* to have it restart itself. If you started it through wireless debugging, it needs Wi-Fi at boot; see below for starting it without.
 4. In ES-DE Overlay, look under **Quitting games**.
-   - The **Shizuku** row says *Not installed*, *Not running* (**Open Shizuku** opens it), *Not allowed* or *Enabled*.
-   - Tap **Allow**, and allow ES-DE Overlay in Shizuku's dialog. The row changes to *Enabled*.
-   - Then turn on **Quit games left with Home** if you want it. You can't turn it on until Shizuku is *Enabled*.
+   - The **Shizuku** row says *Not installed*, *Not running* (**Open Shizuku** opens it), *Not allowed* or *Ready*.
+   - Tap **Allow**, and allow ES-DE Overlay in Shizuku's dialog. The row changes to *Ready*.
+   - Then turn on **Quit games left with Home** if you want it. You can't turn it on until Shizuku is *Ready*.
 
 ## Advanced: start Shizuku-Next without Wi-Fi
 

@@ -34,14 +34,22 @@ A few details:
 - **Screenshot** takes the picture and stops.
 - **Video** and **Screenshot and Video** record a clip (15 s unless you change **Clip length**). Press Back or Menu to stop early. Leaving the game also stops the clip and saves it.
 
-A toast and a notification name the saved files, for example `Saved: snes/screenshots/02) Hacks/Easyland.png, snes/videos/02) Hacks/Easyland.mp4`. They're saved as:
+A toast and a notification name the saved files, for example `Saved: snes/screenshots/02) Hacks/Easyland.png, snes/videos/02) Hacks/Easyland.mp4`. A file that took the place of one the game already had is listed first, under `Replaced:`. A long list is cut short in the toast; the notification has all of it. They're saved as:
 
 ```
 <ES-DE>/downloaded_media/<system>/screenshots/<ROM subfolders>/<ROM name>.png
 <ES-DE>/downloaded_media/<system>/videos/<ROM subfolders>/<ROM name>.mp4
 ```
 
-With **Read screenshots** on, screenshots you take with Power + Volume down during a game are saved the same way. ES-DE shows new media when you go back to the gamelist, so you don't need to reload it.
+ES-DE shows new media when you go back to the gamelist, so you don't need to reload it.
+
+When the game already has that image or clip, **If the media file already exists** in settings decides what happens:
+
+- **Replace** (the default) puts the new capture in its place. The new file is written beside the old one and swapped in only once it's complete, so a capture that fails leaves the old file as it was.
+- **Ask** opens the menu again once the capture is done, with **Keep Existing** selected and **Replace Screenshot** or **Replace Video** below it. **B**, **Back** or leaving the game keeps the existing file.
+- **Skip** keeps the existing file and drops the new capture.
+
+Turn on **Use system screenshots as game images**, under **Capture** in settings, and the system screenshots you take during a game are saved the same way: Power + Volume down, or the Screenshot tile in quick settings. (On the Nova it was tested on, Power + Volume down doesn't take one; the tile does.) It's off by default and needs the **Read screenshots** permission. Android keeps its own copy in Screenshots either way. Under **Ask**, a system screenshot keeps the existing file, because there's no menu open to ask in.
 
 ![The Capture menu](images/capture.png)
 
@@ -72,7 +80,8 @@ The menu's **Guides** row lists the guides you've saved for the game, and **Find
 
 **Save first.** Quit Game force-closes the game, so anything not yet written to storage is lost and save-on-exit doesn't run. (On the Nova it was tested on, RetroArch writes in-game saves every 10 s.)
 
-**Quit Game** (the last row) ends the game's app at once, with no confirmation, then presses Android's Home. That brings back ES-DE only when ES-DE is your Home app; otherwise you land on your usual home screen.
+**Quit Game** (the last row) ends the game's app at once, then presses Android's Home. That brings back ES-DE only when ES-DE is your Home app; otherwise you land on your usual home screen.
 
+- To have it ask first, turn on **Confirm before quitting** under **Quitting games** in settings. The question opens on **Keep Playing**: **A** there, or **B**, takes you back to the menu, and **Quit "*game name*"** ends the game.
 - With [Shizuku](shizuku.md), nothing else shows. Without it, the game's App Info page shows for a moment.
 - It works for any game ES-DE launched, emulator or Android game.

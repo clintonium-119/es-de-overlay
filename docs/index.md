@@ -27,7 +27,7 @@ wide: true
 <div class="feature" markdown="1">
 <div markdown="1">
 
-**Captures straight into ES-DE.** Save a screenshot, a clip or both. They go into ES-DE's media folders, named the way ES-DE expects, so they show up in the gamelist straight away. Turn on **Read screenshots** and the ones you take with Power + Volume down during a game are saved there too.
+**Captures straight into ES-DE.** Save a screenshot, a clip or both. They go into ES-DE's media folders, named the way ES-DE expects, so they show up in the gamelist straight away. Turn on **Use system screenshots as game images** and the system screenshots you take during a game are saved there too.
 
 </div>
 <div markdown="1">

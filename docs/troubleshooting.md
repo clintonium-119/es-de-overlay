@@ -18,9 +18,10 @@ Find what you're seeing, then work down its checks in order. The first ones are 
 ## Captures don't show in ES-DE
 
 1. **The screenshot media type isn't the one your theme shows.** Under **Capture**, set **Screenshot media type** to the image type your theme shows in the gamelist.
-2. **The game already had that image and Skip is on.** With **If the media file already exists** set to **Skip**, a capture of a game that already has the image is dropped. **Replace** saves over it.
-3. **ES-DE uses a custom media folder.** Captures go to `<ES-DE>/downloaded_media`, even when ES-DE keeps its media somewhere else.
-4. **The game couldn't be identified.** Nothing is saved then, and the notification shows ES-DE's launch line instead of file names. See [How the app finds the game](#how-the-app-finds-the-game).
+2. **The game already had that image, and Skip is on or you kept it.** With **If the media file already exists** set to **Skip**, a capture of a game that already has the image is dropped, and so is one you answered **Keep Existing** under **Ask**. **Replace** puts the capture in its place.
+3. **A system screenshot wasn't filed.** That needs **Use system screenshots as game images** on, under **Capture** (it's off by default), and the **Read screenshots** permission.
+4. **ES-DE uses a custom media folder.** Captures go to `<ES-DE>/downloaded_media`, even when ES-DE keeps its media somewhere else.
+5. **The game couldn't be identified.** Nothing is saved then, and the notification shows ES-DE's launch line instead of file names. See [How the app finds the game](#how-the-app-finds-the-game).
 
 ## The menu doesn't look like my theme
 

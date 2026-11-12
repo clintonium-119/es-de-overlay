@@ -43,6 +43,8 @@ Everything here was found on a Retroid Pocket Nova with Android 13, the only dev
 - **Clips of RetroArch with 120 Hz shader sub-frames play at 60 fps without flicker.** The sub-frames (`video_shader_subframes`) put a dark frame between real ones. The app skips those, so clips and screenshots still show the shader.
 - **Android wants a tap after every restart before it allows screen capture.** With **Offer to start after boot** on, a notification after boot brings up the prompt in one tap.
 - **Capture asks for permission again after you reinstall the app or stop the service**, including from the tile.
+- **A replaced image or clip can't be recovered.** With **Replace**, the old file is deleted once the new one is complete. Choose **Ask** or **Skip** under **If the media file already exists** to keep scraped media.
+- **A system screenshot is never asked about.** Under **Ask**, it keeps the existing image, because there's no menu open to ask in.
 - **Captures and guides ignore a custom media folder.** They go to `<ES-DE>/downloaded_media`, even when ES-DE keeps its media in another directory.
 
 ## Guides

@@ -4,7 +4,8 @@ import java.io.InputStream
 
 data class GameRef(val system: String, val romRelativePath: String)
 
-enum class Overwrite { REPLACE, SKIP }
+/** What a capture does when the game's media file exists; listed in this order in settings. */
+enum class Overwrite { REPLACE, ASK, SKIP }
 
 /**
  * Resolves [launch] to a game: the ROM path ES-DE logged, else a unique gamelist.xml name match.
@@ -28,6 +29,6 @@ fun mediaPath(game: GameRef, mediaType: String, ext: String, romIsDirectory: Boo
     return listOf(game.system, mediaType) + parts.dropLast(1) + "$base.${ext.lowercase()}"
 }
 
-/** The file name to write under [policy]: [name], or null when it exists and the policy is SKIP. */
+/** The file name to write under [policy]: [name], or null when it exists and the policy is SKIP. ASK names it as REPLACE does. */
 fun targetName(name: String, policy: Overwrite, exists: (String) -> Boolean): String? =
-    if (!exists(name) || policy == Overwrite.REPLACE) name else null
+    if (!exists(name) || policy != Overwrite.SKIP) name else null

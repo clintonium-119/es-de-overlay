@@ -14,7 +14,7 @@ You grant each of these yourself, in Android's settings or permission dialogs, a
   - A capture copies the whole screen, so a notification or system dialog showing at that moment is in it.
   - Clips can include sound from any app that allows playback capture, so other audio playing at the same time may be recorded. The microphone is never recorded.
 - **The ES-DE and ROMs folders you pick.** It reads ES-DE's settings, log, gamelists and themes, and saves screenshots, clips and guides into `downloaded_media`.
-- **System screenshots** (Power + Volume down), to save them under the game in front, if you turn on Read screenshots.
+- **System screenshots** (Power + Volume down, or the Screenshot tile in quick settings), to save them under the game in front, only if you turn on **Use system screenshots as game images** and grant **Read screenshots**. Both are off until you turn them on.
 - **Which app is in front** (Usage access), to tell a game ES-DE launched from anything else.
 - **The controller's Back or Menu button**, through an accessibility service.
   - It intercepts Back or Menu only during a game ES-DE launched, a capture or the open menu. Every other button is passed on to the app in front.

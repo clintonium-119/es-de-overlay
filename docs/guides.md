@@ -5,7 +5,7 @@
 
 **Guides** lists the game's guides by name, then **Find Guides**.
 
-- Press **X** on a guide to delete it. You're asked to confirm: **Delete** removes it, and **Keep** or **B** leaves it.
+- Press **X** on a guide to delete it. You're asked to confirm, with **Keep** selected: **Keep** or **B** leaves it, and **Delete "*guide name*"** removes it.
 - Guides and manuals reopen where you left off, including the zoom and text size, even after a restart.
 
 ![The Guides list](images/guides.png)

@@ -50,6 +50,14 @@ class Prefs(private val context: Context) {
     var sleepMinutes: Int
         get() = sp.getInt("sleepMinutes", 9)
         set(v) = sp.edit { putInt("sleepMinutes", v) }
+    /** Whether a system screenshot taken during a game is filed as that game's image. */
+    var systemScreenshots: Boolean
+        get() = sp.getBoolean("systemScreenshots", false)
+        set(v) = sp.edit { putBoolean("systemScreenshots", v) }
+    /** Whether Quit Game asks before it ends the game; off by default, as Quit Game always ended it at once. */
+    var confirmQuit: Boolean
+        get() = sp.getBoolean("confirmQuit", false)
+        set(v) = sp.edit { putBoolean("confirmQuit", v) }
     /** Whether a game left with Home is ended through Shizuku, as Quit Game would. */
     var quitOnHome: Boolean
         get() = sp.getBoolean("quitOnHome", false)

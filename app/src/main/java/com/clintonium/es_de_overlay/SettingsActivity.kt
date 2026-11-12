@@ -117,6 +117,8 @@ class SettingsActivity : ComponentActivity() {
         var sleepWhenIdle by remember { mutableStateOf(prefs.sleepWhenIdle) }
         var sleepMinutes by remember { mutableIntStateOf(prefs.sleepMinutes) }
         var quitOnHome by remember { mutableStateOf(prefs.quitOnHome) }
+        var confirmQuit by remember { mutableStateOf(prefs.confirmQuit) }
+        var systemScreenshots by remember { mutableStateOf(prefs.systemScreenshots) }
         val shizuku = remember(tick) { ShizukuShell.state(this) }
         val screensaverReported = remember(tick, esde) { esde?.let(::esdeReportsScreensaver) }
         // No game, so no system: the theme's own theme.xml.
@@ -180,7 +182,7 @@ class SettingsActivity : ComponentActivity() {
                 "Quick settings tile",
                 if (prefs.tileAdded) "Added" else "Not added",
                 if (prefs.tileAdded) null else "Add",
-                "Turn the recorder on or off from the notification shade",
+                "Turn the overlay on or off from the notification shade",
             ) {
                 getSystemService(StatusBarManager::class.java).requestAddTileService(
                     ComponentName(this@SettingsActivity, CaptureTile::class.java),
@@ -222,6 +224,19 @@ class SettingsActivity : ComponentActivity() {
                 "Pick the image type your theme shows in the gamelist, so captures show there. The in-game menu shows the same type.",
             ) { mediaType = it; prefs.mediaType = it }
             Dropdown("Clip length", clip, (5..60 step 5).toList(), { "$it s" }) { clip = it; prefs.clipSeconds = it }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Use system screenshots as game images")
+                    Text(
+                        "A system screenshot you take during a game (Power + Volume down, or the Screenshot tile in quick settings) " +
+                            "also becomes that game's image in ES-DE, following the choice below for an existing file " +
+                            "(Ask keeps it). Needs Read screenshots.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = systemScreenshots, onCheckedChange = { systemScreenshots = it; prefs.systemScreenshots = it })
+            }
             Text("If the media file already exists")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (o in Overwrite.entries) {
@@ -229,7 +244,8 @@ class SettingsActivity : ComponentActivity() {
                 }
             }
             Text(
-                "ES-DE only shows the file named exactly like the ROM: Replace saves over it, Skip keeps it and drops the new capture.",
+                "ES-DE only shows the file named exactly like the ROM. Replace puts the new capture in its place. Ask " +
+                    "keeps the new capture beside it until you choose in the menu. Skip keeps the file and drops the new capture.",
                 style = MaterialTheme.typography.bodySmall,
             )
             Section("Screen")
@@ -274,13 +290,25 @@ class SettingsActivity : ComponentActivity() {
                     "The menu takes it from the next game you start.",
             ) { textScale = it; prefs.textScale = it }
             Section("Quitting games")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Confirm before quitting")
+                    Text(
+                        "Quit Game ends the game's app at once, so progress since the last save is lost. With this on, " +
+                            "the menu asks first, with Keep Playing selected.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = confirmQuit, onCheckedChange = { confirmQuit = it; prefs.confirmQuit = it })
+            }
             Setting(
                 "Shizuku",
                 when (shizuku) {
                     ShizukuShell.State.NOT_INSTALLED -> "Not installed"
                     ShizukuShell.State.NOT_RUNNING -> "Not running"
                     ShizukuShell.State.NOT_ALLOWED -> "Not allowed"
-                    ShizukuShell.State.READY -> "Enabled"
+                    ShizukuShell.State.READY -> "Ready"
                 },
                 when (shizuku) {
                     ShizukuShell.State.NOT_RUNNING -> "Open Shizuku"
@@ -323,8 +351,8 @@ class SettingsActivity : ComponentActivity() {
             Section("Permissions")
             for ((title, permission, description) in listOf(
                 Triple("Notifications", Manifest.permission.POST_NOTIFICATIONS, "Shows capture results and the offer to start after boot."),
-                Triple("Game sound in clips", Manifest.permission.RECORD_AUDIO, "Android calls it audio recording; only game audio is captured."),
-                Triple("Read screenshots", Manifest.permission.READ_MEDIA_IMAGES, "Files a system screenshot (Power + Volume down) under the game."),
+                Triple("Game sound in clips", Manifest.permission.RECORD_AUDIO, "Android calls it audio recording; the microphone is not recorded."),
+                Triple("Read screenshots", Manifest.permission.READ_MEDIA_IMAGES, "Only needed for Use system screenshots as game images, under Capture."),
             )) {
                 val on = granted(permission)
                 Setting(title, on.label, on.action, description) {
@@ -341,8 +369,7 @@ class SettingsActivity : ComponentActivity() {
                 "Back button menu",
                 menu.label,
                 menu.action,
-                "An accessibility service. The menu opens on the controller's Back button during a game ES-DE launched; no " +
-                    "Retroid setting is needed.",
+                "An accessibility service. The menu opens on the controller's Back button during a game ES-DE launched.",
             ) { openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS, withPackage = false) }
             val overlay = Settings.canDrawOverlays(this@SettingsActivity)
             Setting("Display over other apps", overlay.label, overlay.action, "For the in-game menu and the guide viewer.") {
@@ -478,6 +505,7 @@ class SettingsActivity : ComponentActivity() {
     private val Overwrite.label
         get() = when (this) {
             Overwrite.REPLACE -> "Replace"
+            Overwrite.ASK -> "Ask"
             Overwrite.SKIP -> "Skip"
         }
 

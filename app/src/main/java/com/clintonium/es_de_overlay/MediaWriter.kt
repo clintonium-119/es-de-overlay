@@ -14,25 +14,72 @@ class MediaWriter(private val context: Context, private val tree: Uri) {
     private val resolver = context.contentResolver
 
     /**
-     * Writes `<tree>/<segments>` under [policy] by calling [copy] with the open stream.
-     * Returns the path actually written (relative to the tree), or null when skipped because it exists.
+     * A file [write] wrote: [path] below the tree, in the place of a file that was there when [replaced]. Under Ask, a
+     * file that would replace one waits beside it under its temporary name instead: [finish] swaps it in (true) or
+     * deletes it (false), and returns what was written.
      */
-    fun write(segments: List<String>, mime: String, policy: Overwrite, copy: (OutputStream) -> Unit): String? {
+    class Written(val path: String, val replaced: Boolean, val finish: ((Boolean) -> Written?)? = null)
+
+    /**
+     * Writes `<tree>/<segments>` under [policy] by calling [copy] with the open stream, or returns null when skipped
+     * because it exists. The bytes go to a temporary file beside it first, which takes its name only once [copy]
+     * has finished, so a write that fails leaves the file already there as it was.
+     */
+    fun write(segments: List<String>, mime: String, policy: Overwrite, copy: (OutputStream) -> Unit): Written? {
         var dir = DocumentsContract.getTreeDocumentId(tree)
         for (name in segments.dropLast(1)) dir = children(context, tree, dir)[name] ?: create(dir, Document.MIME_TYPE_DIR, name)
         val existing = children(context, tree, dir)
         val name = targetName(segments.last(), policy) { it in existing } ?: return null
-        val doc = existing[name] ?: create(dir, mime, name)
-        resolver.openOutputStream(DocumentsContract.buildDocumentUriUsingTree(tree, doc), "wt")!!.use(copy)
-        val written = doc.substringAfterLast('/')
-        if (written != name) Log.w(TAG, "provider renamed $name to $written; ES-DE will not match it")
-        return (segments.dropLast(1) + written).joinToString("/")
+        // Never `<ROM name>.<ext>`, so ES-DE can't take it for the game's media. A generic type keeps the provider
+        // from adding an extension to it.
+        val part = ".$name.part"
+        // Left by a write that was cut off.
+        existing[part]?.let(::delete)
+        val tmp = create(dir, "application/octet-stream", part)
+        try {
+            resolver.openOutputStream(uri(tmp), "w")!!.use(copy)
+        } catch (e: Throwable) {
+            runCatching { delete(tmp) }
+            throw e
+        }
+        val old = existing[name]
+        fun swapIn(): Written {
+            val written = swap(dir, tmp, name, old, mime)
+            if (written != name) Log.w(TAG, "provider renamed $name to $written; ES-DE will not match it")
+            return Written((segments.dropLast(1) + written).joinToString("/"), old != null)
+        }
+        if (policy == Overwrite.ASK && old != null) {
+            return Written(segments.joinToString("/"), false) { replace -> if (replace) swapIn() else null.also { delete(tmp) } }
+        }
+        return swapIn()
+    }
+
+    /**
+     * Puts the finished temporary file [tmp] in the place of [old], or under [name] when there's none, and returns
+     * the name it got. Where the provider can't rename, the bytes are copied to a new file under [name] instead.
+     */
+    private fun swap(dir: String, tmp: String, name: String, old: String?, mime: String): String {
+        old?.let(::delete)
+        runCatching { DocumentsContract.renameDocument(resolver, uri(tmp), name) }
+            .onFailure { Log.w(TAG, "renaming $tmp failed; writing $name in place", it) }
+            .getOrNull()?.let { return DocumentsContract.getDocumentId(it).substringAfterLast('/') }
+        val doc = create(dir, mime, name)
+        try {
+            resolver.openInputStream(uri(tmp))!!.use { input -> resolver.openOutputStream(uri(doc), "w")!!.use { input.copyTo(it) } }
+        } finally {
+            runCatching { delete(tmp) }
+        }
+        return doc.substringAfterLast('/')
+    }
+
+    private fun uri(doc: String) = DocumentsContract.buildDocumentUriUsingTree(tree, doc)
+
+    private fun delete(doc: String) {
+        DocumentsContract.deleteDocument(resolver, uri(doc))
     }
 
     private fun create(dir: String, mime: String, name: String): String =
-        DocumentsContract.getDocumentId(
-            DocumentsContract.createDocument(resolver, DocumentsContract.buildDocumentUriUsingTree(tree, dir), mime, name)!!,
-        )
+        DocumentsContract.getDocumentId(DocumentsContract.createDocument(resolver, uri(dir), mime, name)!!)
 }
 
 /** Child display name → document id, for the folder with document id [dir] below a SAF [tree]. */

@@ -37,6 +37,7 @@ import com.clintonium.es_de_overlay.core.GameRef
 import com.clintonium.es_de_overlay.core.GuideSite
 import com.clintonium.es_de_overlay.core.Launch
 import com.clintonium.es_de_overlay.core.LeaveWatch
+import com.clintonium.es_de_overlay.core.Overwrite
 import com.clintonium.es_de_overlay.core.gamelistInfo
 import com.clintonium.es_de_overlay.core.guideEntries
 import com.clintonium.es_de_overlay.core.guidePath
@@ -47,6 +48,7 @@ import com.clintonium.es_de_overlay.core.resolveGame
 import com.clintonium.es_de_overlay.core.startUrl
 import com.clintonium.es_de_overlay.core.webSearchUrl
 import java.io.File
+import java.io.IOException
 import java.nio.ByteBuffer
 import java.util.concurrent.CancellationException
 import java.util.concurrent.Executors
@@ -158,6 +160,8 @@ class HelperService : Service() {
     private var opening: Any? = null
     /** Main thread: whether a capture is waiting for the closed menu to leave the screen. */
     private var starting = false
+    /** Main thread: while the menu asks whether a capture replaces a file, the way out that keeps the file. */
+    private var unanswered: (() -> Unit)? = null
     /** Main thread. */
     private val leave = LeaveWatch(ESDE)
 
@@ -277,10 +281,14 @@ class HelperService : Service() {
         }
     }
 
-    /** Main thread: closes the menu and any viewer or browser over it, and cancels its opening or a Find Guides check or save. */
+    /**
+     * Main thread: closes the menu and any viewer or browser over it, cancels its opening or a Find Guides check or
+     * save, and keeps the existing file when it was asking about one.
+     */
     private fun closeMenu() {
         opening = null
         finding?.set(true)
+        unanswered?.invoke()
         closeViewer()
         menu.release()
     }
@@ -363,7 +371,10 @@ class HelperService : Service() {
                     menu.release()
                     startCapture(g, keepShot = mode != 1, keepVideo = mode != 0)
                 }, back)
-                "Quit Game" -> quitGame()
+                "Quit Game" -> if (prefs.confirmQuit) {
+                    // The cursor starts on the safe row: A pressed out of habit keeps the game.
+                    menu.show(listOf("Keep Playing", "Quit \"$name\""), { if (it == 1) quitGame() else back() }, back)
+                } else quitGame()
                 else -> guidesList(g, name, guides, back)
             }
         }, menu::release, start = start)
@@ -380,8 +391,8 @@ class HelperService : Service() {
 
     /** Main thread: Delete removes [doc] (row [at] of the Guides list) and lists the guides again; Keep and B go to [keep]. */
     private fun confirmDelete(g: GameRef, name: String, doc: Doc, at: Int, keep: () -> Unit) {
-        menu.show(listOf("Delete \"${doc.name}\"", "Keep"), { i ->
-            if (i == 1) {
+        menu.show(listOf("Keep", "Delete \"${doc.name}\""), { i ->
+            if (i == 0) {
                 keep()
                 return@show
             }
@@ -606,8 +617,12 @@ class HelperService : Service() {
 
     private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
 
-    /** A system screenshot: file it like a captured frame, or leave it where it is when no game is in front. */
+    /**
+     * A system screenshot: when that's turned on, file it like a captured frame, or leave it where it is when no game
+     * is in front. The setting is read here, so turning it off takes effect at once.
+     */
     private fun onScreenshot(uri: Uri, mime: String) {
+        if (!prefs.systemScreenshots) return
         val g = currentGame() ?: run {
             notify(this, RESULT_ID, "Screenshot left in Screenshots: no ES-DE game detected")
             return
@@ -621,39 +636,109 @@ class HelperService : Service() {
                         else BitmapFactory.decodeStream(input).compress(Bitmap.CompressFormat.PNG, 100, out)
                     }
                 }
-            }.onSuccess { save(g, png, null) }.onFailure {
+            }.onSuccess {
+                // No menu is open to ask in, so Ask keeps the file already there.
+                save(g, png, null, prefs.overwrite.takeIf { it != Overwrite.ASK } ?: Overwrite.SKIP)
+            }.onFailure {
                 Log.e(TAG, "reading screenshot failed", it)
                 notify(this, RESULT_ID, "Couldn't read screenshot: ${it.message}")
             }
         }
     }
 
-    /** io thread: file the capture under the game's ES-DE media folders. */
-    private fun save(g: GameRef, png: File?, mp4: File?) {
-        val written = mutableListOf<String>()
+    /**
+     * io thread: file the capture under the game's ES-DE media folders under [policy]. Under Ask, files that would
+     * replace one wait for the answer to [ask].
+     */
+    private fun save(g: GameRef, png: File?, mp4: File?, policy: Overwrite = prefs.overwrite) {
+        val written = mutableListOf<MediaWriter.Written>()
         val result = runCatching {
             val writer = MediaWriter(this, prefs.esdeTree!!)
             val dir = isDirectory(this, prefs.romsTree!!, "${g.system}/${g.romRelativePath}")
             fun put(file: File?, type: String, ext: String, mime: String) {
                 if (file == null) return
-                writer.write(listOf("downloaded_media") + mediaPath(g, type, ext, dir), mime, prefs.overwrite) { out ->
-                    file.inputStream().use { it.copyTo(out) }
-                }?.let { written += it.removePrefix("downloaded_media/") }
+                writer.write(listOf("downloaded_media") + mediaPath(g, type, ext, dir), mime, policy) { out ->
+                    file.inputStream().use { input ->
+                        // Debug builds: `adb shell run-as com.clintonium.es_de_overlay touch files/fail-next-write` stops the next write half-way.
+                        if (BuildConfig.DEBUG && File(filesDir, "fail-next-write").delete()) {
+                            out.write(input.readNBytes(file.length().toInt() / 2))
+                            throw IOException("stopped half-way on purpose")
+                        }
+                        input.copyTo(out)
+                    }
+                }?.let { written += it }
                 file.delete()
             }
             put(png, prefs.mediaType, "png", "image/png")
             put(mp4, "videos", "mp4", "video/mp4")
         }
         result.exceptionOrNull()?.let { Log.e(TAG, "save failed", it) }
+        val pending = written.filter { it.finish != null }
+        written -= pending
+        if (pending.isNotEmpty()) {
+            if (result.isSuccess) {
+                val art = runCatching { screenshot(g) }.getOrNull()
+                main.post {
+                    menu.title = launch?.name.orEmpty()
+                    menu.art = art
+                    ask(g, pending, written)
+                }
+                return
+            }
+            // A capture that failed part-way keeps the files already there.
+            pending.forEach { runCatching { it.finish!!(false) } }
+        }
+        report(g, result.exceptionOrNull(), written, png != null || mp4 != null)
+    }
+
+    /**
+     * Main thread: for each of [pending] in turn, asks in the menu whether it replaces the file already there, with
+     * the cursor on keeping it. Then swaps in those to [replace], drops the rest and reports them with [done]. B,
+     * leaving the game or the menu closing any other way keeps the file the open question is about.
+     */
+    private fun ask(
+        g: GameRef,
+        pending: List<MediaWriter.Written>,
+        done: List<MediaWriter.Written>,
+        replace: Set<MediaWriter.Written> = emptySet(),
+        at: Int = 0,
+    ) {
+        fun end() {
+            unanswered = null
+            menu.release()
+            io.execute {
+                val finished = pending.mapNotNull { w ->
+                    runCatching { w.finish!!(w in replace) }.onFailure { Log.w(TAG, "finishing ${w.path} failed", it) }.getOrNull()
+                }
+                report(g, null, done + finished, true)
+            }
+        }
+        val w = pending.getOrNull(at)
+        if (w == null || gameInFront() != g) return end()
+        unanswered = ::end
+        val kind = if (w.path.endsWith(".mp4")) "Video" else "Screenshot"
+        menu.show(listOf("Keep Existing", "Replace $kind"), { i ->
+            ask(g, pending, done, if (i == 1) replace + w else replace, at + 1)
+        }, ::end)
+    }
+
+    /** io thread: says in a toast and a notification what [written] holds, or why nothing was saved. */
+    private fun report(g: GameRef, failure: Throwable?, written: List<MediaWriter.Written>, captured: Boolean) {
         val text = when {
-            result.isFailure -> "Couldn't save: ${result.exceptionOrNull()?.message}"
-            written.isNotEmpty() -> "Saved: ${written.joinToString()}"
-            png == null && mp4 == null -> "Nothing captured"
+            failure != null -> "Couldn't save: ${failure.message}"
+            written.isNotEmpty() -> {
+                val (replaced, saved) = written.partition { it.replaced }
+                // Replaced first: a toast shows only two lines.
+                listOf("Replaced" to replaced, "Saved" to saved).filter { it.second.isNotEmpty() }.joinToString("\n") { (label, files) ->
+                    files.joinToString(prefix = "$label: ") { it.path.removePrefix("downloaded_media/") }
+                }
+            }
+            !captured -> "Nothing captured"
             else -> "Skipped: files already exist"
         }
         main.post { toast(text) }
         notify(this, RESULT_ID, text)
-        Log.i(TAG, "saved $written for $g")
+        Log.i(TAG, "saved ${written.map { "${it.path} (replaced: ${it.replaced})" }} for $g")
     }
 
     /** Folds the lines ES-DE logged since the last poll into its latest launch. */
