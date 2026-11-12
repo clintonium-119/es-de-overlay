@@ -39,5 +39,6 @@ adb logcat -G 16M && adb logcat -s ESDEShot   # the app's debug log
 Changes reach `master` through pull requests. Each pull request runs the unit tests, Android Lint and CodeQL, and they have to pass before it can merge.
 
 - Keep a pull request to one change, and say what you checked and on which device.
+- If you add or change logic, add or update its unit tests in `app/src/test`.
 - If the change is one a user would notice, add a line for it under **Unreleased** in [CHANGELOG.md](CHANGELOG.md).
 - If it changes what the app does, update the docs under `docs/` to match.
