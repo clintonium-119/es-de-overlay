@@ -14,6 +14,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.drawable.Icon
 import android.content.pm.ServiceInfo
 import android.hardware.display.DisplayManager
 import android.media.projection.MediaProjection
@@ -62,23 +63,24 @@ private const val CHANNEL = "status"
 private const val ONGOING_ID = 1
 private const val RESULT_ID = 2
 
-/** Posts (or replaces) notification [id]; tapping it opens the settings screen, with [grant] asking for capture consent. */
-fun notify(context: Context, id: Int, text: String, grant: Boolean = false, ongoing: Boolean = false): Notification {
+/** Posts (or replaces) notification [id]; tapping it runs [tap], else opens the settings screen. */
+fun notify(context: Context, id: Int, text: String, ongoing: Boolean = false, tap: PendingIntent? = null): Notification {
     val nm = context.getSystemService(NotificationManager::class.java)
     nm.createNotificationChannel(NotificationChannel(CHANNEL, "Status", NotificationManager.IMPORTANCE_LOW))
-    val open = Intent(context, SettingsActivity::class.java)
-        .putExtra(SettingsActivity.EXTRA_GRANT, grant)
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+    val open = Intent(context, SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
     val n = Notification.Builder(context, CHANNEL)
         .setSmallIcon(android.R.drawable.ic_menu_camera)
         .setContentTitle("ES-DE Overlay")
         .setContentText(text)
         .setStyle(Notification.BigTextStyle().bigText(text))
         .setOngoing(ongoing)
-        .setContentIntent(PendingIntent.getActivity(context, id, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
-        .build()
-    if (!ongoing) nm.notify(id, n)
-    return n
+        .setContentIntent(tap ?: PendingIntent.getActivity(context, id, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+    // The service's own notification: a way into the menu by touch, for controllers whose buttons can't open it.
+    if (ongoing) {
+        val openMenu = Intent(context, HelperService::class.java).setAction(HelperService.ACTION_OPEN_MENU)
+        n.addAction(Notification.Action.Builder(null as Icon?, "Open Menu", PendingIntent.getService(context, 0, openMenu, PendingIntent.FLAG_IMMUTABLE)).build())
+    }
+    return n.build().also { if (!ongoing) nm.notify(id, it) }
 }
 
 /** Document URI for [path] below a SAF tree from the external storage provider (document ids are `volume:dir/sub`). */
@@ -160,6 +162,8 @@ class HelperService : Service() {
     private var opening: Any? = null
     /** Main thread: whether a capture is waiting for the closed menu to leave the screen. */
     private var starting = false
+    /** Main thread: the capture picked before Android's capture prompt, which goes on once consent arrives. */
+    private var afterConsent: (() -> Unit)? = null
     /** Main thread: while the menu asks whether a capture replaces a file, the way out that keeps the file. */
     private var unanswered: (() -> Unit)? = null
     /** Main thread. */
@@ -198,12 +202,19 @@ class HelperService : Service() {
     }
 
     /**
+     * Starts without capture consent: the menu, guides and Quit Game don't need it, and the first Capture asks.
      * Every start returns sticky (Android keeps only the latest start's answer): after Android ends the process for
-     * memory, it starts the service again with no intent, so without capture consent. Stopping the service ends it for good.
+     * memory, it starts the service again with no intent. Stopping the service ends it for good.
      */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_OPEN_FAILED) {
             menu.error("Couldn't open ${intent.getStringExtra(EXTRA_NAME)}")
+            return START_STICKY
+        }
+        if (intent?.action == ACTION_OPEN_MENU) {
+            ButtonService.closeShade()
+            // Only when nothing is up: then the menu button's way opens the menu, if ES-DE's game is in front.
+            if (capture == null && !starting && !menu.isOpen && opening == null) onBack()
             return START_STICKY
         }
         if (intent?.action == ACTION_GUIDE_SAVED) {
@@ -226,7 +237,10 @@ class HelperService : Service() {
                 .getMediaProjection(intent.getIntExtra(EXTRA_CODE, 0), data)
                 ?.apply { registerCallback(ProjectionLost(), main) }
             Log.i(TAG, "capture consent granted: ${projection != null}")
+            if (projection != null) afterConsent?.invoke()
+            afterConsent = null
         }
+        getSystemService(NotificationManager::class.java).cancel(BootReceiver.BOOT_ID)
         running = true
         return START_STICKY
     }
@@ -321,7 +335,7 @@ class HelperService : Service() {
             // The look read when ES-DE launched the game: its theme only changes in ES-DE, before a launch, and reading
             // it here would add to the menu's opening.
             val theme = themeLook.warmed?.also { Log.i(TAG, "look: kept from the launch") }
-                ?: runCatching { themeLook.current(g.system, prefs.mediaType) }
+                ?: runCatching { themeLook.current(g.system, prefs.menuImage) }
                     .onFailure { Log.w(TAG, "reading the theme failed", it) }
                     .getOrDefault(ThemeLook.DEFAULT)
             val inFront = gameInFront() == g
@@ -334,6 +348,7 @@ class HelperService : Service() {
                 opening = null
                 menu.title = name
                 menu.art = art
+                menu.cropArt = prefs.menuImageCrops
                 menu.theme = theme
                 openMenu(g, name, manual, guides, info)
                 Log.i(TAG, "menu: open in ${SystemClock.uptimeMillis() - started} ms")
@@ -564,14 +579,15 @@ class HelperService : Service() {
     }
 
     /**
-     * io thread: the game's screenshot for the menu's art box (PNG, else JPG, as ES-DE looks), or null when it has none.
+     * io thread: the game's image for the menu's art box, of the Menu image type (PNG, else JPG, as ES-DE looks), or
+     * null when it has none.
      * One larger than the box both ways, like a full-screen capture, is decoded at half size.
      */
     private fun screenshot(g: GameRef): Bitmap? {
         val tree = prefs.esdeTree ?: return null
         val dir = isDirectory(this, prefs.romsTree!!, "${g.system}/${g.romRelativePath}")
         for (ext in listOf("png", "jpg")) {
-            val uri = treeChild(tree, (listOf("downloaded_media") + mediaPath(g, prefs.mediaType, ext, dir)).joinToString("/"))
+            val uri = treeChild(tree, (listOf("downloaded_media") + mediaPath(g, prefs.menuImage, ext, dir)).joinToString("/"))
             fun decode(options: BitmapFactory.Options) =
                 contentResolver.openInputStream(uri)!!.use { BitmapFactory.decodeStream(it, null, options) }
             val size = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -582,9 +598,13 @@ class HelperService : Service() {
         return null
     }
 
-    /** Captures the game and saves the screenshot when [keepShot] and the clip when [keepVideo]. */
+    /**
+     * Captures the game and saves the screenshot when [keepShot] and the clip when [keepVideo]. Without consent yet,
+     * opens Android's prompt and carries on once it's granted.
+     */
     private fun startCapture(g: GameRef, keepShot: Boolean, keepVideo: Boolean) {
         val p = projection ?: run {
+            afterConsent = { resumeCapture(g, keepShot, keepVideo, SystemClock.uptimeMillis() + 5_000) }
             startActivity(
                 Intent(this, SettingsActivity::class.java)
                     .putExtra(SettingsActivity.EXTRA_GRANT, true)
@@ -613,6 +633,22 @@ class HelperService : Service() {
                 notify(this, RESULT_ID, "Capture failed: ${e.message}")
             }
         }, 100)
+    }
+
+    /**
+     * Main thread: the capture picked before the consent prompt, once [g] is back in front after it, with time for the
+     * switch back to finish so the first frame is the game. Dropped if [g] isn't in front by [until].
+     */
+    private fun resumeCapture(g: GameRef, keepShot: Boolean, keepVideo: Boolean, until: Long) {
+        when {
+            gameInFront() == g -> main.postDelayed({ startCapture(g, keepShot, keepVideo) }, 500)
+            SystemClock.uptimeMillis() < until -> main.postDelayed({ resumeCapture(g, keepShot, keepVideo, until) }, 200)
+            else -> {
+                Log.i(TAG, "capture dropped: $g not in front after consent")
+                toast("Nothing captured: pick Capture again")
+                notify(this, RESULT_ID, "Nothing captured: the game wasn't in front. Pick Capture again.")
+            }
+        }
     }
 
     private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
@@ -681,6 +717,7 @@ class HelperService : Service() {
                 main.post {
                     menu.title = launch?.name.orEmpty()
                     menu.art = art
+                    menu.cropArt = prefs.menuImageCrops
                     ask(g, pending, written)
                 }
                 return
@@ -754,7 +791,7 @@ class HelperService : Service() {
             Log.i(TAG, "launch: ${latest.name} (${latest.system}) pkg=${latest.pkg} -> $game")
             // Copies a downloaded theme and reads the look now, so the menu doesn't when Back opens it.
             game?.let { g ->
-                runCatching { themeLook.warm(g.system, prefs.mediaType) }.onFailure { Log.w(TAG, "warming the look failed", it) }
+                runCatching { themeLook.warm(g.system, prefs.menuImage) }.onFailure { Log.w(TAG, "warming the look failed", it) }
             }
         }
     }
@@ -770,8 +807,8 @@ class HelperService : Service() {
     private inner class ProjectionLost : MediaProjection.Callback() {
         override fun onStop() {
             Log.i(TAG, "capture consent lost")
+            // The next Capture asks again.
             projection = null
-            notify(this@HelperService, ONGOING_ID, "Capture permission lost — tap to grant again", grant = true)
         }
     }
 
@@ -783,6 +820,8 @@ class HelperService : Service() {
         /** From the viewer's process: the viewer on a guide just saved from the browser has closed, so list the guides again. */
         const val ACTION_GUIDE_SAVED = "com.clintonium.es_de_overlay.GUIDE_SAVED"
         const val EXTRA_NAME = "name"
+        /** Open Menu on the service's notification. */
+        const val ACTION_OPEN_MENU = "com.clintonium.es_de_overlay.OPEN_MENU"
         var running by mutableStateOf(false)
 
         // Main thread only; set while the service exists.

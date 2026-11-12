@@ -85,7 +85,7 @@ There's no per-theme setup: the app reads each theme's own files. [Theme](theme.
 
 - Android 13 or newer; tested on Android 13 only.
 - [ES-DE](https://es-de.org) for Android, set up with your games. The app was developed with ES-DE 3.5.0.
-- A controller with a Back or Menu button: the Android Back button beside Home on Retroid and AYN handhelds, or Menu on controllers that have one.
+- A controller. The menu opens on Back or Menu by default: the Android Back button beside Home on Retroid and AYN handhelds, or Menu on controllers that have one. You can choose another button in settings, or open the menu from its notification.
 
 The app was developed and tested on a Retroid Pocket Nova. Some of what it does depends on the device's firmware, and [Known limitations](limitations.md) says where.
 

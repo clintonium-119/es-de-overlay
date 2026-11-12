@@ -74,7 +74,7 @@ class ViewerService : Service() {
     }
 
     // The look for a game of [system], before its window is up; the default if the theme can't be read.
-    private fun theme(system: String) = runCatching { themeLook.current(system, prefs.mediaType) }
+    private fun theme(system: String) = runCatching { themeLook.current(system, prefs.menuImage) }
         .onFailure { Log.w(TAG, "reading the theme failed", it) }
         .getOrDefault(ThemeLook.DEFAULT)
 

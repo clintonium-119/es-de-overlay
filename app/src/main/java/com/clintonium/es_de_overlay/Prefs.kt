@@ -22,6 +22,17 @@ class Prefs(private val context: Context) {
     var mediaType: String
         get() = sp.getString("mediaType", "screenshots")!!
         set(v) = sp.edit { putString("mediaType", v) }
+    /** The ES-DE image type the menu shows; empty for the one captures are saved as ([mediaType]). */
+    var menuImageType: String
+        get() = sp.getString("menuImageType", "")!!
+        set(v) = sp.edit { putString("menuImageType", v) }
+    val menuImage get() = menuImageType.ifEmpty { mediaType }
+    /** Whether the menu crops [menuImage] to its box: a game's screen, as themes draw it; covers and the rest fit. */
+    val menuImageCrops get() = menuImage == "screenshots" || menuImage == "titlescreens"
+    /** The gamepad key code that opens the menu; 0 for Back or Menu. */
+    var menuKey: Int
+        get() = sp.getInt("menuKey", 0)
+        set(v) = sp.edit { putInt("menuKey", v) }
     var overwrite: Overwrite
         // A policy an older build stored but this one dropped (Keep both) reads as Skip: it never overwrote either.
         get() = when (val name = sp.getString("overwrite", null)) {
@@ -36,8 +47,9 @@ class Prefs(private val context: Context) {
     var textScale: Int
         get() = sp.getInt("textScale", 100)
         set(v) = sp.edit { putInt("textScale", v) }
+    /** Whether the service starts after the device boots. On by default, so a restart doesn't leave the menu gone. */
     var bootStart: Boolean
-        get() = sp.getBoolean("bootStart", false)
+        get() = sp.getBoolean("bootStart", true)
         set(v) = sp.edit { putBoolean("bootStart", v) }
     var tileAdded: Boolean
         get() = sp.getBoolean("tileAdded", false)
@@ -63,7 +75,7 @@ class Prefs(private val context: Context) {
         get() = sp.getBoolean("quitOnHome", false)
         set(v) = sp.edit { putBoolean("quitOnHome", v) }
 
-    private fun esdeIsHome() = context.packageManager.resolveActivity(
+    fun esdeIsHome() = context.packageManager.resolveActivity(
         Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
         PackageManager.MATCH_DEFAULT_ONLY,
     )?.activityInfo?.packageName == ESDE

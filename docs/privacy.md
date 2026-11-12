@@ -16,10 +16,10 @@ You grant each of these yourself, in Android's settings or permission dialogs, a
 - **The ES-DE and ROMs folders you pick.** It reads ES-DE's settings, log, gamelists and themes, and saves screenshots, clips and guides into `downloaded_media`.
 - **System screenshots** (Power + Volume down, or the Screenshot tile in quick settings), to save them under the game in front, only if you turn on **Use system screenshots as game images** and grant **Read screenshots**. Both are off until you turn them on.
 - **Which app is in front** (Usage access), to tell a game ES-DE launched from anything else.
-- **The controller's Back or Menu button**, through an accessibility service.
-  - It intercepts Back or Menu only during a game ES-DE launched, a capture or the open menu. Every other button is passed on to the app in front.
+- **One controller button**, through an accessibility service: Back or Menu, or the one you choose under **Controls**.
+  - Android shows the service every button press. It intercepts the menu button only during a game ES-DE launched, a capture or the open menu, and passes every other button on to the app in front.
   - The same service turns the screen off when ES-DE's screensaver has run for the time you set.
-  - Without Shizuku, it presses Force stop on a game's App Info page for Quit Game.
+  - For Quit Game, it brings ES-DE back afterwards, and without Shizuku it presses Force stop on the game's App Info page.
 - **Drawing over other apps**, for the menu, the guide viewer and the guide browser.
 - **With [Shizuku](shizuku.md)** (optional):
   - ending a game's app for Quit Game and Quit games left with Home, but never ES-DE Overlay, ES-DE or Shizuku themselves;

@@ -7,20 +7,20 @@ Find what you're seeing, then work down its checks in order. The first ones are 
 
 ## The menu doesn't open
 
-1. **The service isn't running.** It stops whenever the device restarts. Open ES-DE Overlay and look under **Service**: if it says *Stopped*, tap **Start Service**, then **Start now** on Android's prompt. **Offer to start after boot** reminds you with a notification after each restart.
-2. **The accessibility service is off.** Under **Permissions**, **Back button menu** has to say *Enabled*. If Android won't turn it on and shows a *Restricted setting* message, [Set up](setup.md#get-the-menu-working) has the way through.
-3. **Usage access or Display over other apps is off.** Both rows under **Permissions** have to say *Enabled*. Without usage access, the app can't tell that the game is in front. Without Display over other apps, it can't draw the menu.
+1. **Something on the checklist isn't ready.** Open ES-DE Overlay: the checklist at the top marks what's missing with ✗, and tapping that line goes where it's fixed. Without usage access, the app can't tell that the game is in front; without Display over other apps, it can't draw the menu; without the **Controller button (accessibility service)**, it doesn't see the button. If Android won't turn the accessibility service on and shows a *Restricted setting* message, [Set up](setup.md#get-the-menu-working) has the way through.
+2. **The service isn't running.** Under **Service**, if it says *Stopped*, tap **Start Service**. With **Start after boot** on (the default), it starts by itself after a restart; if Android refused that, a *Tap to start ES-DE Overlay* notification starts it.
+3. **You chose another menu button.** Under **Controls**, **Menu button** names the one that opens the menu; **Reset** goes back to Back or Menu.
 4. **The game wasn't launched from ES-DE.** The menu opens only for a game ES-DE launched, and only while that game is the app in front.
 5. **You pressed the button in the game's first second.** The app reads launches from ES-DE's log once a second, so a press right after the game starts goes to the game. Press again.
 6. **Android ended the app for memory.** On the Nova, Switch games that take nearly all its memory in Eden (Super Mario Odyssey, Mario + Rabbids) make Android end the app within seconds. Android starts it again by itself a few seconds later, but while it's gone, the button goes to the game. See [Known limitations](limitations.md#controller-and-menu).
-7. **The controller has no Back or Menu button.** The menu opens only on the controller's Back or Menu.
+7. **The controller has no Back or Menu button, or Android doesn't pass it on.** Choose another under **Controls**. Either way, **Open Menu** in the service's notification opens the menu by touch; expand the notification to see it.
 
 ## Captures don't show in ES-DE
 
 1. **The screenshot media type isn't the one your theme shows.** Under **Capture**, set **Screenshot media type** to the image type your theme shows in the gamelist.
 2. **The game already had that image, and Skip is on or you kept it.** With **If the media file already exists** set to **Skip**, a capture of a game that already has the image is dropped, and so is one you answered **Keep Existing** under **Ask**. **Replace** puts the capture in its place.
 3. **A system screenshot wasn't filed.** That needs **Use system screenshots as game images** on, under **Capture** (it's off by default), and the **Read screenshots** permission.
-4. **ES-DE uses a custom media folder.** Captures go to `<ES-DE>/downloaded_media`, even when ES-DE keeps its media somewhere else.
+4. **ES-DE uses a custom media folder.** Captures go to `<ES-DE>/downloaded_media`, even when ES-DE keeps its media somewhere else. The ES-DE folder row in settings says *ES-DE shows media from …* when that's the case.
 5. **The game couldn't be identified.** Nothing is saved then, and the notification shows ES-DE's launch line instead of file names. See [How the app finds the game](#how-the-app-finds-the-game).
 
 ## The menu doesn't look like my theme
@@ -32,13 +32,13 @@ Under **Look**, the Theme row says which look the app is using: the theme and co
 
 ## Quit Game does nothing, or lands on the wrong screen
 
-1. **ES-DE isn't your Home app.** Quit Game ends the game, then presses Android's Home, which only brings back ES-DE when ES-DE is your Home app.
+1. **The accessibility service is off.** Quit Game ends the game and brings ES-DE back through it, so the **Controller button (accessibility service)** row has to say *Enabled*.
 2. **The game is on Retroid's Whitelist.** On Retroid firmware, apps on its Whitelist aren't force-stopped, so Quit Game does nothing for them.
 3. **A Settings page flashes by.** Without [Shizuku](shizuku.md), Quit Game ends the game from its App Info page, which shows for a moment. That's expected.
 
 ## Capture asks for permission again
 
-That's expected. Android's permission to capture the screen lasts only while the service runs, so you're asked again after the service stops (including from the tile), after the app is reinstalled, after a restart of the device, and when Android has ended the app for memory and started it again.
+That's expected. Android's permission to capture the screen lasts only while the service runs, so you're asked on the first capture after the service starts: after a restart of the device, after you stop and start the service (including from the tile), after the app is updated or reinstalled, and when Android has ended the app for memory and started it again.
 
 ## How the app finds the game
 

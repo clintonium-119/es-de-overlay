@@ -5,7 +5,7 @@
 
 Shizuku is optional. Android normally doesn't let one app end another, but [Shizuku](https://shizuku.rikka.app) is a helper that runs with adb's permissions and is allowed to. When it's running and you've allowed ES-DE Overlay to use it:
 
-- **Quit Game** ends the game with nothing else on screen. Without Shizuku, it opens the game's App Info page in Settings for a moment and presses Force stop. Either way it then presses Android's Home, which is ES-DE only when ES-DE is your Home app.
+- **Quit Game** ends the game with nothing else on screen. Without Shizuku, it opens the game's App Info page in Settings for a moment and presses Force stop. Either way it then takes you to ES-DE.
 - **Quit games left with Home** (off by default, needs Shizuku) ends the game's app when you leave it with Home, as Quit Game would. It acts only when Home takes you to ES-DE, so ES-DE has to be your Home app.
   - You lose progress since your last save, and the game starts fresh next time.
   - The upside: launching a different RetroArch game afterwards works the first time (see [Known limitations](limitations.md#quitting-games)).

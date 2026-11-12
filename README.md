@@ -10,7 +10,7 @@
 
 ES-DE Overlay adds an in-game menu to [ES-DE](https://es-de.org) on Android. Press **Back** or **Menu** on your controller during a game you launched from ES-DE, and the menu opens over it in your ES-DE theme's colours and font. From it you can save a screenshot or clip straight into ES-DE's media, read the game's manual, find and read guides, see the game's ES-DE info, and quit.
 
-Back is the Android Back button beside Home on Retroid and AYN handhelds. Menu is for controllers that have one.
+Back is the Android Back button beside Home on Retroid and AYN handhelds. Menu is for controllers that have one. You can choose another button in settings, or open the menu from its notification.
 
 **[Read the documentation →](https://clintonium-119.github.io/es-de-overlay/)**
 
@@ -35,7 +35,7 @@ You need:
 
 - Android 13 or newer. The app is tested on Android 13 only.
 - [ES-DE](https://es-de.org) for Android, set up with your games. The app was developed with ES-DE 3.5.0.
-- A controller with a Back or Menu button.
+- A controller. The menu opens on Back or Menu by default, or on a button you choose in settings.
 
 To install it, either:
 
@@ -46,7 +46,7 @@ The app was developed and tested on a Retroid Pocket Nova.
 
 ## Set up
 
-Open ES-DE Overlay, pick your ES-DE and ROMs folders, grant the permissions it lists, and tap **Start Service**. Then press Back or Menu in a game. The [setup guide](https://clintonium-119.github.io/es-de-overlay/setup.html) walks you through it, says what each permission is for, and covers the optional settings, including [Shizuku](https://clintonium-119.github.io/es-de-overlay/shizuku.html) for quitting games directly.
+Open ES-DE Overlay, pick your ES-DE and ROMs folders, grant the permissions its checklist names, and tap **Start Service**. Then press Back or Menu in a game. After a restart, the app starts again by itself. The [setup guide](https://clintonium-119.github.io/es-de-overlay/setup.html) walks you through it, says what each permission is for, and covers the optional settings, including [Shizuku](https://clintonium-119.github.io/es-de-overlay/shizuku.html) for quitting games directly.
 
 ## Build from source
 
@@ -60,7 +60,7 @@ adb logcat -G 16M && adb logcat -s ESDEShot   # the app's debug log
 
 ## Safety
 
-ES-DE Overlay asks for broad permissions. It captures the screen and sound, intercepts the controller's Back or Menu button during games through an accessibility service, and draws over other apps. With Shizuku, it can also end other apps. [Privacy and safety](https://clintonium-119.github.io/es-de-overlay/privacy.html) lists what it can access and when it goes online. It adds no analytics, accounts or ads of its own.
+ES-DE Overlay asks for broad permissions. It captures the screen and sound, intercepts one controller button (Back or Menu, or the one you choose) during games through an accessibility service, and draws over other apps. With Shizuku, it can also end other apps. [Privacy and safety](https://clintonium-119.github.io/es-de-overlay/privacy.html) lists what it can access and when it goes online. It adds no analytics, accounts or ads of its own.
 
 ES-DE Overlay is written with an AI coding assistant and reviewed by its author. The code has been checked for the ways an app with these permissions could be misused, and each finding was fixed or accepted with a reason; [Privacy and safety](https://clintonium-119.github.io/es-de-overlay/privacy.html) says what was checked. Every push runs the unit tests and Android Lint, and CodeQL and OpenSSF Scorecard scan the main branch. There's no warranty (it's MIT-licensed), so use it at your own risk. To report a security problem privately, see [SECURITY.md](SECURITY.md).
 
