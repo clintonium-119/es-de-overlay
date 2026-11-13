@@ -4,7 +4,7 @@ import android.content.Intent
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 
-/** Quick Settings toggle: on asks for capture consent (it can't be granted headless), off stops the service. */
+/** Quick Settings toggle: on starts the service (capture consent is asked on the first capture), off stops it. */
 class CaptureTile : TileService() {
     // Android can't be asked whether the tile is added, so settings reads what these callbacks saw.
     override fun onTileAdded() {
@@ -25,11 +25,10 @@ class CaptureTile : TileService() {
             stopService(Intent(this, HelperService::class.java))
             show(false)
         } else {
-            startActivityAndCollapse(
-                Intent(this, SettingsActivity::class.java)
-                    .putExtra(SettingsActivity.EXTRA_GRANT, true)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
+            // Android can refuse a start from the background; settings can always start it.
+            runCatching { startForegroundService(Intent(this, HelperService::class.java)) }
+                .onSuccess { show(true) }
+                .onFailure { startActivityAndCollapse(Intent(this, SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         }
     }
 

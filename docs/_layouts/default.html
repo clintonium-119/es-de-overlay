@@ -9,23 +9,52 @@
 <link rel="stylesheet" href="{{ '/assets/main.css' | relative_url }}">
 </head>
 <body>
+<a class="skip" href="#content">Skip to content</a>
 <header class="masthead">
 <div class="wrap">
 <a class="site-name" href="{{ '/' | relative_url }}"><img src="{{ '/assets/icon.svg' | relative_url }}" alt="" width="28" height="28">{{ site.title | escape }}</a>
-<nav aria-label="Pages">
-{%- for path in site.header_pages -%}
-{%- assign item = site.pages | where: "path", path | first -%}
-{%- if item %}
-<a href="{{ item.url | relative_url }}"{% if item.url == page.url %} aria-current="page"{% endif %}>{{ item.title | escape }}</a>
-{%- endif -%}
-{%- endfor %}
-</nav>
+<a class="repo" href="https://github.com/clintonium-119/es-de-overlay">GitHub</a>
 </div>
 </header>
-<main{% if page.wide %} class="wide"{% endif %}>
-{% unless page.wide %}<h1>{{ page.title | escape }}</h1>{% endunless %}
+{%- if page.wide %}
+<main id="content" tabindex="-1" class="wide">
 {{ content }}
 </main>
+{%- else %}
+{%- capture pages -%}
+{%- for group in site.nav %}
+<p class="nav-group">{{ group.title | escape }}</p>
+<ul>
+{%- for path in group.pages %}
+{%- assign item = site.pages | where: "path", path | first %}
+<li><a href="{{ item.url | relative_url }}"{% if item.url == page.url %} aria-current="page"{% endif %}>{{ item.title | escape }}</a>
+{%- if item.url == page.url %}<ul class="toc"></ul>{% endif %}</li>
+{%- endfor %}
+</ul>
+{%- endfor %}
+{%- endcapture %}
+<div class="with-sidebar">
+<!-- One copy of the page list for each layout; CSS shows one. -->
+<details class="nav-narrow"><summary>Documentation</summary><nav aria-label="Documentation">{{ pages }}</nav></details>
+<nav class="sidebar" aria-label="Documentation">{{ pages }}</nav>
+<main id="content" tabindex="-1">
+<h1>{{ page.title | escape }}</h1>
+{{ content }}
+</main>
+</div>
+<script>
+// Lists the page's sections under it in the page list: h2s, with their h3s nested.
+for (const toc of document.querySelectorAll('.toc')) {
+  let h2 = null;
+  for (const h of document.querySelectorAll('main h2[id], main h3[id]')) {
+    const li = document.createElement('li');
+    li.append(Object.assign(document.createElement('a'), { href: '#' + h.id, textContent: h.textContent }));
+    if (h.tagName === 'H3' && h2) (h2.querySelector('ul') || h2.appendChild(document.createElement('ul'))).append(li);
+    else { toc.append(li); if (h.tagName === 'H2') h2 = li; }
+  }
+}
+</script>
+{%- endif %}
 <footer>
 <div class="wrap">{{ site.title | escape }} · <a href="https://github.com/clintonium-119/es-de-overlay">Source on GitHub</a></div>
 </footer>

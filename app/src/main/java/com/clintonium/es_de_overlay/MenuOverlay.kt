@@ -219,9 +219,11 @@ class MenuOverlay(private val context: Context) {
     val artW = (screenW * 0.3625f).toInt()
     val artH = (screenH * 0.73333333f).toInt()
 
-    /** The game's name and screenshot, set before the menu opens; every [show] keeps them until [release]. */
+    /** The game's name and image, set before the menu opens; every [show] keeps them until [release]. */
     var title = ""
     var art: Bitmap? = null
+    /** Whether [art] fills the box, cropped, as themes draw a game's screen; otherwise it's scaled to fit. */
+    var cropArt = true
     /** The look and fonts the menu draws with, set before it opens. */
     var theme = ThemeLook.DEFAULT
 
@@ -347,7 +349,10 @@ class MenuOverlay(private val context: Context) {
             if (image != null) {
                 // Unfiltered, so pixel art keeps hard edges, as ES-DE's default nearest interpolation scales it.
                 val drawable = BitmapDrawable(context.resources, image).apply { isFilterBitmap = false }
-                addView(ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_CROP; setImageDrawable(drawable) })
+                addView(ImageView(context).apply {
+                    scaleType = if (cropArt) ImageView.ScaleType.CENTER_CROP else ImageView.ScaleType.FIT_CENTER
+                    setImageDrawable(drawable)
+                })
             } else {
                 addView(
                     TextView(context).apply {

@@ -41,6 +41,14 @@ class NameResolverTest {
         assertNull(targetName("X.png", Overwrite.SKIP, existing::contains))
         assertEquals("X.png", targetName("X.png", Overwrite.REPLACE, existing::contains))
         assertEquals("Y.png", targetName("Y.png", Overwrite.SKIP, existing::contains))
+        assertEquals("Y.png", targetName("Y.png", Overwrite.REPLACE, existing::contains))
+    }
+
+    @Test
+    fun `ask names the file whether or not it exists`() {
+        val existing = setOf("X.png")
+        assertEquals("X.png", targetName("X.png", Overwrite.ASK, existing::contains))
+        assertEquals("Y.png", targetName("Y.png", Overwrite.ASK, existing::contains))
     }
 
     // End to end over the device fixtures: launch block -> GameRef -> media path.

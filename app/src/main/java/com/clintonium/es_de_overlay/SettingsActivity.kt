@@ -1,6 +1,7 @@
 package com.clintonium.es_de_overlay
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.AppOpsManager
 import android.app.StatusBarManager
 import android.content.ComponentName
@@ -13,10 +14,14 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.provider.DocumentsContract
 import android.provider.Settings
+import android.view.InputDevice
+import android.view.KeyEvent
+import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,6 +53,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.clintonium.es_de_overlay.core.LookSource
 import com.clintonium.es_de_overlay.core.Overwrite
+import com.clintonium.es_de_overlay.core.RESERVED_KEYS
+import com.clintonium.es_de_overlay.core.mediaDirectory
 import com.clintonium.es_de_overlay.core.reportsScreensaver
 import rikka.shizuku.Shizuku
 
@@ -55,11 +62,15 @@ class SettingsActivity : ComponentActivity() {
     private var refresh by mutableIntStateOf(0)
     private var autoGrant = false
 
-    // Opened just to grant consent (tile, boot notification, re-grant tap): go back to the game afterwards.
+    // Opened by a capture just to grant consent: go back to the game afterwards.
     private var grantOnly = false
 
     // The permission the dialog was last launched for: its result only says whether it was granted.
     private var asked = ""
+
+    // While set, the next controller button pressed becomes the menu button; [refused] says why the last one wasn't.
+    private var learning by mutableStateOf(false)
+    private var refused by mutableStateOf<String?>(null)
 
     // Shizuku's row changes while settings are open: Shizuku starts or stops, or its permission dialog is answered.
     private val shizukuStarted = Shizuku.OnBinderReceivedListener { refresh++ }
@@ -92,6 +103,35 @@ class SettingsActivity : ComponentActivity() {
         refresh++
     }
 
+    /**
+     * While [learning], takes the controller's buttons: the first one the menu can use becomes the menu button. Here
+     * rather than in Compose, which moves focus on the D-pad before anything else sees it.
+     */
+    // Activity.dispatchKeyEvent is public; androidx marks only its own override of it as restricted.
+    @SuppressLint("RestrictedApi")
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (!learning || !event.isFromSource(InputDevice.SOURCE_GAMEPAD)) return super.dispatchKeyEvent(event)
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            if (event.keyCode in RESERVED_KEYS) {
+                refused = refusal(keyName(event.keyCode))
+            } else {
+                Prefs(this).menuKey = event.keyCode
+                learning = false
+                refresh++
+            }
+        }
+        return true
+    }
+
+    /** While [learning], a D-pad that reports as a hat axis (the Nova's) is refused as one sending keys would be. */
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        if (!learning || !event.isFromSource(InputDevice.SOURCE_JOYSTICK)) return super.dispatchGenericMotionEvent(event)
+        if (event.getAxisValue(MotionEvent.AXIS_HAT_X) != 0f || event.getAxisValue(MotionEvent.AXIS_HAT_Y) != 0f) refused = refusal("The D-pad")
+        return true
+    }
+
+    private fun refusal(button: String) = "$button can't be the menu button: the menu, the viewer or Home use it. Press another."
+
     override fun onDestroy() {
         Shizuku.removeBinderReceivedListener(shizukuStarted)
         Shizuku.removeBinderDeadListener(shizukuStopped)
@@ -110,6 +150,7 @@ class SettingsActivity : ComponentActivity() {
         val esdeWarning = remember(tick, esde) { esde?.let(::esdeWarning) }
         val romsWarning = remember(tick, esde, roms) { if (esde != null && roms != null) romsWarning(esde, roms) else null }
         var mediaType by remember { mutableStateOf(prefs.mediaType) }
+        var menuImageType by remember { mutableStateOf(prefs.menuImageType) }
         var clip by remember { mutableIntStateOf(prefs.clipSeconds) }
         var textScale by remember { mutableIntStateOf(prefs.textScale) }
         var overwrite by remember { mutableStateOf(prefs.overwrite) }
@@ -117,10 +158,12 @@ class SettingsActivity : ComponentActivity() {
         var sleepWhenIdle by remember { mutableStateOf(prefs.sleepWhenIdle) }
         var sleepMinutes by remember { mutableIntStateOf(prefs.sleepMinutes) }
         var quitOnHome by remember { mutableStateOf(prefs.quitOnHome) }
+        var confirmQuit by remember { mutableStateOf(prefs.confirmQuit) }
+        var systemScreenshots by remember { mutableStateOf(prefs.systemScreenshots) }
         val shizuku = remember(tick) { ShizukuShell.state(this) }
         val screensaverReported = remember(tick, esde) { esde?.let(::esdeReportsScreensaver) }
         // No game, so no system: the theme's own theme.xml.
-        val lookSource = remember(tick, esde, mediaType) { ThemeLook(this, prefs).current("", mediaType).look.source }
+        val lookSource = remember(tick, esde, mediaType, menuImageType) { ThemeLook(this, prefs).current("", prefs.menuImage).look.source }
 
         val pickEsde = treePicker { prefs.esdeTree = it }
         val pickRoms = treePicker { prefs.romsTree = it }
@@ -160,7 +203,26 @@ class SettingsActivity : ComponentActivity() {
         ) {
             Text("ES-DE Overlay", style = MaterialTheme.typography.headlineSmall)
 
+            // What the menu can't work without; a tap on one that isn't ready goes to where it's fixed.
+            val overlay = Settings.canDrawOverlays(this@SettingsActivity)
+            val usage = usageAccess()
+            val menuService = menuServiceEnabled()
+            val checklist = listOf(
+                Triple("Folders", esde != null && roms != null, { if (esde == null) pickEsde.launch(null) else pickRoms.launch(null) }),
+                Triple("Display over other apps", overlay, { openSettings(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, withPackage = true) }),
+                Triple("Usage access", usage, { openSettings(Settings.ACTION_USAGE_ACCESS_SETTINGS, withPackage = false) }),
+                Triple(MENU_SERVICE, menuService, { openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS, withPackage = false) }),
+            )
+            for ((label, ready, fix) in checklist) {
+                Text(
+                    (if (ready) "✓ " else "✗ Not ready: ") + label,
+                    Modifier.fillMaxWidth().clickable(enabled = !ready, onClick = fix),
+                    color = if (ready) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+                )
+            }
+
             Section("Service")
+            val missing = checklist.firstOrNull { !it.second }?.first
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (HelperService.running) {
                     OutlinedButton(onClick = { stopService(Intent(this@SettingsActivity, HelperService::class.java)); this@SettingsActivity.refresh++ }) {
@@ -168,19 +230,38 @@ class SettingsActivity : ComponentActivity() {
                     }
                     Text("Running")
                 } else {
-                    Button(onClick = requestConsent, enabled = prefs.esdeTree != null && prefs.romsTree != null) { Text("Start Service") }
-                    Text(if (prefs.esdeTree == null || prefs.romsTree == null) "Set both folders first" else "Stopped")
+                    Button(
+                        onClick = { startForegroundService(Intent(this@SettingsActivity, HelperService::class.java)); this@SettingsActivity.refresh++ },
+                        enabled = missing == null,
+                    ) { Text("Start Service") }
+                    Text(missing?.let { "Not ready: $it" } ?: "Stopped")
                 }
             }
+            if (HelperService.running) {
+                Text(
+                    "Stopping ends the menu and captures. Turning the screen off when ES-DE is idle keeps working, " +
+                        "because the accessibility service does it; turn that off under Screen.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Offer to start after boot", Modifier.weight(1f))
+                Column(Modifier.weight(1f)) {
+                    Text("Start after boot")
+                    Text(
+                        "Starts the service when the device starts, so the menu works with no visit here. Capture still " +
+                            "asks for permission the first time.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Switch(checked = bootStart, onCheckedChange = { bootStart = it; prefs.bootStart = it })
             }
             Setting(
                 "Quick settings tile",
                 if (prefs.tileAdded) "Added" else "Not added",
                 if (prefs.tileAdded) null else "Add",
-                "Turn the recorder on or off from the notification shade",
+                "Turn the overlay on or off from the notification shade",
             ) {
                 getSystemService(StatusBarManager::class.java).requestAddTileService(
                     ComponentName(this@SettingsActivity, CaptureTile::class.java),
@@ -213,15 +294,54 @@ class SettingsActivity : ComponentActivity() {
                     "card's root, so it's a separate pick.",
             ) { pickRoms.launch(null) }
 
+            Section("Controls")
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text("Menu button")
+                    Text(
+                        "Opens and closes the menu during a game ES-DE launched. Games don't get this button while the " +
+                            "overlay runs. A trigger that reports as an axis can't be chosen, and some devices keep buttons " +
+                            "such as Home or Guide for themselves: if pressing one shows nothing here, the device doesn't " +
+                            "pass it on.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(if (learning) refused ?: "Press the controller button to use…" else keyName(prefs.menuKey), style = MaterialTheme.typography.bodySmall)
+                }
+                OutlinedButton(onClick = { learning = !learning; refused = null }) { Text(if (learning) "Cancel" else "Change") }
+                if (prefs.menuKey != 0 && !learning) {
+                    OutlinedButton(onClick = { prefs.menuKey = 0; this@SettingsActivity.refresh++ }) { Text("Reset") }
+                }
+            }
+
             Section("Capture")
             Dropdown(
                 "Screenshot media type",
                 mediaType,
                 MEDIA_TYPES.keys.toList(),
                 { MEDIA_TYPES[it] ?: it },
-                "Pick the image type your theme shows in the gamelist, so captures show there. The in-game menu shows the same type.",
+                "Where screenshots are saved: pick the image type your theme shows in the gamelist, so captures show there.",
             ) { mediaType = it; prefs.mediaType = it }
+            Text(
+                "Android asks for permission to capture the screen the first time you pick Capture, and again after " +
+                    "the service or the device restarts.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Dropdown("Clip length", clip, (5..60 step 5).toList(), { "$it s" }) { clip = it; prefs.clipSeconds = it }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Use system screenshots as game images")
+                    Text(
+                        "A system screenshot you take during a game (Power + Volume down, or the Screenshot tile in quick settings) " +
+                            "also becomes that game's image in ES-DE, following the choice below for an existing file " +
+                            "(Ask keeps it). Needs Read screenshots.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = systemScreenshots, onCheckedChange = { systemScreenshots = it; prefs.systemScreenshots = it })
+            }
             Text("If the media file already exists")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (o in Overwrite.entries) {
@@ -229,7 +349,8 @@ class SettingsActivity : ComponentActivity() {
                 }
             }
             Text(
-                "ES-DE only shows the file named exactly like the ROM: Replace saves over it, Skip keeps it and drops the new capture.",
+                "ES-DE only shows the file named exactly like the ROM. Replace puts the new capture in its place. Ask " +
+                    "keeps the new capture beside it until you choose in the menu. Skip keeps the file and drops the new capture.",
                 style = MaterialTheme.typography.bodySmall,
             )
             Section("Screen")
@@ -238,8 +359,8 @@ class SettingsActivity : ComponentActivity() {
                     Text("Turn the screen off when ES-DE is idle")
                     Text(
                         "ES-DE keeps the screen on while it's in front, even behind its screensaver. This locks the screen " +
-                            "like the power button once ES-DE's screensaver has run for the time below. Needs the Back " +
-                            "button menu and usage access enabled.",
+                            "like the power button once ES-DE's screensaver has run for the time below. Needs the " +
+                            "accessibility service and usage access.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -273,14 +394,33 @@ class SettingsActivity : ComponentActivity() {
                 "Scales the theme's text in the menu and guides, for themes whose small text fits ES-DE's busy screens. " +
                     "The menu takes it from the next game you start.",
             ) { textScale = it; prefs.textScale = it }
+            Dropdown(
+                "Menu image",
+                menuImageType,
+                listOf("") + MEDIA_TYPES.keys,
+                { if (it.isEmpty()) "Same as captures" else MEDIA_TYPES[it] ?: it },
+                "Which of the game's ES-DE images the menu shows.",
+            ) { menuImageType = it; prefs.menuImageType = it }
             Section("Quitting games")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Confirm before quitting")
+                    Text(
+                        "Quit Game ends the game's app at once, so progress since the last save is lost. With this on, " +
+                            "the menu asks first, with Keep Playing selected.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = confirmQuit, onCheckedChange = { confirmQuit = it; prefs.confirmQuit = it })
+            }
             Setting(
                 "Shizuku",
                 when (shizuku) {
                     ShizukuShell.State.NOT_INSTALLED -> "Not installed"
                     ShizukuShell.State.NOT_RUNNING -> "Not running"
                     ShizukuShell.State.NOT_ALLOWED -> "Not allowed"
-                    ShizukuShell.State.READY -> "Enabled"
+                    ShizukuShell.State.READY -> "Ready"
                 },
                 when (shizuku) {
                     ShizukuShell.State.NOT_RUNNING -> "Open Shizuku"
@@ -321,37 +461,32 @@ class SettingsActivity : ComponentActivity() {
                 }
             }
             Section("Permissions")
-            for ((title, permission, description) in listOf(
-                Triple("Notifications", Manifest.permission.POST_NOTIFICATIONS, "Shows capture results and the offer to start after boot."),
-                Triple("Game sound in clips", Manifest.permission.RECORD_AUDIO, "Android calls it audio recording; only game audio is captured."),
-                Triple("Read screenshots", Manifest.permission.READ_MEDIA_IMAGES, "Files a system screenshot (Power + Volume down) under the game."),
-            )) {
-                val on = granted(permission)
-                Setting(title, on.label, on.action, description) {
-                    if (on) {
-                        openSettings(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, withPackage = true)
-                    } else {
-                        asked = permission
-                        askPermission.launch(permission)
-                    }
-                }
+            val ask = { permission: String ->
+                asked = permission
+                askPermission.launch(permission)
             }
-            val menu = menuServiceEnabled()
-            Setting(
-                "Back button menu",
-                menu.label,
-                menu.action,
-                "An accessibility service. The menu opens on the controller's Back button during a game ES-DE launched; no " +
-                    "Retroid setting is needed.",
-            ) { openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS, withPackage = false) }
-            val overlay = Settings.canDrawOverlays(this@SettingsActivity)
+            Group("Required")
             Setting("Display over other apps", overlay.label, overlay.action, "For the in-game menu and the guide viewer.") {
                 openSettings(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, withPackage = true)
             }
-            val usage = usageAccess()
             Setting("Usage access", usage.label, usage.action, "Tells which app is in front.") {
                 openSettings(Settings.ACTION_USAGE_ACCESS_SETTINGS, withPackage = false)
             }
+            Setting(
+                MENU_SERVICE,
+                menuService.label,
+                menuService.action,
+                "Opens the menu on the controller's menu button during a game ES-DE launched, and lets Quit Game end " +
+                    "the game." + if (menuService) "" else " If Android says the setting is restricted, open this app's " +
+                    "App Info, tap ⋮, then Allow restricted settings, and try again.",
+            ) { openSettings(Settings.ACTION_ACCESSIBILITY_SETTINGS, withPackage = false) }
+            Group("Recommended")
+            PermissionRow(
+                "Notifications",
+                Manifest.permission.POST_NOTIFICATIONS,
+                "Shows the service's notification with Open Menu, and capture results.",
+                ask,
+            )
             val battery = getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
             Setting("Ignore battery optimization", battery.label, battery.action, "Keeps the service running in the background.") {
                 if (battery) {
@@ -361,6 +496,28 @@ class SettingsActivity : ComponentActivity() {
                     openSettings(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, withPackage = true)
                 }
             }
+            Group("Optional")
+            PermissionRow(
+                "Game sound in clips",
+                Manifest.permission.RECORD_AUDIO,
+                "Android calls it audio recording; the microphone is not recorded.",
+                ask,
+            )
+            PermissionRow(
+                "Read screenshots",
+                Manifest.permission.READ_MEDIA_IMAGES,
+                "Only needed for Use system screenshots as game images, under Capture.",
+                ask,
+            )
+        }
+    }
+
+    /** A runtime permission's row: [ask] requests it, or App Info turns it off once it's on. */
+    @Composable
+    private fun PermissionRow(title: String, permission: String, description: String, ask: (String) -> Unit) {
+        val on = granted(permission)
+        Setting(title, on.label, on.action, description) {
+            if (on) openSettings(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, withPackage = true) else ask(permission)
         }
     }
 
@@ -380,6 +537,12 @@ class SettingsActivity : ComponentActivity() {
     @Composable
     private fun Section(title: String) {
         Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+    }
+
+    /** How much a group of rows in a section matters: Required, Recommended or Optional. */
+    @Composable
+    private fun Group(title: String) {
+        Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
     }
 
     /** A row with a button labelled [action], or none when [action] is null. */
@@ -436,13 +599,31 @@ class SettingsActivity : ComponentActivity() {
         }
     }
 
+    private fun keyName(code: Int) = when (code) {
+        0 -> "Back or Menu (default)"
+        KeyEvent.KEYCODE_BUTTON_THUMBL -> "L3"
+        KeyEvent.KEYCODE_BUTTON_THUMBR -> "R3"
+        KeyEvent.KEYCODE_BUTTON_MODE -> "Guide"
+        else -> KeyEvent.keyCodeToString(code).removePrefix("KEYCODE_").removePrefix("BUTTON_").replace('_', ' ')
+            .lowercase().replaceFirstChar(Char::uppercase)
+    }
+
     private fun treeLabel(uri: Uri?) = uri?.let { DocumentsContract.getTreeDocumentId(it) } ?: "Not set"
 
-    // The service reads this log to see launches, so a folder without it isn't the ES-DE folder.
-    private fun esdeWarning(esde: Uri) =
+    /**
+     * The service reads ES-DE's log to see launches, so a folder without it isn't the ES-DE folder. And ES-DE shows
+     * game media from its MediaDirectory when that's set, where captures and guides saved here don't show.
+     */
+    private fun esdeWarning(esde: Uri): String? {
         if (runCatching { contentResolver.openInputStream(treeChild(esde, "logs/es_log.txt"))!!.close() }.isFailure) {
-            "No ES-DE log here; set the ES-DE folder"
-        } else null
+            return "No ES-DE log here; set the ES-DE folder"
+        }
+        val media = runCatching {
+            contentResolver.openInputStream(treeChild(esde, "settings/es_settings.xml"))!!.use(::mediaDirectory)
+        }.getOrDefault("")
+        if (media.isEmpty() || media.trimEnd('/') == romRoots(esde).first() + "/downloaded_media") return null
+        return "ES-DE shows media from $media, so captures and guides saved in this folder won't show in ES-DE"
+    }
 
     // Null when there's no settings file to read, which the folder's own warning covers.
     private fun esdeReportsScreensaver(esde: Uri) = runCatching {
@@ -478,11 +659,13 @@ class SettingsActivity : ComponentActivity() {
     private val Overwrite.label
         get() = when (this) {
             Overwrite.REPLACE -> "Replace"
+            Overwrite.ASK -> "Ask"
             Overwrite.SKIP -> "Skip"
         }
 
     companion object {
         const val EXTRA_GRANT = "grant"
+        private const val MENU_SERVICE = "Controller button (accessibility service)"
 
         // ES-DE's image folders under downloaded_media/<system>/, labelled as its scraper menu names them.
         private val MEDIA_TYPES = linkedMapOf(

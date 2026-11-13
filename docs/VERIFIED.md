@@ -3,6 +3,8 @@
 
 # Verified device facts
 
+These are the developer's dated test notes, taken on one device while the app was being built. They aren't user documentation and aren't on the site. Older entries describe behaviour that has since changed; [Known limitations](limitations.md) and the other pages describe the app as it is now.
+
 Device: Retroid Pocket Nova (`kalama`), checked over adb on 2026-10-28.
 
 ## Device

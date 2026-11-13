@@ -139,7 +139,7 @@ fun saveVia(
         if (cancelled()) throw CancellationException()
         return writer.write(listOf("downloaded_media") + guidePath(game, romIsDirectory) + name, mime, Overwrite.REPLACE) { out ->
             file.inputStream().use { it.copyTo(out) }
-        }!!
+        }!!.path
     } finally {
         file.delete()
     }

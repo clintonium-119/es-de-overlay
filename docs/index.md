@@ -9,7 +9,7 @@ wide: true
 
 <h1>{{ page.title }}</h1>
 
-<span class="pitch">An in-game menu for [ES-DE](https://es-de.org) on Android.</span> Press the controller's **Back** button during a game you launched from ES-DE, and a menu opens over the game. It's laid out like a gamelist and drawn in the colours and font of your ES-DE theme.
+<span class="pitch">An in-game menu for [ES-DE](https://es-de.org) on Android.</span> Press **Back** or **Menu** on your controller during a game you launched from ES-DE, and a menu opens over it. It looks like part of ES-DE: the same layout as a gamelist, in your theme's colours and font.
 
 [Get it](#get-it){: .button} [Set up](setup.md){: .button .outline}
 {: .actions}
@@ -17,7 +17,7 @@ wide: true
 </div>
 <div markdown="1">
 
-![The overlay's menu over Super Mario World, in the MinUI Menu (Overlay) theme](images/menu.png)
+![The menu over Super Mario World, in the MinUI Menu (Overlay) theme](images/menu.png)
 
 </div>
 </div>
@@ -27,7 +27,7 @@ wide: true
 <div class="feature" markdown="1">
 <div markdown="1">
 
-**Captures straight into ES-DE.** Save a screenshot, a clip or both. They go into ES-DE's media folders under the names ES-DE expects, so they show in the gamelist with no renaming. Screenshots you take with Power + Volume down during a game are filed the same way.
+**Captures straight into ES-DE.** Save a screenshot, a clip or both. They go into ES-DE's media folders, named the way ES-DE expects, so they show up in the gamelist straight away. Turn on **Use system screenshots as game images** and the system screenshots you take during a game are saved there too.
 
 </div>
 <div markdown="1">
@@ -40,7 +40,7 @@ wide: true
 <div class="feature" markdown="1">
 <div markdown="1">
 
-**Manuals and guides in the game.** Read the game's scraped manual, or guides you add next to ES-DE's media: PDF, text, images, CBZ map packs and saved web pages. **Find Guides** gets maps from VGMaps and walkthroughs from StrategyWiki. It can also open GameFAQs, Neoseeker and ZeldaDungeon in a browser over the game and save a guide for reading offline. The viewer works like ES-DE's own manual viewer.
+**Manuals and guides in the game.** Read the game's manual, or any guide you've saved next to ES-DE's media. **Find Guides** downloads maps from VGMaps and walkthroughs from StrategyWiki, and can save guides from GameFAQs and other sites to read offline. The viewer works like ES-DE's own manual viewer.
 
 </div>
 <div markdown="1">
@@ -53,7 +53,7 @@ wide: true
 <div class="feature" markdown="1">
 <div markdown="1">
 
-**Your theme's look.** The menu, the guide viewer and the browser take their colours and font from the ES-DE theme you use. Change the theme in ES-DE and the overlay follows.
+**Your theme's look.** The menu, the guide viewer and the browser take their colours and font from your ES-DE theme. Change the theme in ES-DE and the app follows from the next game you start.
 
 </div>
 <div markdown="1">
@@ -63,11 +63,11 @@ wide: true
 </div>
 </div>
 
-It also shows the game's ES-DE info and can quit the game. See [Use](use.md) for every feature and [Theme](theme.md) for how the look works.
+You can also see the game's ES-DE info and quit the game from the menu. [Use](use.md) covers every feature, and [Theme](theme.md) how the look works.
 
 ## It follows your theme
 
-Each one is the overlay reading the theme's own files. [Theme](theme.md) shows them beside ES-DE's gamelist.
+There's no per-theme setup: the app reads each theme's own files. [Theme](theme.md) shows them beside ES-DE's gamelist.
 
 <div class="gallery">
 <figure><img src="images/menu.png" alt="The menu under MinUI Menu (Overlay)"><figcaption>MinUI Menu (Overlay)</figcaption></figure>
@@ -83,11 +83,11 @@ Each one is the overlay reading the theme's own files. [Theme](theme.md) shows t
 
 ## What you need
 
-- Android 13 or newer.
-- [ES-DE](https://es-de.org) for Android, set up with your games. The overlay was developed with ES-DE 3.5.0.
-- A controller with a Back button.
+- Android 13 or newer; tested on Android 13 only.
+- [ES-DE](https://es-de.org) for Android, set up with your games. The app was developed with ES-DE 3.5.0.
+- A controller. The menu opens on Back or Menu by default: the Android Back button beside Home on Retroid and AYN handhelds, or Menu on controllers that have one. You can choose another button in settings, or open the menu from its notification.
 
-The app was developed and tested on a Retroid Pocket Nova. Some behaviour depends on the device's firmware; [Known limitations](limitations.md) says which.
+The app was developed and tested on a Retroid Pocket Nova. Some of what it does depends on the device's firmware, and [Known limitations](limitations.md) says where.
 
 </div>
 <div class="card" markdown="1">
@@ -108,8 +108,8 @@ Then follow [Set up](setup.md). You can also [build it yourself](setup.md#build-
 | --- | --- | --- | --- |
 | Retroid Pocket Nova | 13 | 3.5.0 | Every feature, with RetroArch and Eden games. |
 
-Tried it on another device? [Open an issue](https://github.com/clintonium-119/es-de-overlay/issues) with the device, its Android and ES-DE versions, and what worked and what didn't. That way this table can grow.
+Tried it on another device? [Open an issue](https://github.com/clintonium-119/es-de-overlay/issues) with the device, its Android and ES-DE versions, and what worked and what didn't.
 
 ## Safety
 
-ES-DE Overlay is written with an AI coding assistant and reviewed by its author. It comes with no warranty; use it at your own risk. [Privacy and safety](privacy.md) lists what it can access and when it goes online.
+ES-DE Overlay asks for broad permissions. [Privacy and safety](privacy.md) lists what it can access, when it goes online and how it was checked. There's no warranty, so use it at your own risk.

@@ -13,9 +13,9 @@ ES-DE Overlay is MIT-licensed. It builds on, reads from and borrows ideas from t
 
 ## Read at runtime, never bundled
 
-- **[ES-DE](https://es-de.org)** ([source](https://gitlab.com/es-de/emulationstation-de)). Licence: MIT. The overlay reads ES-DE's log, gamelists, media folders, settings and themes, and saves captures and guides where ES-DE looks for them. Its manual viewer is the model for the overlay's viewer controls.
-- **Your ES-DE theme.** The menu, guides and browser take the colours and fonts of the theme you use, read from the theme's own files. No theme files or fonts ship with the app, VAG Rounded included.
-- **[Linear](https://gitlab.com/es-de/emulationstation-de/-/tree/master/themes/linear-es-de)**, ES-DE's bundled theme, by Northwestern Software AB, Leon Styhre and Weestuarty. Licence: MIT. Its dark colour values are the overlay's built-in look, used when the active theme can't be read.
+- **[ES-DE](https://es-de.org)** ([source](https://gitlab.com/es-de/emulationstation-de)). Licence: MIT. The app reads ES-DE's log, gamelists, media folders, settings and themes, and saves captures and guides where ES-DE looks for them. ES-DE's manual viewer is the model for the app's viewer controls.
+- **Your ES-DE theme.** The menu, guides and browser take the colours and fonts of your theme, read from the theme's own files. No theme files or fonts ship with the app.
+- **[Linear](https://gitlab.com/es-de/emulationstation-de/-/tree/master/themes/linear-es-de)**, ES-DE's bundled theme, by Northwestern Software AB, Leon Styhre and Weestuarty. Licence: MIT. Its files are read at runtime like any theme's, but its dark colour values are also built into the app, as the default look used when your theme can't be read.
 
 ## The themes in the screenshots
 
@@ -37,16 +37,16 @@ Both showed how useful game guides are on a handheld. No code or services from e
 
 ## Guide sources
 
-The overlay opens these sites in its browser and saves pages for reading offline. Saved guides are for your own reading on your device.
+The app opens these sites in its browser and saves pages for you to read offline. Keep saved guides for your own reading on your device.
 
 - **[StrategyWiki](https://strategywiki.org)**: text under CC BY-SA 4.0. Each saved guide keeps the source and licence at its end.
 - **[VGMaps](https://www.vgmaps.com)**: the site is © Jonathan Leung. Each map is by its mapper, and ripped game images belong to their copyright holders. Saved maps keep the mapper's credit in the images.
 - **[GameFAQs](https://gamefaqs.gamespot.com)**, **[Neoseeker](https://www.neoseeker.com)** and **[ZeldaDungeon](https://www.zeldadungeon.net)**: guides belong to their authors and sites. The same goes for any other page you save, such as IGN.
 - **[DuckDuckGo](https://duckduckgo.com)** runs Search the Web.
 
-## Tools the setup uses
+## Optional tools
 
-- **[Shizuku](https://github.com/RikkaApps/Shizuku)** by RikkaApps (Apache License 2.0), and **[Shizuku-Next](https://github.com/rushiranpise/Shizuku-Next)** by rushiranpise (Apache License 2.0), the fork the screenshots' setup runs; see [Shizuku](shizuku.md).
+- **[Shizuku](https://github.com/RikkaApps/Shizuku)** by RikkaApps (Apache License 2.0), and **[Shizuku-Next](https://github.com/rushiranpise/Shizuku-Next)** by rushiranpise (Apache License 2.0), the fork used for the screenshots; see [Shizuku](shizuku.md).
 - **[Obtainium](https://github.com/ImranR98/Obtainium)** by ImranR98 (GPL-3.0) keeps the app up to date from GitHub Releases.
 
 Game names, logos and screenshots belong to their owners.

@@ -5,14 +5,19 @@ url: https://clintonium-119.github.io
 # The layout's {% seo %} tag; minima used to switch this plugin on.
 plugins:
   - jekyll-seo-tag
-header_pages:
-  - setup.md
-  - use.md
-  - theme.md
-  - shizuku.md
-  - privacy.md
-  - limitations.md
-  - credits.md
+# Developer test notes stay in the repository, off the site.
+exclude:
+  - VERIFIED.md
+# The sidebar on every page but the home page, in groups.
+nav:
+  - title: Get started
+    pages: [setup.md, shizuku.md]
+  - title: Using it
+    pages: [use.md, guides.md]
+  - title: Customise
+    pages: [theme.md]
+  - title: Help and reference
+    pages: [troubleshooting.md, limitations.md, privacy.md, credits.md]
 # Each page's first heading is its title, shown once.
 titles_from_headings:
   strip_title: true

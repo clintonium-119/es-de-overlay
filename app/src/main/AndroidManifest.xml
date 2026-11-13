@@ -5,17 +5,17 @@
     <!-- The overlay service, which holds the screen capture; the capture type is only enforced from target 34. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
-    <!-- Capture results and the offer to start after boot. -->
+    <!-- The service's notification with Open Menu, capture results, and the tap to start if a start after boot is refused. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- The menu, guide viewer and browser over the game. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <!-- System screenshots (Power + Volume down), filed under the game in front. -->
+    <!-- System screenshots, filed under the game in front. -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <!-- Game sound in clips: the capture's playback audio only, never the microphone. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Asks to keep the service running in the background. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    <!-- The one-tap notification to start after a restart, when that setting is on. -->
+    <!-- Starts the service after a restart, when that setting is on. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Find Guides and the guide browser, only when the user opens them. -->
     <uses-permission android:name="android.permission.INTERNET" />

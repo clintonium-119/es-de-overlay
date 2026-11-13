@@ -1,5 +1,6 @@
 package com.clintonium.es_de_overlay.core
 
+import android.view.KeyEvent
 import java.io.InputStream
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -63,12 +64,35 @@ fun buttonLabel(letter: String, swap: Boolean, controllerType: String): String {
     return names[if (swap) i xor 1 else i].toString()
 }
 
-/** The [ThemeSettings] of an es_settings.xml, whose `<string|bool name="…" value="…"/>` entries have no root element. */
-fun themeSettings(xml: InputStream): ThemeSettings {
+/**
+ * Whether the gamepad key [keyCode] opens the menu: with nothing [chosen] (0), Back or Menu, as controllers like the
+ * GuliKit Elves 2 have Menu where others have Back; otherwise only the chosen key.
+ */
+fun isMenuKey(keyCode: Int, chosen: Int) =
+    if (chosen == 0) keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_MENU else keyCode == chosen
+
+/** Keys the menu button can't be: the menu and viewer use these, and Home leaves the game and closes the menu. */
+val RESERVED_KEYS = setOf(
+    KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
+    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BUTTON_X,
+    KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_BUTTON_R1, KeyEvent.KEYCODE_BUTTON_L2,
+    KeyEvent.KEYCODE_BUTTON_R2, KeyEvent.KEYCODE_HOME, KeyEvent.KEYCODE_MOVE_HOME,
+)
+
+/** The `name="…" value="…"` entries of an es_settings.xml, whose `<string|bool …/>` entries have no root element. */
+private fun esSettings(xml: InputStream): Map<String, String> {
     val body = xml.reader().readText().removePrefix("\uFEFF").replaceFirst(Regex("""^\s*<\?xml[^?]*\?>"""), "")
-    val values = xmlDocument("<root>$body</root>")?.documentElement
+    return xmlDocument("<root>$body</root>")?.documentElement
         ?.let { root -> (root.children("string") + root.children("bool")).associate { it.getAttribute("name") to it.getAttribute("value") } }
         .orEmpty()
+}
+
+/** ES-DE's MediaDirectory setting: where it keeps game media instead of `<ES-DE>/downloaded_media`; empty for that. */
+fun mediaDirectory(xml: InputStream): String = esSettings(xml)["MediaDirectory"].orEmpty()
+
+/** The [ThemeSettings] of an es_settings.xml. */
+fun themeSettings(xml: InputStream): ThemeSettings {
+    val values = esSettings(xml)
     val defaults = ThemeSettings()
     return ThemeSettings(
         theme = values["Theme"] ?: defaults.theme,

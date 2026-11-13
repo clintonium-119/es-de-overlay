@@ -14,15 +14,16 @@ import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import com.clintonium.es_de_overlay.core.isMenuKey
 import com.clintonium.es_de_overlay.core.screensaverEvent
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 /**
- * Catches the controller's Back for the menu. Key filtering is on, so Android hands this every key first and waits
- * for the answer; anything but the controller's Back is passed on at once.
+ * Catches the controller's menu button (Back or Menu, or the one chosen in settings) for the menu. Key filtering is
+ * on, so Android hands this every key first and waits for the answer; anything else is passed on at once.
  *
- * Also ends a game's app on request ([forceStop]), then goes home to ES-DE. Android only lets system apps force-stop
+ * Also ends a game's app on request ([forceStop]), then shows ES-DE. Android only lets system apps force-stop
  * another app, so this goes through Shizuku's shell when it's running and allowed, which shows nothing, and otherwise
  * presses Force stop on the app's App Info page in Settings.
  *
@@ -31,8 +32,8 @@ import java.util.concurrent.TimeUnit
  */
 class ButtonService : AccessibilityService() {
     private val main = Handler(Looper.getMainLooper())
-    /** Whether the overlay took the Back press in progress, decided on its first down. */
-    private var backTaken = false
+    /** Whether the overlay took the menu button press in progress, decided on its first down. */
+    private var menuTaken = false
     private val io = Executors.newSingleThreadScheduledExecutor()
     private lateinit var prefs: Prefs
 
@@ -94,19 +95,18 @@ class ButtonService : AccessibilityService() {
         if (event.keyCode == KeyEvent.KEYCODE_MOVE_HOME && event.action == KeyEvent.ACTION_UP && event.isFromSource(InputDevice.SOURCE_GAMEPAD)) {
             main.post(HelperService::closeMenuNow)
         }
-        // The controller's Back only: the back swipe and other apps' Back have no gamepad source. The controller's
-        // Menu counts as Back too, so controllers like the GuliKit Elves 2 can open the menu with it.
-        if (event.keyCode != KeyEvent.KEYCODE_BACK && event.keyCode != KeyEvent.KEYCODE_MENU) return false
+        // Gamepad keys only: the back swipe and other apps' Back have no gamepad source.
+        if (!isMenuKey(event.keyCode, prefs.menuKey)) return false
         if (!event.isFromSource(InputDevice.SOURCE_GAMEPAD)) return false
         // Decide on the first down and keep that answer for repeats and the up, so the app never gets half a press.
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
             val start = SystemClock.uptimeMillis()
-            backTaken = HelperService.takesBack()
-            if (BuildConfig.DEBUG) Log.d(TAG, "Back taken=$backTaken, decided in ${SystemClock.uptimeMillis() - start} ms")
+            menuTaken = HelperService.takesBack()
+            if (BuildConfig.DEBUG) Log.d(TAG, "menu button taken=$menuTaken, decided in ${SystemClock.uptimeMillis() - start} ms")
         }
-        val taken = backTaken
+        val taken = menuTaken
         if (event.action == KeyEvent.ACTION_UP) {
-            backTaken = false
+            menuTaken = false
             // A cancelled press is still kept from the app, as its down was, but does nothing.
             if (taken && !event.isCanceled) main.post(HelperService::back)
         }
@@ -157,9 +157,14 @@ class ButtonService : AccessibilityService() {
         step()
     }
 
+    /**
+     * Shows ES-DE after a quit: Home when ES-DE is the Home app, else ES-DE's own task brought forward as its icon
+     * would; Home too when ES-DE can't be found.
+     */
     private fun home(result: String) {
-        Log.i(TAG, "force stop: $result")
-        performGlobalAction(GLOBAL_ACTION_HOME)
+        val esde = packageManager.getLaunchIntentForPackage(ESDE)?.takeUnless { prefs.esdeIsHome() }
+        Log.i(TAG, "force stop: $result; to ES-DE by ${if (esde == null) "Home" else "its launch intent"}")
+        if (esde == null) performGlobalAction(GLOBAL_ACTION_HOME) else startActivity(esde.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
     companion object {
@@ -172,6 +177,11 @@ class ButtonService : AccessibilityService() {
         /** Any thread: force-stops [pkg], closes the menu and returns to ES-DE. Does nothing while the service is off. */
         fun forceStop(pkg: String) {
             Handler(Looper.getMainLooper()).post { instance?.stop(pkg) }
+        }
+
+        /** Main thread: closes the notification shade, after Open Menu there. Does nothing while the service is off. */
+        fun closeShade() {
+            instance?.performGlobalAction(GLOBAL_ACTION_DISMISS_NOTIFICATION_SHADE)
         }
 
     }

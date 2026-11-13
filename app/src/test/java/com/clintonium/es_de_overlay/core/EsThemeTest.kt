@@ -1,8 +1,11 @@
 package com.clintonium.es_de_overlay.core
 
+import android.view.KeyEvent
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EsThemeTest {
@@ -45,6 +48,47 @@ class EsThemeTest {
             ThemeSettings("linear-es-de", "", "", "", "automatic"),
             themeSettings("""<?xml version="1.0"?><int name="ScreenWidth" value="0" />""".byteInputStream()),
         )
+    }
+
+    @Test
+    fun `the menu key is Back or Menu until one is chosen, then only that one`() {
+        assertTrue(isMenuKey(KeyEvent.KEYCODE_BACK, 0))
+        assertTrue(isMenuKey(KeyEvent.KEYCODE_MENU, 0))
+        for (other in listOf(KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_START, KeyEvent.KEYCODE_BUTTON_SELECT)) {
+            assertFalse(isMenuKey(other, 0))
+        }
+        val select = KeyEvent.KEYCODE_BUTTON_SELECT
+        assertTrue(isMenuKey(select, select))
+        assertFalse(isMenuKey(KeyEvent.KEYCODE_BACK, select))
+        assertFalse(isMenuKey(KeyEvent.KEYCODE_MENU, select))
+    }
+
+    @Test
+    fun `the buttons the menu and viewer use can't be the menu key`() {
+        val used = listOf(
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BUTTON_X,
+            KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_BUTTON_R1, KeyEvent.KEYCODE_BUTTON_L2,
+            KeyEvent.KEYCODE_BUTTON_R2,
+        )
+        assertTrue(RESERVED_KEYS.containsAll(used))
+        val free = listOf(
+            KeyEvent.KEYCODE_BUTTON_SELECT, KeyEvent.KEYCODE_BUTTON_START, KeyEvent.KEYCODE_BUTTON_MODE,
+            KeyEvent.KEYCODE_BUTTON_THUMBL, KeyEvent.KEYCODE_BUTTON_THUMBR, KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_MENU,
+        )
+        assertFalse(free.any { it in RESERVED_KEYS })
+    }
+
+    @Test
+    fun `media directory is read when set and empty when not`() {
+        val set = """
+            <?xml version="1.0"?>
+            <string name="MediaDirectory" value="/storage/7BEF-E760/media" />
+            <string name="Theme" value="linear-es-de" />
+        """.trimIndent()
+        assertEquals("/storage/7BEF-E760/media", mediaDirectory(set.byteInputStream()))
+        assertEquals("", mediaDirectory("""<string name="MediaDirectory" value="" />""".byteInputStream()))
+        assertEquals("", mediaDirectory("""<string name="Theme" value="linear-es-de" />""".byteInputStream()))
     }
 
     @Test
