@@ -89,10 +89,12 @@ jobs:
           SIGNING_CERT_SHA256: ${{ vars.SIGNING_CERT_SHA256 }}
         # Fails unless the APK is signed with the release key: apksigner fails on an unsigned APK,
         # and the certificate must match the variable (empty if the variable is unset).
+        # apksigner labels signers differently by version ("Signer #1", "V2 Signer:"), so every
+        # certificate it prints is read; more than one distinct certificate fails the match.
         run: |
           apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -n 1)
           certs=$("$apksigner" verify --print-certs "$APK")
-          cert=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' <<< "$certs")
+          cert=$(grep -oP 'certificate SHA-256 digest: \K[0-9a-f]{64}' <<< "$certs" | sort -u)
           want=${SIGNING_CERT_SHA256//:/}
           if [[ -z "$cert" || "$cert" != "${want,,}" ]]; then
             echo "::error::$APK is signed with certificate '$cert', not SIGNING_CERT_SHA256"
