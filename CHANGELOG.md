@@ -4,6 +4,8 @@ What changed in each version of ES-DE Overlay. A release's notes on GitHub are i
 
 ## Unreleased
 
+## 1.2.0 - 2026-11-13
+
 - You choose the menu button in settings: Back or Menu by default, or any one controller button. The service's notification has an **Open Menu** action that works with no button at all.
 - The service starts without the screen-capture prompt. The first Capture asks, and carries on once Android allows it.
 - **Start after boot** is on by default and starts the service itself, with a tap-to-start notification if Android refuses.
