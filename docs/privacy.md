@@ -12,7 +12,7 @@ You grant each of these yourself, in Android's settings or permission dialogs, a
 - **The screen and sound**, for screenshots and clips.
   - The app holds Android's capture permission while its service runs, but records only when you pick Capture.
   - A capture copies the whole screen, so a notification or system dialog showing at that moment is in it.
-  - Clips can include sound from any app that allows playback capture, so other audio playing at the same time may be recorded. The microphone is never recorded.
+  - Clips record sound from the game's app only. The microphone is never recorded.
 - **The ES-DE and ROMs folders you pick.** It reads ES-DE's settings, log, gamelists and themes, and saves screenshots, clips and guides into `downloaded_media`.
 - **System screenshots** (Power + Volume down, or the Screenshot tile in quick settings), to save them under the game in front, only if you turn on **Use system screenshots as game images** and grant **Read screenshots**. Both are off until you turn them on.
 - **Which app is in front** (Usage access), to tell a game ES-DE launched from anything else.

@@ -49,6 +49,16 @@ class HtmlGuideTest {
     }
 
     @Test
+    fun `a tag written inside an attribute value stays text and can't end the attribute`() {
+        val out = html(
+            listOf(GuideSection("Map", "<a href=\"<img src='img/k.png' onfocus=alert(1) autofocus>\">Map</a>")),
+            mapOf("img/k.png" to GuideImage("image/png", byteArrayOf(1, 2, 3))),
+        )
+        assertTrue(out.contains("<a href=\"&lt;img src='img/k.png' onfocus=alert(1) autofocus&gt;\">Map</a>"))
+        assertFalse(out.contains("data:image"))
+    }
+
+    @Test
     fun `an unknown image key drops src and srcset but keeps alt`() {
         val out = html(
             listOf(GuideSection("Map", "<IMG SRC='https://example.com/x.png' srcset=\"x2.png 2x\" alt=\"Brinstar\">")),

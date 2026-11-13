@@ -41,6 +41,14 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    // The JUnit 5 platform for Jazzer's fuzz tests; the JUnit 4 tests run on its vintage engine.
+    testOptions.unitTests.all {
+        it.useJUnitPlatform()
+        // Fuzzing (JAZZER_FUZZ set): a fuzz test's @Timeout limits each input, which Jazzer hands to libFuzzer,
+        // so JUnit mustn't apply it to the whole run as well.
+        if (System.getenv("JAZZER_FUZZ") != null) it.systemProperty("junit.jupiter.execution.timeout.mode", "disabled")
+    }
 }
 
 dependencies {
@@ -50,4 +58,11 @@ dependencies {
     implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("dev.rikka.shizuku:provider:13.1.5")
     testImplementation("junit:junit:4.13.2")
+    // JUnit 5, which Jazzer 0.30.0 is built against; the JUnit 4 tests run on its vintage engine.
+    testImplementation(platform("org.junit:junit-bom:5.14.4"))
+    testImplementation("org.junit.jupiter:junit-jupiter-api")
+    testImplementation("com.code-intelligence:jazzer-junit:0.30.0")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
+    testRuntimeOnly("org.junit.vintage:junit-vintage-engine")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

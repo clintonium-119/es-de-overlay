@@ -35,7 +35,8 @@ fun nextLaunch(latest: Launch?, line: String): Launch? {
 
 // ES-DE writes a launch's lines in one go, but its clock can tick over between the first line and the rest.
 private const val LAUNCH_SECONDS = 2
-private val CLOCK = Regex("""^\S+ +\d+ (\d+):(\d+):(\d+)""")
+// Two digits each, so a garbled line can't overflow an Int.
+private val CLOCK = Regex("""^\S+ +\d+ (\d{1,2}):(\d{1,2}):(\d{1,2})""")
 private fun secondOfDay(line: String) =
     CLOCK.find(line)?.destructured?.let { (h, m, s) -> h.toInt() * 3600 + m.toInt() * 60 + s.toInt() }
 

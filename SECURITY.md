@@ -17,7 +17,8 @@ Fixes go into the latest release only.
 ## What the app can access and when it goes online
 
 [Privacy and safety](https://clintonium-119.github.io/es-de-overlay/privacy.html) lists every
-permission the app asks for, what it uses each one for, and when it goes online.
+permission the app asks for, what it uses each one for, and when it goes online. Clips record sound
+from the game's app only. The microphone is never recorded.
 
 ## No warranty
 

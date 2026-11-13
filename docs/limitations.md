@@ -38,10 +38,10 @@ Everything here was found on a Retroid Pocket Nova with Android 13, the only dev
 ## Capture
 
 - **Clips are half resolution** (640x480 on the Nova), while screenshots are full resolution. The Nova's encoder ignores bitrate settings, so the app keeps files small through resolution.
-- **Clips can include other apps' sound** when **Game sound in clips** is enabled.
-  - Android calls this permission audio recording. Clips can include sound from any app that allows playback capture, so other audio playing at the same time may be recorded. The microphone is never recorded.
+- **Clips have only the game's own sound**, when **Game sound in clips** is enabled.
+  - Android calls this permission audio recording. Clips record sound from the game's app only. The microphone is never recorded. Music or video playing in another app isn't recorded either.
   - Apps can opt out of playback capture. Every game and emulator on the Nova allows it.
-  - Without the permission, clips are silent.
+  - If ES-DE Overlay can't find the game's app, the clip is silent and the notice after the capture says so. Without the permission, clips are silent too.
 - **Clips of RetroArch with 120 Hz shader sub-frames play at 60 fps without flicker.** The sub-frames (`video_shader_subframes`) put a dark frame between real ones. The app skips those, so clips and screenshots still show the shader.
 - **Android asks for permission before the first capture after every restart** of the service or the device, and after you reinstall the app. The menu, guides and Quit Game work without it.
 - **A replaced image or clip can't be recovered.** With **Replace**, the old file is deleted once the new one is complete. Choose **Ask** or **Skip** under **If the media file already exists** to keep scraped media.

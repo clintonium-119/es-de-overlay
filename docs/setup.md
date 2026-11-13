@@ -28,7 +28,7 @@ Then:
    | Controller button (accessibility service) | Opening the menu from the controller; also turning the screen off when idle, and Quit Game | Required |
    | Notifications | The service's notification with **Open Menu**, and capture results | Recommended |
    | Ignore battery optimization | Keeping the service alive in the background; Android can still end it when memory runs short | Recommended |
-   | Game sound in clips | Sound in video clips; the microphone is not used | Optional |
+   | Game sound in clips | The game's sound in video clips, from its app only; the microphone is never recorded | Optional |
    | Read screenshots | Only **Use system screenshots as game images**, under [Capture](#capture) | Optional |
 
    **Controller button (accessibility service) → Enable** opens Android's accessibility settings, where you turn on *ES-DE Overlay*.

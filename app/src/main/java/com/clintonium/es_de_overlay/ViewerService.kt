@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Process
 import android.util.Log
 import com.clintonium.es_de_overlay.core.GameRef
+import com.clintonium.es_de_overlay.core.GuideTooLarge
 
 /**
  * Runs the viewer and the guide browser in their own `:viewer` process. A WebView's library, and the GPU and
@@ -81,12 +82,16 @@ class ViewerService : Service() {
     // A manual's or guide's system, from its path below the ES-DE folder: downloaded_media/<system>/….
     private fun systemOf(key: String) = key.removePrefix("downloaded_media/").substringBefore('/')
 
-    /** Runs [open] for [name]; if it fails, says so in the menu underneath (a toast would draw below it) and ends the service. */
+    /**
+     * Runs [open] for [name]; if it fails, says so in the menu underneath (a toast would draw below it), with the
+     * reason when the guide is over a load limit, and ends the service.
+     */
     private fun show(name: String, open: () -> Unit) {
         runCatching(open).onFailure {
             Log.e(TAG, "opening $name failed", it)
             startService(
-                Intent(this, HelperService::class.java).setAction(HelperService.ACTION_OPEN_FAILED).putExtra(HelperService.EXTRA_NAME, name),
+                Intent(this, HelperService::class.java).setAction(HelperService.ACTION_OPEN_FAILED).putExtra(HelperService.EXTRA_NAME, name)
+                    .putExtra(HelperService.EXTRA_REASON, (it as? GuideTooLarge)?.message),
             )
             stopSelf()
         }

@@ -166,6 +166,8 @@ class HelperService : Service() {
     private var afterConsent: (() -> Unit)? = null
     /** Main thread: while the menu asks whether a capture replaces a file, the way out that keeps the file. */
     private var unanswered: (() -> Unit)? = null
+    /** Set when a capture starts: its clip has no sound because the game's app couldn't be found. Read by [report]. */
+    @Volatile private var noGameSound = false
     /** Main thread. */
     private val leave = LeaveWatch(ESDE)
 
@@ -208,7 +210,7 @@ class HelperService : Service() {
      */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_OPEN_FAILED) {
-            menu.error("Couldn't open ${intent.getStringExtra(EXTRA_NAME)}")
+            menu.error("Couldn't open ${intent.getStringExtra(EXTRA_NAME)}" + (intent.getStringExtra(EXTRA_REASON)?.let { ": $it" } ?: ""))
             return START_STICKY
         }
         if (intent?.action == ACTION_OPEN_MENU) {
@@ -620,12 +622,16 @@ class HelperService : Service() {
             try {
                 // A screenshot alone stops as soon as its frame is taken, too soon for a usable clip.
                 val onRecording = { if (!keepVideo) capture?.stop() }
-                capture = Capture(windowContext, p, prefs.clipSeconds, audioGranted(), menu::nudge, onRecording) { png, mp4 ->
+                // Only the game's app is recorded, never everything playing; without its app the clip has no sound.
+                val gameUid = launch?.pkg?.takeIf { audioGranted() }?.let { runCatching { packageManager.getPackageUid(it, 0) }.getOrNull() }
+                noGameSound = audioGranted() && gameUid == null
+                if (noGameSound) Log.w(TAG, "no sound: no app found for ${launch?.pkg}")
+                capture = Capture(windowContext, p, prefs.clipSeconds, gameUid, menu::nudge, onRecording) { png, mp4 ->
                     capture = null
                     menu.endCapture()
                     io.execute { save(g, png?.takeIf { keepShot }, mp4?.takeIf { keepVideo }) }
                 }.also { it.start() }
-                Log.i(TAG, "capturing $g")
+                Log.i(TAG, "capturing $g, sound from uid $gameUid")
             } catch (e: Exception) {
                 Log.e(TAG, "capture failed to start", e)
                 menu.endCapture()
@@ -772,7 +778,7 @@ class HelperService : Service() {
             }
             !captured -> "Nothing captured"
             else -> "Skipped: files already exist"
-        }
+        } + if (noGameSound && written.any { it.path.endsWith(".mp4") }) "\nThe clip has no sound: the game's app wasn't found" else ""
         main.post { toast(text) }
         notify(this, RESULT_ID, text)
         Log.i(TAG, "saved ${written.map { "${it.path} (replaced: ${it.replaced})" }} for $g")
@@ -815,11 +821,12 @@ class HelperService : Service() {
     companion object {
         const val EXTRA_CODE = "code"
         const val EXTRA_DATA = "data"
-        /** From the viewer's process: opening [EXTRA_NAME] failed, which the menu underneath shows. */
+        /** From the viewer's process: opening [EXTRA_NAME] failed, for [EXTRA_REASON] if given, which the menu underneath shows. */
         const val ACTION_OPEN_FAILED = "com.clintonium.es_de_overlay.OPEN_FAILED"
         /** From the viewer's process: the viewer on a guide just saved from the browser has closed, so list the guides again. */
         const val ACTION_GUIDE_SAVED = "com.clintonium.es_de_overlay.GUIDE_SAVED"
         const val EXTRA_NAME = "name"
+        const val EXTRA_REASON = "reason"
         /** Open Menu on the service's notification. */
         const val ACTION_OPEN_MENU = "com.clintonium.es_de_overlay.OPEN_MENU"
         var running by mutableStateOf(false)
