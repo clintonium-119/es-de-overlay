@@ -129,6 +129,16 @@ class PillList(context: Context, private val look: Look, font: Typeface, private
     /** Moves the pill [by] rows, stopping at the ends. */
     fun move(by: Int) = select((selected + by).coerceIn(0, (rows.size - 1).coerceAtLeast(0)))
 
+    /** Changes row [i]'s label; the pill on it is sized again for the new label, which a progress count lengthens. */
+    fun relabel(i: Int, label: String) {
+        val row = rows.getOrNull(i) ?: return
+        row.text = label
+        if (i == selected) {
+            row.background = selectedBackground(row)
+            row.setPadding(textInset, capShift, textInset, 0)
+        }
+    }
+
     /** Puts the pill on row [i] and scrolls it into view. */
     fun select(i: Int) {
         selected = i
@@ -204,7 +214,7 @@ class MenuOverlay(private val context: Context) {
     private val screenW = wm.maximumWindowMetrics.bounds.width()
     private val screenH = wm.maximumWindowMetrics.bounds.height()
     private var root: View? = null
-    private var rows: List<TextView> = emptyList()
+    private var list: PillList? = null
     /** Shows the list [show] last put up again, for [error] to go back to. */
     private var reshow: () -> Unit = {}
     private var captureView: View? = null
@@ -257,7 +267,7 @@ class MenuOverlay(private val context: Context) {
             }
             true
         }
-        this.rows = rows
+        this.list = list
     }
 
     /**
@@ -404,7 +414,7 @@ class MenuOverlay(private val context: Context) {
      * a moment, handing focus (and an unpause) back to the game.
      */
     fun relabel(i: Int, label: String) {
-        rows.getOrNull(i)?.text = label
+        list?.relabel(i, label)
     }
 
     /** Replaces an open menu's list with [text] as its only row; B goes back to the list. */
@@ -417,7 +427,7 @@ class MenuOverlay(private val context: Context) {
     fun close() {
         root?.let(wm::removeView)
         root = null
-        rows = emptyList()
+        list = null
     }
 
     /** Closes the menu for good, dropping its [title] and [art]. */

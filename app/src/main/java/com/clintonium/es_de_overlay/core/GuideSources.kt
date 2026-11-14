@@ -322,8 +322,8 @@ private val IMG_SRC_ATTR = Regex("\\bsrc=\"([^\"]*)\"")
 private val SRCSET = Regex("\\s+srcset=\"[^\"]*\"")
 private val EVENT_ATTR = Regex("\\s+on\\w+\\s*=\\s*(\"[^\"]*\"|'[^']*')", RegexOption.IGNORE_CASE)
 
-/** `Super_Metroid/Space_Colony_Ceres` (URL-encoded) → `Super Metroid/Space Colony Ceres`. */
-private fun wikiPage(path: String) = URLDecoder.decode(path, Charsets.UTF_8).replace('_', ' ')
+/** `Super_Metroid/Space_Colony_Ceres` (URL-encoded) → `Super Metroid/Space Colony Ceres`; a bad `%` escape stays as written. */
+private fun wikiPage(path: String) = runCatching { URLDecoder.decode(path, Charsets.UTF_8) }.getOrDefault(path).replace('_', ' ')
 
 /** Comments, `<style>`, `<script>`, `<link>`, and the header/footer navigation boxes, ad slot and page contents box. */
 private fun stripWikiChrome(html: String) = removeElements(

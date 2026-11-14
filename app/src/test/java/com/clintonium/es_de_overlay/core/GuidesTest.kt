@@ -1,6 +1,7 @@
 package com.clintonium.es_de_overlay.core
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class GuidesTest {
@@ -174,5 +175,34 @@ class GuidesTest {
         )
         assertEquals("003 Tail Cave.png", mapEntryName(2, "Tail Cave", "png"))
         assertEquals("Zelda - Link's Awakening", fileName("Zelda: Link's Awakening"))
+    }
+
+    private fun refusal(check: () -> Unit) = assertThrows(GuideTooLarge::class.java, check).message
+
+    @Test
+    fun `a CBZ page at the size limit loads and one byte over is refused with the size`() {
+        checkCbzPage(MAX_CBZ_PAGE_BYTES)
+        assertEquals("a page is larger than 64 MB", refusal { checkCbzPage(MAX_CBZ_PAGE_BYTES + 1) })
+    }
+
+    @Test
+    fun `a CBZ at the page limit loads and one more page is refused`() {
+        checkCbzPages(MAX_CBZ_PAGES)
+        assertEquals("more than 2000 pages", refusal { checkCbzPages(MAX_CBZ_PAGES + 1) })
+    }
+
+    @Test
+    fun `a picture over the pixel limit is refused from its size alone`() {
+        checkImage(16_896, 14_336)
+        checkImage(1_000_000, 1_000)
+        assertEquals("a picture is larger than 1000 megapixels", refusal { checkImage(1_000_001, 1_000) })
+        // The largest PNG: its width times its height doesn't fit in an Int.
+        refusal { checkImage(Int.MAX_VALUE, Int.MAX_VALUE) }
+    }
+
+    @Test
+    fun `a text guide at the limit loads and one byte over is refused`() {
+        checkText(MAX_TEXT_BYTES)
+        assertEquals("larger than 8 MB", refusal { checkText(MAX_TEXT_BYTES + 1) })
     }
 }

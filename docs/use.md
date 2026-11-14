@@ -31,7 +31,7 @@ A few details:
 
 **Capture** offers **Screenshot**, **Video** and **Screenshot and Video**. Pick one and the menu closes so it isn't in the shot. Only what you picked is saved.
 
-The first time you pick one after the service starts, Android asks for permission to capture the screen. Tap **Start now**, and the capture goes ahead once you're back in the game, with no second pick. The permission lasts until the service or the device restarts. If you leave the game while Android is asking, Android closes its question and nothing is captured. If the game has closed by the time you tap **Start now**, nothing is captured either, and a message asks you to pick Capture again.
+The first time you pick one after the service starts, Android asks for permission to capture the screen. Tap **Start now**, then pick **Capture** again: the first pick only gets the permission, and a message says so. Eden pauses behind Android's question and stays paused: tap its play button to resume the game first. The permission lasts until the service or the device restarts. If you leave the game while Android is asking, Android closes its question.
 
 
 - **Screenshot** takes the picture and stops.

@@ -24,3 +24,5 @@ local.properties
 *.keystore
 *.p12
 keystore.properties
+# Jazzer's generated corpus from local fuzzing runs
+.cifuzz-corpus/

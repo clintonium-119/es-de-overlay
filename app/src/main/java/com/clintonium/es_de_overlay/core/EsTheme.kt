@@ -325,7 +325,7 @@ fun unpackFiles(stream: InputStream, write: (path: String, bytes: ByteArray) -> 
         val header = input.readNBytes(512)
         if (header.size < 512 || header.all { it == 0.toByte() }) return
         fun field(at: Int, length: Int) = String(header, at, length, Charsets.UTF_8).substringBefore('\u0000')
-        val size = field(124, 12).trim().toIntOrNull(8) ?: return
+        val size = field(124, 12).trim().toIntOrNull(8)?.takeIf { it >= 0 } ?: return
         val body = input.readNBytes(size)
         if (body.size < size) return
         // Entries take whole 512-byte blocks.
@@ -356,6 +356,11 @@ private val FONT_SIZES = listOf("medium", "large", "small", "x-large", "x-small"
 // Includes deeper than this are skipped, as a loop or runaway nesting.
 private const val MAX_INCLUDE_DEPTH = 8
 
+// Theme files read for one gamelist, at most: files that include several others, which include them again under
+// other paths, would otherwise multiply to millions within the depth. The themes on the Nova on 2026-11-13 have at
+// most 47 includes in all their files (iconic-es-de).
+private const val MAX_THEME_FILES = 500
+
 private enum class Part { VARIABLES, COLOR_SCHEMES, FONT_SIZES, INCLUDES, VIEWS, VARIANTS, ASPECT_RATIOS }
 
 // What ES-DE parses, and in which order, in a theme file, a variant, an aspect ratio, and a colour scheme or font
@@ -377,10 +382,11 @@ private class Resolver(
     val gamelist = LinkedHashMap<String, MutableMap<String, String>>()
     private val variables = variables.toMutableMap()
     private val files = ArrayDeque<String>()
+    private var reads = 0
 
-    /** Parses the theme file at [path]; false when it can't be read or isn't a `<theme>`. */
+    /** Parses the theme file at [path]; false when it can't be read or isn't a `<theme>`, or too many files were. */
     fun load(path: String): Boolean {
-        if (path in files || files.size > MAX_INCLUDE_DEPTH) return false
+        if (path in files || files.size > MAX_INCLUDE_DEPTH || ++reads > MAX_THEME_FILES) return false
         val theme = read(path)?.let(::xmlDocument)?.documentElement?.takeIf { it.tagName == "theme" } ?: return false
         files.addLast(path)
         parse(theme, FILE)

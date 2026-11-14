@@ -35,6 +35,14 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.view.doOnLayout
+import com.clintonium.es_de_overlay.core.GuideTooLarge
+import com.clintonium.es_de_overlay.core.MAX_CBZ_PAGE_BYTES
+import com.clintonium.es_de_overlay.core.MAX_IMAGE_PIXELS
+import com.clintonium.es_de_overlay.core.MAX_TEXT_BYTES
+import com.clintonium.es_de_overlay.core.checkCbzPage
+import com.clintonium.es_de_overlay.core.checkCbzPages
+import com.clintonium.es_de_overlay.core.checkImage
+import com.clintonium.es_de_overlay.core.checkText
 import com.clintonium.es_de_overlay.core.guidePicture
 import com.clintonium.es_de_overlay.core.isOneTextSection
 import com.clintonium.es_de_overlay.core.splitTextGuide
@@ -43,6 +51,7 @@ import com.clintonium.es_de_overlay.core.writeHtmlGuide
 import com.clintonium.es_de_overlay.core.youtubeVideo
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.FilterInputStream
 import java.io.InputStream
 import java.io.StringWriter
 import java.util.Locale
@@ -73,14 +82,21 @@ private class RegionPage(private val decoder: BitmapRegionDecoder) : Page {
     override fun close() = decoder.recycle()
 }
 
+/** Throws [GuideTooLarge] when the image [input] starts with is over [MAX_IMAGE_PIXELS]; reads only its header. */
+private fun checkBounds(input: InputStream) = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    .also { BitmapFactory.decodeStream(input, null, it) }
+    .let { checkImage(it.outWidth, it.outHeight) }
+
 /** A region decoder for an image's [bytes]; a GIF or BMP, which it can't read, goes through PNG first. */
-private fun regionDecoder(bytes: ByteArray): BitmapRegionDecoder = runCatching { BitmapRegionDecoder.newInstance(bytes, 0, bytes.size)!! }
-    .getOrElse { e ->
+private fun regionDecoder(bytes: ByteArray): BitmapRegionDecoder {
+    checkBounds(ByteArrayInputStream(bytes))
+    return runCatching { BitmapRegionDecoder.newInstance(bytes, 0, bytes.size)!! }.getOrElse { e ->
         val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: throw e
         val png = ByteArrayOutputStream().also { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
         bitmap.recycle()
         BitmapRegionDecoder.newInstance(png, 0, png.size)!!
     }
+}
 
 private class PdfPage(private val page: PdfRenderer.Page) : Page {
     override val width get() = page.width
@@ -303,7 +319,10 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 val doc = when (ext) {
                     "pdf" -> pdf(uri)
                     "cbz" -> cbz(uri)
-                    "png", "jpg", "jpeg" -> Doc(1, { RegionPage(resolver.openInputStream(uri)!!.use { BitmapRegionDecoder.newInstance(it)!! }) }) {}
+                    "png", "jpg", "jpeg" -> {
+                        resolver.openInputStream(uri)!!.use(::checkBounds)
+                        Doc(1, { RegionPage(resolver.openInputStream(uri)!!.use { BitmapRegionDecoder.newInstance(it)!! }) }) {}
+                    }
                     else -> throw IllegalArgumentException("unsupported guide format: $name")
                 }
                 val under = layer()
@@ -663,13 +682,17 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
      * one text section (before text guides were split) split the same way, and anything else as it is.
      */
     private fun guidePage(uri: Uri, ext: String, name: String): () -> InputStream {
-        // Invalid UTF-8 shows as replacement characters rather than failing.
-        fun read(limit: Int = Int.MAX_VALUE) = resolver.openInputStream(uri)!!.use { String(it.readNBytes(limit), Charsets.UTF_8) }
+        // Up to one byte past the text limit, so a text over it shows as over. Invalid UTF-8 shows as replacement
+        // characters rather than failing.
+        fun read(limit: Int = MAX_TEXT_BYTES + 1) = resolver.openInputStream(uri)!!.use { it.readNBytes(limit) }
         val html = when {
             ext == "txt" -> name.substringBeforeLast('.').let { title ->
-                StringWriter().also { writeHtmlGuide(it, title, textSections(title, read()), emptyMap(), "") }.toString()
+                val text = read().also { checkText(it.size) }.toString(Charsets.UTF_8)
+                StringWriter().also { writeHtmlGuide(it, title, textSections(title, text), emptyMap(), "") }.toString()
             }
-            isOneTextSection(read(4096)) -> splitTextGuide(read())
+            // One over the text limit shows unsplit, as it was saved.
+            isOneTextSection(read(4096).toString(Charsets.UTF_8)) ->
+                read().takeIf { it.size <= MAX_TEXT_BYTES }?.let { splitTextGuide(it.toString(Charsets.UTF_8)) }
             else -> null
         }
         val bytes = html?.toByteArray() ?: return { resolver.openInputStream(uri)!! }
@@ -847,18 +870,39 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         }
     }
 
+    /** A CBZ's pictures as pages. The listing reads every page, so it checks the load limits too, and refuses before any page shows. */
     private fun cbz(uri: Uri): Doc {
+        // Each page's size from the listing, so opening it reads into one array of that size.
+        val sizes = HashMap<String, Int>()
         val entries = zip(uri) { z ->
+            // What the header read took of the page, so its size adds up.
+            var read = 0L
+            val counted = object : FilterInputStream(z) {
+                override fun read() = super.read().also { if (it >= 0) read++ }
+                override fun read(b: ByteArray, off: Int, len: Int) = super.read(b, off, len).also { if (it > 0) read += it }
+                override fun skip(n: Long) = super.skip(n).also { read += it }
+            }
             generateSequence { z.nextEntry }
                 .filter { !it.isDirectory && it.name.substringAfterLast('.').lowercase() in setOf("png", "jpg", "jpeg") }
-                .map { it.name }
+                .mapIndexed { i, entry ->
+                    checkCbzPages(i + 1)
+                    read = 0
+                    checkBounds(counted)
+                    val size = read + z.skip(MAX_CBZ_PAGE_BYTES + 1 - read)
+                    checkCbzPage(size)
+                    sizes[entry.name] = size.toInt()
+                    entry.name
+                }
                 .sortedWith(String.CASE_INSENSITIVE_ORDER)
                 .toList()
         }
         // `003 Tail Cave.png` → Tail Cave. Maps saved before they had names show their file name, `Shantae-DribbleFountain`.
         val names = entries.map { it.substringAfterLast('/').substringBeforeLast('.').replace(Regex("^\\d+ "), "") }
         return Doc(entries.size, { n ->
-            val bytes = zip(uri) { z -> generateSequence { z.nextEntry }.first { it.name == entries[n] }; z.readBytes() }
+            val bytes = zip(uri) { z ->
+                generateSequence { z.nextEntry }.first { it.name == entries[n] }
+                ByteArray(sizes.getValue(entries[n])).also { z.readNBytes(it, 0, it.size) }
+            }
             RegionPage(BitmapRegionDecoder.newInstance(bytes, 0, bytes.size)!!)
         }, names) {}
     }

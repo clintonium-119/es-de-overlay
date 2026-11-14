@@ -104,11 +104,15 @@ Then follow [Set up](setup.md). You can also [build it yourself](setup.md#build-
 
 ## Tested on
 
-| Device | Android | ES-DE | Result |
-| --- | --- | --- | --- |
-| Retroid Pocket Nova | 13 | 3.5.0 | Every feature, with RetroArch and Eden games. |
+Each row is one recorded test pass on the device, with the app version it ran.
 
-Tried it on another device? [Open an issue](https://github.com/clintonium-119/es-de-overlay/issues) with the device, its Android and ES-DE versions, and what worked and what didn't.
+| Device | Android | ES-DE | App version | Date | What was tested |
+| --- | --- | --- | --- | --- | --- |
+| Retroid Pocket Nova | 13 | 3.5.0 | Unreleased, after 1.2.0 | 2026-11-13 | Guides too large to open refused with the reason, and the largest saved guides still opening; clips with the sound of the game's app only, with RetroArch (Shantae) and Eden (Mario Kart 8 Deluxe). |
+| Retroid Pocket Nova | 13 | 3.5.0 | 1.2.0 | 2026-11-12 | Choosing the menu button, Open Menu in the notification, the setup checklist, Menu image, starting after a restart, and Quit Game bringing back ES-DE, with RetroArch and Eden games. |
+| Retroid Pocket Nova | 13 | 3.5.0 | 1.2.0, before release | 2026-11-12 | Captures and the existing-file question, system screenshots, deleting a guide, and Quit Game in RetroArch and Eden. |
+
+Tried it on another device? [Send a device report](https://github.com/clintonium-119/es-de-overlay/issues/new?template=device-report.yml). It asks for the device, its Android, ES-DE and app versions, and what worked.
 
 ## Safety
 

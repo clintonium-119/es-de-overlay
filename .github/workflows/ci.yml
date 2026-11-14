@@ -58,13 +58,19 @@ jobs:
         with:
           persist-credentials: false
       # The notes start with the version's CHANGELOG.md section (a pre-release such as
-      # v1.2.0-rc1 takes 1.2.0's). Without one, nothing is built or released.
+      # v1.2.0-rc1 takes 1.2.0's). Without one, nothing is built or released. The app's
+      # versionName must be the same version, or the APK would report another one.
       - run: |
           version=${GITHUB_REF_NAME#v}
           version=${version%%-*}
           awk -v v="$version" '/^## / { if (found) exit; found = ($2 == v); next } found' CHANGELOG.md > notes.md
           if ! grep -q '[^[:space:]]' notes.md; then
             echo "::error::CHANGELOG.md has no section for $version"
+            exit 1
+          fi
+          name=$(grep -oP '^\s*versionName = "\K[^"]+' app/build.gradle.kts || true)
+          if [[ "$name" != "$version" ]]; then
+            echo "::error::app/build.gradle.kts has versionName '$name', not $version"
             exit 1
           fi
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0

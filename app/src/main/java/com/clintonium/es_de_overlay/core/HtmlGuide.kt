@@ -151,10 +151,12 @@ fun safeHtml(html: String): String = MARKUP.replaceEach(html) { m ->
         if (m.group(2).isEmpty()) {
             for (a in ATTR.scan(m.group(4))) {
                 val attr = a.group(1).lowercase()
-                val value = a.group(2)?.let { if (it[0] == '"' || it[0] == '\'') it.substring(1, it.length - 1) else it }
+                // Unquoted only when the quotes pair up: a tag cut off after `="` leaves a lone quote.
+                val value = a.group(2)?.let { if (it.length >= 2 && (it[0] == '"' || it[0] == '\'') && it.last() == it[0]) it.substring(1, it.length - 1) else it }
                 if (attr.startsWith("on") || attr == "srcdoc" || attr in URL_ATTRS && value != null && !SAFE_URL.containsMatchIn(urlAsRead(value))) continue
                 append(' ').append(a.group(1))
-                if (value != null) append("=\"").append(value.replace("\"", "&quot;")).append('"')
+                // < and > escaped too, which a browser reads the same: no later pass can take text in a value for a tag.
+                if (value != null) append("=\"").append(value.replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;")).append('"')
             }
         }
         append(if (m.group().endsWith("/>")) " />" else ">")

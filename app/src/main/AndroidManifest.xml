@@ -25,12 +25,17 @@
         tools:ignore="ProtectedPermissions" />
 
     <!-- Whether ES-DE is the Home app, which turns Screen off when idle on by default; whether Shizuku
-         (or a fork, which keeps its package name) is installed, to open it from settings; and ES-DE itself,
-         whose built-in themes the overlay reads from its app. -->
+         (or a fork, which keeps its package name) is installed, to open it from settings; ES-DE itself,
+         whose built-in themes the overlay reads from its app; and the game's app (any app with a launcher
+         icon), whose user id a clip records the sound of. -->
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.HOME" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
         </intent>
         <package android:name="moe.shizuku.privileged.api" />
         <package android:name="org.es_de.frontend" />

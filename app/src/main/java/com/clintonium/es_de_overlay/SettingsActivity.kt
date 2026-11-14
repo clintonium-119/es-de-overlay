@@ -500,7 +500,7 @@ class SettingsActivity : ComponentActivity() {
             PermissionRow(
                 "Game sound in clips",
                 Manifest.permission.RECORD_AUDIO,
-                "Android calls it audio recording; the microphone is not recorded.",
+                "Records the game's sound only. Android calls it audio recording; the microphone is never recorded.",
                 ask,
             )
             PermissionRow(

@@ -38,7 +38,7 @@ Under **Look**, the Theme row says which look the app is using: the theme and co
 
 ## Capture asks for permission again
 
-That's expected. Android's permission to capture the screen lasts only while the service runs, so you're asked on the first capture after the service starts: after a restart of the device, after you stop and start the service (including from the tile), after the app is updated or reinstalled, and when Android has ended the app for memory and started it again.
+That's expected. Android's permission to capture the screen lasts only while the service runs, so you're asked on the first capture after the service starts: after a restart of the device, after you stop and start the service (including from the tile), after the app is updated or reinstalled, and when Android has ended the app for memory and started it again. After you tap **Start now**, pick **Capture** again: the pick that asked doesn't capture anything.
 
 ## How the app finds the game
 
