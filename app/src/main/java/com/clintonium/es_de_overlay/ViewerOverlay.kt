@@ -140,7 +140,9 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
     private val screenH = bounds.height()
     /** ES-DE's bottom bar: 40 px of the Nova's 960. */
     private val barH = screenH / 24
-    private val viewH = screenH - barH
+    /** On a second screen, where the controller stays with the game, a row of taps 48 dp tall above the bar; else none. */
+    private val tapH = if (context.onSecondScreen) (48 * context.resources.displayMetrics.density).toInt() else 0
+    private val viewH = screenH - barH - tapH
     private val resolver = context.contentResolver
     private val main = Handler(Looper.getMainLooper())
     private var root: View? = null
@@ -335,9 +337,34 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 keys = paged(doc, name, saved, savedView, frame, under, image, label, help)
             }
         }
+        /** A press of [code]: B steps back or closes, the rest go to the document's keys. Returns whether it was used. */
+        fun press(code: Int): Boolean {
+            if (code == KeyEvent.KEYCODE_BUTTON_B || code == KeyEvent.KEYCODE_BACK) {
+                if (!back()) { close(); onClose() }
+                return true
+            }
+            // A bad page shouldn't take the service down with it.
+            return runCatching { keys(code) }.onFailure { Log.w(TAG, "viewer: $name", it) }.getOrDefault(true)
+        }
         val view = FrameLayout(context).apply {
             setBackgroundColor(theme.look.background)
             addView(content, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, viewH, Gravity.TOP))
+            if (tapH > 0) {
+                // The taps stand in for the buttons the help names, so it goes.
+                help.visibility = View.GONE
+                addView(
+                    LinearLayout(context).apply {
+                        setBackgroundColor(VIEWER_BAR)
+                        TAPS.forEach { (text, code) ->
+                            addView(
+                                barText(context, barH, Gravity.CENTER).apply { this.text = text; setOnClickListener { press(code) } },
+                                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f),
+                            )
+                        }
+                    },
+                    FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, tapH, Gravity.BOTTOM).apply { bottomMargin = barH },
+                )
+            }
             addView(
                 FrameLayout(context).apply {
                     setBackgroundColor(VIEWER_BAR)
@@ -351,13 +378,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
             isFocusableInTouchMode = true
             setOnKeyListener { _, sent, event ->
                 val code = theme.button(sent, event.device?.name)
-                if (code == KeyEvent.KEYCODE_BUTTON_B || code == KeyEvent.KEYCODE_BACK) {
-                    if (event.action == KeyEvent.ACTION_DOWN && !back()) { close(); onClose() }
-                    return@setOnKeyListener true
-                }
-                if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
-                // A bad page shouldn't take the service down with it.
-                runCatching { keys(code) }.onFailure { Log.w(TAG, "viewer: $name", it) }.getOrDefault(true)
+                if (event.action == KeyEvent.ACTION_DOWN) press(code) else code == KeyEvent.KEYCODE_BUTTON_B || code == KeyEvent.KEYCODE_BACK
             }
         }
         wm.addFullScreen(view, PixelFormat.OPAQUE)
@@ -927,6 +948,13 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
 
         /** Images larger than this (about 0.2 s to decode whole on the Nova) show their top quarter first. */
         const val PREVIEW_PIXELS = 16_000_000L
+
+        /** A second screen's taps for the controller's buttons, as the help names them: zoom, the D-pad, Y, A and B. */
+        val TAPS = listOf(
+            "−" to KeyEvent.KEYCODE_BUTTON_L1, "+" to KeyEvent.KEYCODE_BUTTON_R1, "◀" to KeyEvent.KEYCODE_DPAD_LEFT,
+            "▲" to KeyEvent.KEYCODE_DPAD_UP, "▼" to KeyEvent.KEYCODE_DPAD_DOWN, "▶" to KeyEvent.KEYCODE_DPAD_RIGHT,
+            "☰" to KeyEvent.KEYCODE_BUTTON_Y, "OK" to KeyEvent.KEYCODE_BUTTON_A, "Back" to KeyEvent.KEYCODE_BUTTON_B,
+        )
 
         val HTML_KEYS = setOf(
             KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,

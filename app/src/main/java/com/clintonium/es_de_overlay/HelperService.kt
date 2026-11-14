@@ -131,12 +131,28 @@ class ForegroundApp {
     }
 }
 
-/** A context for overlay windows on the built-in display. */
-fun overlayContext(context: Context): Context = context.createWindowContext(
-    context.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY),
-    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-    null,
-)
+/** A context for overlay windows on [display], the built-in one unless given. */
+fun overlayContext(
+    context: Context,
+    display: Display = context.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY),
+): Context = context.createWindowContext(display, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null)
+
+/**
+ * A screen beside the built-in one that's switched on: a dual-screen handheld's other screen, or one plugged in.
+ * Null when there's none. Private displays, such as a capture's, aren't screens.
+ */
+// ponytail: the game is taken to be on the built-in screen, where ES-DE launches it; look up the game's own screen
+// if a device runs games on its second one.
+fun secondScreen(context: Context): Display? = context.getSystemService(DisplayManager::class.java).displays.firstOrNull {
+    it.displayId != Display.DEFAULT_DISPLAY && it.flags and Display.FLAG_PRIVATE == 0 && it.state == Display.STATE_ON
+}
+
+/** Where the menu, viewer and browser open: the second screen when that's set and there is one, else the built-in one. */
+fun menuScreen(context: Context): Display = (if (Prefs(context).secondScreen) secondScreen(context) else null)
+    ?: context.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
+
+/** Whether this window context is on a second screen: there the game keeps the controller, and windows are worked by touch. */
+val Context.onSecondScreen get() = display.displayId != Display.DEFAULT_DISPLAY
 
 /** The ROMs root as ES-DE logs it (absolute path) and as SAF document id, e.g. `/storage/7BEF-E760/ROMs`, `7BEF-E760:ROMs`. */
 fun romRoots(romsTree: Uri): List<String> {
@@ -170,6 +186,8 @@ class HelperService : Service() {
     @Volatile private var noGameSound = false
     /** Main thread. */
     private val leave = LeaveWatch(ESDE)
+    /** Main thread: the log stamp of the launch the menu last came up for by itself, so it does once per launch. */
+    private var openedAtLaunch: String? = null
 
     // Written on the io thread, read on main.
     @Volatile private var launch: Launch? = null
@@ -190,7 +208,7 @@ class HelperService : Service() {
         instance = this
         prefs = Prefs(this)
         windowContext = overlayContext(this)
-        menu = MenuOverlay(windowContext)
+        menu = MenuOverlay(this)
         themeLook = ThemeLook(windowContext, prefs)
         screenshots = ScreenshotObserver(this, main, ::onScreenshot)
         if (checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED) screenshots.register()
@@ -281,9 +299,24 @@ class HelperService : Service() {
     /** Main thread: when the game is left, close the menu and end a recording; when it's left for ES-DE, end it if set to. */
     private fun onForeground(fg: String?) {
         leave.left(fg, launch?.pkg)?.let(::quitLeft)
-        if (fg == launch?.pkg) return
+        if (fg == launch?.pkg) {
+            openAtLaunch()
+            return
+        }
         closeMenu()
         capture?.stop()
+    }
+
+    /**
+     * Main thread: opens the menu by itself once for each launch, when that's set and it would open on a second screen,
+     * where the game keeps running; never over the game.
+     */
+    private fun openAtLaunch() {
+        val stamp = launch?.stamp ?: return
+        if (stamp == openedAtLaunch) return
+        openedAtLaunch = stamp
+        if (!prefs.openAtLaunch || menuScreen(this).displayId == Display.DEFAULT_DISPLAY) return
+        if (capture == null && !starting && !menu.isOpen && opening == null) onBack()
     }
 
     /** Main thread: ends [pkg], left with Home, when that's set and Shizuku is usable; never through App Info. */
@@ -348,6 +381,7 @@ class HelperService : Service() {
                     return@post
                 }
                 opening = null
+                menu.place(menuScreen(this))
                 menu.title = name
                 menu.art = art
                 menu.cropArt = prefs.menuImageCrops
@@ -363,14 +397,15 @@ class HelperService : Service() {
         val guidesRow = if (guides.isNotEmpty()) "Guides" else prefs.esdeTree?.let { "Find Guides" }
         // ES-DE adds an entry with only a play count when it launches a game; that gives Game Info nothing to show.
         val infoRow = info?.takeIf { it != GameInfo(null, null, null, null, null, null) }?.let { "Game Info" }
+        // On a second screen the game isn't paused, so there's nothing to resume.
         val items = listOfNotNull(
-            "Resume", guidesRow, manual?.let { "Manual" }, infoRow, "Capture", "Quit Game",
+            if (menu.onSecondScreen) "Close Menu" else "Resume", guidesRow, manual?.let { "Manual" }, infoRow, "Capture", "Quit Game",
         )
         menu.show(items, { i ->
             // B in a screen opened from here comes back to its row.
             val back = { openMenu(g, name, manual, guides, info, i) }
             when (items[i]) {
-                "Resume" -> menu.release()
+                "Resume", "Close Menu" -> menu.release()
                 "Manual" -> view(manual!!)
                 "Find Guides" -> findGuides(g, name, back)
                 "Game Info" -> menu.info(
@@ -709,6 +744,7 @@ class HelperService : Service() {
             if (result.isSuccess) {
                 val art = runCatching { screenshot(g) }.getOrNull()
                 main.post {
+                    menu.place(menuScreen(this))
                     menu.title = launch?.name.orEmpty()
                     menu.art = art
                     menu.cropArt = prefs.menuImageCrops

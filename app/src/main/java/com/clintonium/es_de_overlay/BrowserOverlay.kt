@@ -238,7 +238,8 @@ class BrowserOverlay(private val context: Context, private val prefs: Prefs) {
             }, fill)
             addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
             addView(save, fill)
-            if (gamepad != null) {
+            // The gamepad stays with the game on a second screen, where the video's own buttons are tapped.
+            if (gamepad != null && !context.onSecondScreen) {
                 addView(barText(context, barH, Gravity.CENTER).apply {
                     text = "${gamepad.label("A")} PAUSE   ✚ SKIP   ${gamepad.label("B")} CLOSE"
                     setPadding(barH, 0, barH, 0)

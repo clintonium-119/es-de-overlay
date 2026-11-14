@@ -26,7 +26,8 @@ class ViewerService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        val windows = overlayContext(this)
+        // The menu's screen: a second screen beside the game when that's set.
+        val windows = overlayContext(this, menuScreen(this))
         prefs = Prefs(this)
         viewer = ViewerOverlay(windows, prefs)
         browser = BrowserOverlay(windows, prefs)

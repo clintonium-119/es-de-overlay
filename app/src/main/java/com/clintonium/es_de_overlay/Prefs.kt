@@ -75,7 +75,16 @@ class Prefs(private val context: Context) {
         get() = sp.getBoolean("quitOnHome", false)
         set(v) = sp.edit { putBoolean("quitOnHome", v) }
 
-    fun esdeIsHome() = context.packageManager.resolveActivity(
+    /** Whether the menu, guides and browser open on a second screen, when there is one, leaving the game running. */
+    var secondScreen: Boolean
+        get() = sp.getBoolean("secondScreen", false)
+        set(v) = sp.edit { putBoolean("secondScreen", v) }
+    /** Whether the menu opens on the second screen by itself when a game starts; off, as that screen may be in use. */
+    var openAtLaunch: Boolean
+        get() = sp.getBoolean("openAtLaunch", false)
+        set(v) = sp.edit { putBoolean("openAtLaunch", v) }
+
+    fun esdeIsHome() =context.packageManager.resolveActivity(
         Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
         PackageManager.MATCH_DEFAULT_ONLY,
     )?.activityInfo?.packageName == ESDE

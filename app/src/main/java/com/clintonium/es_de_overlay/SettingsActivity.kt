@@ -160,6 +160,9 @@ class SettingsActivity : ComponentActivity() {
         var quitOnHome by remember { mutableStateOf(prefs.quitOnHome) }
         var confirmQuit by remember { mutableStateOf(prefs.confirmQuit) }
         var systemScreenshots by remember { mutableStateOf(prefs.systemScreenshots) }
+        var onSecondScreen by remember { mutableStateOf(prefs.secondScreen) }
+        var openAtLaunch by remember { mutableStateOf(prefs.openAtLaunch) }
+        val secondScreenName = remember(tick) { secondScreen(this)?.name }
         val shizuku = remember(tick) { ShizukuShell.state(this) }
         val screensaverReported = remember(tick, esde) { esde?.let(::esdeReportsScreensaver) }
         // No game, so no system: the theme's own theme.xml.
@@ -401,6 +404,37 @@ class SettingsActivity : ComponentActivity() {
                 { if (it.isEmpty()) "Same as captures" else MEDIA_TYPES[it] ?: it },
                 "Which of the game's ES-DE images the menu shows.",
             ) { menuImageType = it; prefs.menuImageType = it }
+            Section("Second screen")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Open on second screen")
+                    Text(
+                        "On a dual-screen handheld, or with a screen plugged in, the menu, guides and browser open on the " +
+                            "screen the game isn't on, and the game keeps running. The controller stays with the game, so " +
+                            "tap them there; Resume reads Close Menu. " +
+                            (secondScreenName?.let { "Found: $it." } ?: "No second screen found."),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = onSecondScreen, onCheckedChange = { onSecondScreen = it; prefs.secondScreen = it })
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Open at launch")
+                    Text(
+                        "Opens the menu on the second screen by itself when a game starts. Off unless you want it, as " +
+                            "that screen may be showing something else.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(
+                    checked = openAtLaunch,
+                    onCheckedChange = { openAtLaunch = it; prefs.openAtLaunch = it },
+                    enabled = onSecondScreen,
+                )
+            }
             Section("Quitting games")
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {

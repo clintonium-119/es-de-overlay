@@ -17,6 +17,7 @@ import android.text.TextUtils
 import android.text.style.ForegroundColorSpan
 import android.util.Log
 import android.util.TypedValue
+import android.view.Display
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -47,15 +48,17 @@ fun capCentring(font: Typeface): Float {
  * Adds [view] as a focusable full-screen window over the game, with the system bars hidden, and focuses it.
  * The window shrinks to stay clear of [fitInsets]: `WindowInsets.Type.ime()` keeps a text field above the
  * keyboard, which is what a resize soft-input mode would do if setting the insets didn't turn that off.
+ * On a second screen it never takes focus, so the game keeps the controller and isn't paused; it's worked by touch.
  */
 fun WindowManager.addFullScreen(view: View, format: Int, fitInsets: Int = 0) {
+    val focus = if (view.context.onSecondScreen) WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE else 0
     addView(
         view,
         WindowManager.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or focus,
             format,
         ).apply {
             // Cover the bars' area as well, instead of leaving the game showing there.
@@ -70,13 +73,13 @@ fun WindowManager.addFullScreen(view: View, format: Int, fitInsets: Int = 0) {
     view.requestFocus()
 }
 
-/** A rounded help pill in [look]'s help colours: `A OPEN  B BACK`, button letters in the icon color. */
+/** A rounded help pill in [look]'s help colours: `A OPEN  B BACK`, button letters in the icon color; an empty button shows the label alone. */
 fun helpPill(context: Context, look: Look, font: Typeface, textPx: Float, vararg entries: Pair<String, String>) = TextView(context).apply {
     text = SpannableStringBuilder().apply {
         entries.forEachIndexed { i, (button, label) ->
             if (i > 0) append("   ")
-            append(button, ForegroundColorSpan(look.helpIcon), 0)
-            append(" ${label.uppercase()}")
+            if (button.isNotEmpty()) append(button, ForegroundColorSpan(look.helpIcon), 0).append(" ")
+            append(label.uppercase())
         }
     }
     typeface = font
@@ -207,12 +210,17 @@ fun barText(context: Context, barH: Int, gravity: Int) = TextView(context).apply
  * The in-game menu: a focusable full-screen window over the game, a themed list moved with the D-pad,
  * A to pick and B to close, with the game's title and screenshot laid out like the theme's gamelist. Built on [show]
  * and dropped on [close]; [release] also drops the title and screenshot, so nothing is held between opens.
- * Also owns the invisible window kept up during a capture.
+ * Also owns the invisible window kept up during a capture, always on the built-in screen, which is the one captured.
+ * Opens on the built-in screen, or the one last [place]d on; on a second screen rows and the help pill's buttons
+ * are tapped instead, as the controller stays with the game.
  */
-class MenuOverlay(private val context: Context) {
-    private val wm = context.getSystemService(WindowManager::class.java)
-    private val screenW = wm.maximumWindowMetrics.bounds.width()
-    private val screenH = wm.maximumWindowMetrics.bounds.height()
+class MenuOverlay(private val service: Context) {
+    private val builtIn = overlayContext(service)
+    private val captureWm = builtIn.getSystemService(WindowManager::class.java)
+    private var context = builtIn
+    private var wm = captureWm
+    private var screenW = wm.maximumWindowMetrics.bounds.width()
+    private var screenH = wm.maximumWindowMetrics.bounds.height()
     private var root: View? = null
     private var list: PillList? = null
     /** Shows the list [show] last put up again, for [error] to go back to. */
@@ -226,8 +234,8 @@ class MenuOverlay(private val context: Context) {
     ).apply { alpha = 0f }
 
     // The theme's 4:3 gamelist art box (aspect-ratio-4-3.xml): 0.3625 × 0.73333333 of the screen.
-    val artW = (screenW * 0.3625f).toInt()
-    val artH = (screenH * 0.73333333f).toInt()
+    val artW get() = (screenW * 0.3625f).toInt()
+    val artH get() = (screenH * 0.73333333f).toInt()
 
     /** The game's name and image, set before the menu opens; every [show] keeps them until [release]. */
     var title = ""
@@ -238,6 +246,19 @@ class MenuOverlay(private val context: Context) {
     var theme = ThemeLook.DEFAULT
 
     val isOpen get() = root != null
+
+    /** Whether the menu opens on a second screen, where the game runs on beside it. */
+    val onSecondScreen get() = context.onSecondScreen
+
+    /** Opens the menu on [display] from the next [show]; closes it first if it's open on another. */
+    fun place(display: Display) {
+        if (display.displayId == context.display.displayId) return
+        close()
+        context = if (display.displayId == Display.DEFAULT_DISPLAY) builtIn else overlayContext(service, display)
+        wm = context.getSystemService(WindowManager::class.java)
+        screenW = wm.maximumWindowMetrics.bounds.width()
+        screenH = wm.maximumWindowMetrics.bounds.height()
+    }
 
     /** Shows [items] with the cursor on [start]; with [alt], X calls it with the selected row and the help pill names it. */
     fun show(
@@ -266,6 +287,11 @@ class MenuOverlay(private val context: Context) {
                 else -> return@open false
             }
             true
+        }
+        // A tap picks a row; X's action, which takes the selected row, is a long press on one.
+        if (onSecondScreen) rows.forEachIndexed { i, row ->
+            row.setOnClickListener { onPick(i) }
+            if (alt != null) row.setOnLongClickListener { alt.second(i); true }
         }
         this.list = list
     }
@@ -389,7 +415,27 @@ class MenuOverlay(private val context: Context) {
                 topMargin = (screenH * 0.44166667f).toInt() - artH / 2 - padTop
             })
             addView(
-                helpPill(context, look, font, textPx, *help.map { (button, action) -> theme.label(button) to action }.toTypedArray()),
+                if (!onSecondScreen) {
+                    helpPill(context, look, font, textPx, *help.map { (button, action) -> theme.label(button) to action }.toTypedArray())
+                } else {
+                    // B as a pill to tap, and X's long press; A is a tap on the row, and the D-pad scrolling.
+                    LinearLayout(context).apply {
+                        help.forEach { (button, action) ->
+                            val pill = when (button) {
+                                "B" -> helpPill(context, look, font, textPx, "" to action).apply {
+                                    setOnClickListener { onKey(KeyEvent.KEYCODE_BUTTON_B) }
+                                }
+                                "X" -> helpPill(context, look, font, textPx, "" to "Hold to $action")
+                                else -> return@forEach
+                            }
+                            addView(
+                                pill,
+                                LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                                    .apply { marginStart = textInset },
+                            )
+                        }
+                    }
+                },
                 FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END),
             )
             // Keep focus on the root so the ScrollView doesn't take the D-pad.
@@ -441,18 +487,18 @@ class MenuOverlay(private val context: Context) {
     /** Adds the invisible window that [nudge] relayouts, so a static screen still yields capture frames. */
     fun beginCapture() {
         if (captureView != null) return
-        captureView = View(context).also { wm.addView(it, captureParams) }
+        captureView = View(builtIn).also { captureWm.addView(it, captureParams) }
     }
 
     /** Forces a window layout pass without any visible change (only the window title differs). */
     fun nudge() {
         val view = captureView ?: return
         captureParams.title = "capture ${SystemClock.uptimeMillis()}"
-        wm.updateViewLayout(view, captureParams)
+        captureWm.updateViewLayout(view, captureParams)
     }
 
     fun endCapture() {
-        captureView?.let(wm::removeView)
+        captureView?.let(captureWm::removeView)
         captureView = null
     }
 
