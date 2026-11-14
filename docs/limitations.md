@@ -43,7 +43,7 @@ Everything here was found on a Retroid Pocket Nova with Android 13, the only dev
   - Apps can opt out of playback capture. Every game and emulator on the Nova allows it.
   - If ES-DE Overlay can't find the game's app, the clip is silent and the notice after the capture says so. Without the permission, clips are silent too.
 - **Clips of RetroArch with 120 Hz shader sub-frames play at 60 fps without flicker.** The sub-frames (`video_shader_subframes`) put a dark frame between real ones. The app skips those, so clips and screenshots still show the shader.
-- **Android asks for permission before the first capture after every restart** of the service or the device, and after you reinstall the app. The menu, guides and Quit Game work without it.
+- **Android asks for permission before the first capture after every restart** of the service or the device, and after you reinstall the app. That first pick of Capture only gets the permission; pick it again to capture. The menu, guides and Quit Game work without it.
 - **A replaced image or clip can't be recovered.** With **Replace**, the old file is deleted once the new one is complete. Choose **Ask** or **Skip** under **If the media file already exists** to keep scraped media.
 - **A system screenshot is never asked about.** Under **Ask**, it keeps the existing image, because there's no menu open to ask in.
 - **Captures and guides ignore a custom media folder.** They go to `<ES-DE>/downloaded_media`, even when ES-DE keeps its media in another directory. The ES-DE folder row in settings warns you when it does.

@@ -4,6 +4,8 @@ What changed in each version of ES-DE Overlay. A release's notes on GitHub are i
 
 ## Unreleased
 
+- The first Capture after the service starts only asks for Android's permission; pick Capture again to capture. Carrying on after the question recorded a still picture with no sound in Eden, which stays paused behind it, and with **Replace** that clip replaced the game's video.
+- The app reports its own version again: 1.2.0 said 1.1.0 in Android's app settings. Releases now check that the app's version matches the tag.
 - Clips record sound from the game's app only. Music or video playing in another app is no longer recorded with it. If the overlay can't find the game's app, the clip is silent and the notice says so.
 - A guide too large to open safely is refused with the reason, such as `Couldn't open Maps.cbz: more than 2000 pages`, instead of running the viewer out of memory. The limits are several times the largest guides tested.
 - The parsers that read ES-DE's files and guide pages are fuzz-tested, and what the fuzzing found is fixed:

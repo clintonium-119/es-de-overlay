@@ -602,11 +602,15 @@ class HelperService : Service() {
 
     /**
      * Captures the game and saves the screenshot when [keepShot] and the clip when [keepVideo]. Without consent yet,
-     * opens Android's prompt and carries on once it's granted.
+     * opens Android's prompt and captures nothing: an emulator can stay paused behind the prompt (Eden waits for a tap
+     * on its play button), which would record a still frame with no sound, so once it's granted Capture is picked again.
      */
     private fun startCapture(g: GameRef, keepShot: Boolean, keepVideo: Boolean) {
         val p = projection ?: run {
-            afterConsent = { resumeCapture(g, keepShot, keepVideo, SystemClock.uptimeMillis() + 5_000) }
+            afterConsent = {
+                toast("Capture allowed: pick Capture again")
+                notify(this, RESULT_ID, "Capture allowed. Pick Capture again to capture the game.")
+            }
             startActivity(
                 Intent(this, SettingsActivity::class.java)
                     .putExtra(SettingsActivity.EXTRA_GRANT, true)
@@ -639,22 +643,6 @@ class HelperService : Service() {
                 notify(this, RESULT_ID, "Capture failed: ${e.message}")
             }
         }, 100)
-    }
-
-    /**
-     * Main thread: the capture picked before the consent prompt, once [g] is back in front after it, with time for the
-     * switch back to finish so the first frame is the game. Dropped if [g] isn't in front by [until].
-     */
-    private fun resumeCapture(g: GameRef, keepShot: Boolean, keepVideo: Boolean, until: Long) {
-        when {
-            gameInFront() == g -> main.postDelayed({ startCapture(g, keepShot, keepVideo) }, 500)
-            SystemClock.uptimeMillis() < until -> main.postDelayed({ resumeCapture(g, keepShot, keepVideo, until) }, 200)
-            else -> {
-                Log.i(TAG, "capture dropped: $g not in front after consent")
-                toast("Nothing captured: pick Capture again")
-                notify(this, RESULT_ID, "Nothing captured: the game wasn't in front. Pick Capture again.")
-            }
-        }
     }
 
     private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
