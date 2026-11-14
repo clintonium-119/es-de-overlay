@@ -1,7 +1,53 @@
 package com.clintonium.es_de_overlay.core
 
+import java.io.IOException
+
 /** Guide formats the viewer reads, including the self-contained HTML that Find Guides saves. CBR (a RAR archive) is left out. */
 val GUIDE_EXTENSIONS = setOf("pdf", "txt", "png", "jpg", "jpeg", "cbz", "html")
+
+// How much of a guide the viewer will load, so a huge or malformed file is refused instead of using up its memory
+// (256 MB of heap on the Nova). Each limit is several times the largest of the 22 guides saved on the Nova,
+// measured on 2026-11-13.
+
+/** VGMaps' Chrono Trigger CBZ has the most pages: 137. */
+const val MAX_CBZ_PAGES = 2_000
+
+/** The largest page is the Super Metroid CBZ's map of Zebes, a 13.4 MB PNG; the page is held once while it opens. */
+const val MAX_CBZ_PAGE_BYTES = 64L shl 20
+
+/** That map of Zebes is also the largest picture: 16,896 × 14,336, 242 megapixels. Pages decode a region at a time. */
+const val MAX_IMAGE_PIXELS = 1_000_000_000L
+
+/**
+ * The longest text guide is Neoseeker's Link's Awakening DX walkthrough, saved as 173 KB of HTML; no `.txt` guide is
+ * saved. Turning text into the viewer's page takes several copies of it.
+ */
+const val MAX_TEXT_BYTES = 8 shl 20
+
+/** A guide over one of the load limits; the message says which, after "Couldn't open <name>: ". */
+class GuideTooLarge(message: String) : IOException(message)
+
+private const val MB = 1 shl 20
+
+/** Throws [GuideTooLarge] when a CBZ holds more than [MAX_CBZ_PAGES] pages; [count] is how many so far. */
+fun checkCbzPages(count: Int) {
+    if (count > MAX_CBZ_PAGES) throw GuideTooLarge("more than $MAX_CBZ_PAGES pages")
+}
+
+/** Throws [GuideTooLarge] when a CBZ page unpacks to more than [MAX_CBZ_PAGE_BYTES]. */
+fun checkCbzPage(bytes: Long) {
+    if (bytes > MAX_CBZ_PAGE_BYTES) throw GuideTooLarge("a page is larger than ${MAX_CBZ_PAGE_BYTES / MB} MB")
+}
+
+/** Throws [GuideTooLarge] for a picture of more than [MAX_IMAGE_PIXELS], from its header's size, before it's decoded. */
+fun checkImage(width: Int, height: Int) {
+    if (width.toLong() * height > MAX_IMAGE_PIXELS) throw GuideTooLarge("a picture is larger than ${MAX_IMAGE_PIXELS / 1_000_000} megapixels")
+}
+
+/** Throws [GuideTooLarge] when a text guide is more than [MAX_TEXT_BYTES]. */
+fun checkText(bytes: Int) {
+    if (bytes > MAX_TEXT_BYTES) throw GuideTooLarge("larger than ${MAX_TEXT_BYTES / MB} MB")
+}
 
 /** ES-DE's scraped manual below downloaded_media, paired with the ROM like its other media. */
 fun manualPath(game: GameRef, romIsDirectory: Boolean): List<String> =

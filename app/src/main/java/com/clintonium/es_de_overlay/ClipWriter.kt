@@ -24,15 +24,15 @@ private const val VIDEO = 0
 private const val AUDIO = 1
 
 /**
- * MP4 writer for a clip: H.264 from frames drawn on [surface] plus, when [withAudio], AAC of the
- * games' own sound via Android playback capture (MediaRecorder can't record another app's audio).
+ * MP4 writer for a clip: H.264 from frames drawn on [surface] plus, when [gameUid] is given, AAC of the
+ * sound played by that app alone via Android playback capture (MediaRecorder can't record another app's audio).
  * Apps can opt out of playback capture; their clips then get a silent audio track.
  */
-class ClipWriter(projection: MediaProjection, file: File, width: Int, height: Int, withAudio: Boolean) {
+class ClipWriter(projection: MediaProjection, file: File, width: Int, height: Int, gameUid: Int?) {
     private val threads = listOf(HandlerThread("clip-video"), HandlerThread("clip-audio")).onEach { it.start() }
     private val muxer = MediaMuxer(file.path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
     private val video = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
-    private val record = if (withAudio) captureGameAudio(projection) else null
+    private val record = gameUid?.let { captureGameAudio(projection, it) }
     private val audio = record?.let { MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_AAC) }
     private val done = CountDownLatch(if (audio != null) 2 else 1)
     private val tracks = intArrayOf(-1, -1)
@@ -97,7 +97,7 @@ class ClipWriter(projection: MediaProjection, file: File, width: Int, height: In
     }
 
     @SuppressLint("MissingPermission") // only called when RECORD_AUDIO is granted
-    private fun captureGameAudio(projection: MediaProjection): AudioRecord? = runCatching {
+    private fun captureGameAudio(projection: MediaProjection, uid: Int): AudioRecord? = runCatching {
         val format = AudioFormat.Builder()
             .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
             .setSampleRate(SAMPLE_RATE)
@@ -107,6 +107,8 @@ class ClipWriter(projection: MediaProjection, file: File, width: Int, height: In
             .addMatchingUsage(AudioAttributes.USAGE_GAME)
             .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
             .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
+            // Only the game's app: Android matches a playback when its usage and its app both match.
+            .addMatchingUid(uid)
             .build()
         AudioRecord.Builder()
             .setAudioPlaybackCaptureConfig(config)

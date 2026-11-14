@@ -22,7 +22,7 @@ import java.util.concurrent.Future
 
 /**
  * One press: a screen mirror whose first frames become the PNG screenshot and whose following frames
- * are recorded at half size as an MP4 (with the game's sound when [withAudio]) until [seconds] pass or
+ * are recorded at half size as an MP4 (with the sound of [gameUid]'s app, if given) until [seconds] pass or
  * [stop] is called.
  * [onRecording] fires once the screenshot frame is chosen; [onDone] gets whichever files are usable.
  * [nudge] must force a window layout pass: Android only starts mirroring into a new capture display
@@ -37,7 +37,7 @@ class Capture(
     context: Context,
     private val projection: MediaProjection,
     private val seconds: Int,
-    withAudio: Boolean,
+    gameUid: Int?,
     private val nudge: () -> Unit,
     private val onRecording: () -> Unit,
     private val onDone: (png: File?, mp4: File?) -> Unit,
@@ -57,7 +57,7 @@ class Capture(
         HardwareBuffer.USAGE_CPU_READ_OFTEN or HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE,
     )
     // ponytail: half resolution is the size knob; the Nova's encoder ignored bitrate requests.
-    private val clip = ClipWriter(projection, mp4, width / 2, height / 2, withAudio)
+    private val clip = ClipWriter(projection, mp4, width / 2, height / 2, gameUid)
     private val input = clip.surface
     private val clipRect = Rect(0, 0, width / 2, height / 2)
 

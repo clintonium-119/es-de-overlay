@@ -1,0 +1,76 @@
+name: Device report
+description: How the overlay works on your device, whether everything worked or not.
+title: "Device report: "
+body:
+  - type: markdown
+    attributes:
+      value: The app is tested on a Retroid Pocket Nova with Android 13 only, so a report from any other device helps, even when everything worked.
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      placeholder: AYN Odin 2
+    validations:
+      required: true
+  - type: input
+    id: android
+    attributes:
+      label: Android version
+      placeholder: "13"
+    validations:
+      required: true
+  - type: input
+    id: esde
+    attributes:
+      label: ES-DE version
+      description: From ES-DE's main menu.
+    validations:
+      required: true
+  - type: input
+    id: overlay
+    attributes:
+      label: Overlay version
+      description: Shown in Obtainium, or in Android's Settings > Apps > ES-DE Overlay.
+      placeholder: 1.2.0
+    validations:
+      required: true
+  - type: input
+    id: controller
+    attributes:
+      label: Controller
+      description: The device's own controls, or the controller you connected.
+      placeholder: Built-in
+    validations:
+      required: true
+  - type: dropdown
+    id: installed
+    attributes:
+      label: How you installed it
+      options:
+        - GitHub Releases
+        - Obtainium
+        - Built from source
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: worked
+    attributes:
+      label: What worked
+      description: Tick each one you tried and that worked. Say what went wrong with the others below.
+      options:
+        - label: The menu opens over a game
+        - label: Capture saves a screenshot and a clip
+        - label: Guides open, and Find Guides saves one
+        - label: Quit Game ends the game
+        - label: The service starts after a restart
+  - type: input
+    id: games
+    attributes:
+      label: Emulators and games tried
+      placeholder: RetroArch (mGBA), Pokémon Emerald
+  - type: textarea
+    id: notes
+    attributes:
+      label: What didn't work, or anything else
+      description: "If you can connect a computer with adb, a log helps: run `adb logcat -G 16M && adb logcat -s ESDEShot` and paste the lines."
