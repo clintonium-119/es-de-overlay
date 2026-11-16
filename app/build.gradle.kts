@@ -60,7 +60,7 @@ dependencies {
     implementation("dev.rikka.shizuku:provider:13.1.5")
     testImplementation("junit:junit:4.13.2")
     // JUnit 5, which Jazzer 0.30.0 is built against; the JUnit 4 tests run on its vintage engine.
-    testImplementation(platform("org.junit:junit-bom:5.14.4"))
+    testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter-api")
     testImplementation("com.code-intelligence:jazzer-junit:0.30.0")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
