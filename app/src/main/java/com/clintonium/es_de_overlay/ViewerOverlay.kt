@@ -766,8 +766,13 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 if (!restored) {
                     restored = true
                     web.evaluateJavascript(
-                        "scrollTo(0,(document.documentElement.scrollHeight-innerHeight)*${saved.coerceIn(0, 10_000)}/10000)", null,
-                    )
+                        "scrollTo(0,(document.documentElement.scrollHeight-innerHeight)*${saved.coerceIn(0, 10_000)}/10000)",
+                    ) {
+                        // Shown once the frame at the saved place is ready. A closed guide has no parent.
+                        if (web.parent != null) web.postVisualStateCallback(0, object : WebView.VisualStateCallback() {
+                            override fun onComplete(requestId: Long) { web.alpha = 1f }
+                        })
+                    }
                     web.evaluateJavascript(PICTURE_TAPS, null)
                 }
                 refresh.run()
@@ -781,6 +786,8 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 return true
             }
         }
+        // A guide reopened part-way down stays hidden until it's scrolled there, so its top doesn't show first.
+        if (saved > 0) web.alpha = 0f
         web.loadUrl("https://$HOST/guide.html")
         val density = context.resources.displayMetrics.density
         position = { fraction(web.scrollY, (web.contentHeight * density).toInt() - web.height) }

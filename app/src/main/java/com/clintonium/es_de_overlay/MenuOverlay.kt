@@ -126,8 +126,11 @@ class PillList(context: Context, private val look: Look, font: Typeface, private
         select(start.coerceIn(0, (rows.size - 1).coerceAtLeast(0)))
     }
 
-    /** Moves the pill [by] rows, stopping at the ends. */
-    fun move(by: Int) = select((selected + by).coerceIn(0, (rows.size - 1).coerceAtLeast(0)))
+    /** Moves the pill [by] rows, stopping at the ends; with [wrap], a move past an end goes round to the other. */
+    fun move(by: Int, wrap: Boolean = false) {
+        if (rows.isEmpty()) return
+        select(if (wrap) Math.floorMod(selected + by, rows.size) else (selected + by).coerceIn(0, rows.size - 1))
+    }
 
     /** Changes row [i]'s label; the pill on it is sized again for the new label, which a progress count lengthens. */
     fun relabel(i: Int, label: String) {
@@ -214,6 +217,9 @@ class MenuOverlay(private val context: Context) {
     private val screenW = wm.maximumWindowMetrics.bounds.width()
     private val screenH = wm.maximumWindowMetrics.bounds.height()
     private var root: View? = null
+    /** A window just closed, left up until the next one has drawn so the game doesn't show between two lists. */
+    private var outgoing: View? = null
+    private var dropOutgoing = Runnable {}
     private var list: PillList? = null
     /** Shows the list [show] last put up again, for [error] to go back to. */
     private var reshow: () -> Unit = {}
@@ -252,10 +258,11 @@ class MenuOverlay(private val context: Context) {
         val list = PillList(context, theme.look, theme.font, screenW, screenH, items, start)
         val rows = list.rows
         val help = listOfNotNull("A" to "Select", alt?.let { "X" to it.first }, "B" to "Back")
-        open(ScrollView(context).apply { addView(list.view) }, help) { code ->
+        open(ScrollView(context).apply { addView(list.view) }, help) { code, held ->
             when (code) {
-                KeyEvent.KEYCODE_DPAD_UP -> list.move(-1)
-                KeyEvent.KEYCODE_DPAD_DOWN -> list.move(1)
+                // A press past an end goes round to the other, as in ES-DE's gamelist; a held D-pad stops at the end.
+                KeyEvent.KEYCODE_DPAD_UP -> list.move(-1, wrap = !held)
+                KeyEvent.KEYCODE_DPAD_DOWN -> list.move(1, wrap = !held)
                 KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER ->
                     if (rows.isNotEmpty()) onPick(list.selected)
                 // Always used: Android's gamepad key map turns an unused X into DPAD_CENTER, which would pick the row.
@@ -305,7 +312,7 @@ class MenuOverlay(private val context: Context) {
             }
         }
         val scroll = ScrollView(context).apply { addView(text) }
-        open(scroll, listOf("✚" to "Scroll", "B" to "Back")) { code ->
+        open(scroll, listOf("✚" to "Scroll", "B" to "Back")) { code, _ ->
             when (code) {
                 KeyEvent.KEYCODE_DPAD_UP -> scroll.scrollBy(0, -linePx)
                 KeyEvent.KEYCODE_DPAD_DOWN -> scroll.scrollBy(0, linePx)
@@ -319,9 +326,9 @@ class MenuOverlay(private val context: Context) {
 
     /**
      * Adds the menu window: the [title] above [content] in the list column, the art box beside it and a help pill of
-     * [help]. [onKey] gets each key press and returns whether it used it.
+     * [help]. [onKey] gets each key press, and whether it's a repeat from a held key, and returns whether it used it.
      */
-    private fun open(content: ScrollView, help: List<Pair<String, String>>, onKey: (Int) -> Boolean) {
+    private fun open(content: ScrollView, help: List<Pair<String, String>>, onKey: (Int, Boolean) -> Boolean) {
         val look = theme.look
         val font = theme.font
         val textPx = screenH * look.fontSize
@@ -402,17 +409,24 @@ class MenuOverlay(private val context: Context) {
                     val swapped = if (code != sent) " as ${KeyEvent.keyCodeToString(code)}" else ""
                     Log.d(TAG, "key delivered ${SystemClock.uptimeMillis() - event.eventTime} ms: ${KeyEvent.keyCodeToString(sent)}$swapped")
                 }
-                if (event.action == KeyEvent.ACTION_DOWN) onKey(code) else code in KEYS
+                if (event.action == KeyEvent.ACTION_DOWN) onKey(code, event.repeatCount > 0) else code in KEYS
             }
         }
         wm.addFullScreen(view, PixelFormat.TRANSLUCENT)
         root = view
+        // close() left the last window up for this one. It goes once this one's frame is on screen, or after a
+        // quarter second if no frame is reported.
+        outgoing?.let { old ->
+            old.removeCallbacks(dropOutgoing)
+            view.post {
+                view.viewTreeObserver.registerFrameCommitCallback { view.post { if (outgoing === old) dropOutgoing.run() } }
+                view.invalidate()
+            }
+            old.postDelayed(dropOutgoing, 250)
+        }
     }
 
-    /**
-     * Changes row [i]'s label in place, for progress. Showing a new list instead removes the focused window for
-     * a moment, handing focus (and an unpause) back to the game.
-     */
+    /** Changes row [i]'s label in place, for progress, without building a new window. */
     fun relabel(i: Int, label: String) {
         list?.relabel(i, label)
     }
@@ -424,10 +438,20 @@ class MenuOverlay(private val context: Context) {
         show(listOf(text), {}, back)
     }
 
+    /**
+     * Closes the menu. Its window stays until the end of this turn of the main thread, so that a list shown
+     * straight after takes over from it without the game showing in between.
+     */
     fun close() {
-        root?.let(wm::removeView)
+        // Nothing open: B closes the menu and then the list it goes back to closes it again before opening, and
+        // the window already on its way out has to last until then.
+        val old = root ?: return
+        outgoing?.let { it.removeCallbacks(dropOutgoing); wm.removeView(it) }
+        outgoing = old
         root = null
         list = null
+        dropOutgoing = Runnable { if (outgoing === old) { wm.removeView(old); outgoing = null } }
+        old.post(dropOutgoing)
     }
 
     /** Closes the menu for good, dropping its [title] and [art]. */
