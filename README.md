@@ -8,9 +8,11 @@
 [![Licence](https://img.shields.io/github/license/clintonium-119/es-de-overlay)](LICENSE)
 ![Android 13+](https://img.shields.io/badge/Android-13%2B-3DDC84)
 
-ES-DE Overlay adds an in-game menu to [ES-DE](https://es-de.org) on Android. Press **Back** or **Menu** on your controller during a game you launched from ES-DE, and the menu opens over it in your ES-DE theme's colours and font. From it you can save a screenshot or clip straight into ES-DE's media, read the game's manual, find and read guides, see the game's ES-DE info, and quit.
+ES-DE Overlay adds an in-game menu to [ES-DE](https://es-de.org) on Android. Press **Back** or **Menu** on your controller during a game you launched from ES-DE, and the menu opens over it in your ES-DE theme's colours and font. From it you can find guides and maps for the game, save them to read offline, read the game's manual, save a screenshot or clip straight into ES-DE's media, see the game's ES-DE info, and quit.
 
 Back is the Android Back button beside Home on Retroid and AYN handhelds. Menu is for controllers that have one. You can choose another button in settings, or open the menu from its notification.
+
+![Opening the menu in Super Mario World, then a saved walkthrough and a map, each where they were left](docs/images/demo.gif)
 
 **[Read the documentation →](https://clintonium-119.github.io/es-de-overlay/)**
 
@@ -24,10 +26,10 @@ The same menu in six ES-DE themes. The first is a [fork of minui-menu-es-de](htt
 
 ## What it adds
 
-| Capture | Manual | Guides |
+| Guides | Manual | Capture |
 | --- | --- | --- |
-| ![The Capture menu](docs/images/capture.png) | ![A manual page in the viewer](docs/images/manual.png) | ![A VGMaps map in the viewer](docs/images/viewer-map.png) |
-| Save screenshots and clips into ES-DE's media, named the way ES-DE expects, so they show up in the gamelist straight away. | Read the game's scraped manual with ES-DE's own viewer controls: pages, zoom and pan. | Save maps, walkthroughs and guides from VGMaps, StrategyWiki, GameFAQs and more, and read them offline. |
+| ![A VGMaps map in the viewer](docs/images/viewer-map.png) | ![A manual page in the viewer](docs/images/manual.png) | ![The Capture menu](docs/images/capture.png) |
+| Find maps, walkthroughs and guides from VGMaps, StrategyWiki, GameFAQs and more without leaving the game. Save one and it's kept on the device, so it opens offline, in your theme's colours and font. [More about Guides](https://clintonium-119.github.io/es-de-overlay/guides.html). | Read the game's scraped manual with ES-DE's own viewer controls: pages, zoom and pan. | Save screenshots and clips into ES-DE's media, named the way ES-DE expects, so they show up in the gamelist straight away. |
 
 ## Get it
 

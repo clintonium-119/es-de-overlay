@@ -13,7 +13,17 @@
 <header class="masthead">
 <div class="wrap">
 <a class="site-name" href="{{ '/' | relative_url }}"><img src="{{ '/assets/icon.svg' | relative_url }}" alt="" width="28" height="28">{{ site.title | escape }}</a>
-<a class="repo" href="https://github.com/clintonium-119/es-de-overlay">GitHub</a>
+<nav aria-label="Site">
+{%- comment %} The home page has no sidebar, so its header links to the pages people look for first. {% endcomment %}
+{%- if page.wide %}
+{%- assign top = "setup.md,use.md,guides.md" | split: "," %}
+{%- for path in top %}
+{%- assign item = site.pages | where: "path", path | first %}
+<a href="{{ item.url | relative_url }}">{{ item.title | escape }}</a>
+{%- endfor %}
+{%- endif %}
+<a href="https://github.com/clintonium-119/es-de-overlay">GitHub</a>
+</nav>
 </div>
 </header>
 {%- if page.wide %}
