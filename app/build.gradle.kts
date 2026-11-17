@@ -13,8 +13,8 @@ android {
         // Pinned: Android 14 (34) requires a new MediaProjection consent per capture.
         targetSdk = 33
         // The release job refuses a tag that doesn't match versionName; raise versionCode with it.
-        versionCode = 6
-        versionName = "1.3.2"
+        versionCode = 7
+        versionName = "1.3.3"
     }
 
     buildTypes {

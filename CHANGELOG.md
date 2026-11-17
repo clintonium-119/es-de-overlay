@@ -4,6 +4,11 @@ What changed in each version of ES-DE Overlay. A release's notes on GitHub are i
 
 ## Unreleased
 
+## 1.3.3 - 2026-11-17
+
+- With RetroArch's shaders on, the game no longer looks brighter for a moment before a reopened guide appears. RetroArch keeps drawing until the guide covers it.
+- In settings, **Notifications**, **Game sound in clips** and **Read screenshots** show Enabled as soon as you allow them. They used to keep saying Disabled until the app was reopened.
+
 ## 1.3.2 - 2026-11-17
 
 - The menu button opens straight into the guide, map or manual you last opened for the game, where you left it. **B** goes back to the menu. Turn it off with **Open the menu at the last guide** under **Guides** in settings.
