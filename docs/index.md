@@ -58,7 +58,7 @@ Stuck on a level? Open the menu and the walkthrough or the map is there, on the 
 <div class="feature" markdown="1">
 <div markdown="1">
 
-**Guides follow your theme's look.** A saved web guide leaves the site's ads, scripts and layout behind. The viewer shows its text and pictures in your ES-DE theme's colours and font. Press **Y** for the contents, or **A** on a picture to see it full screen. Guides and manuals reopen where you left off.
+**Guides follow your theme's look.** A saved web guide leaves the site's ads, scripts and layout behind. The viewer shows its text and pictures in your ES-DE theme's colours and font. Press **Y** for the contents, or **A** on a picture to see it full screen. Guides and manuals reopen where you left off, and the menu button opens straight into the one you last read.
 
 </div>
 <div markdown="1">
