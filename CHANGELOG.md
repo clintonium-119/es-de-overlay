@@ -6,6 +6,12 @@ What changed in each version of ES-DE Overlay. A release's notes on GitHub are i
 
 - **Open on second screen**, under Second screen in settings: on a dual-screen handheld, or with a screen plugged in, the menu, guides and browser open on the screen the game isn't on, and the game keeps running. The controller stays with the game, so you tap them there; the menu button still opens and closes the menu, and **Resume** reads **Close Menu**. **Open at launch** opens the menu there by itself when a game starts. Both are off by default.
 
+## 1.3.1 - 2026-11-16
+
+- The menu's lists wrap: Up on the first row goes to the last, and Down on the last goes to the first, as in ES-DE's gamelist. A held D-pad stops at the end.
+- A guide reopened where you left off no longer shows its top first. It stays hidden until it's at your place.
+- The game no longer shows for a moment between two of the menu's lists.
+
 ## 1.3.0 - 2026-11-14
 
 - The first Capture after the service starts only asks for Android's permission; pick Capture again to capture. Carrying on after the question recorded a still picture with no sound in Eden, which stays paused behind it, and with **Replace** that clip replaced the game's video.
