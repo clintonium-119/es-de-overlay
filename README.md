@@ -14,7 +14,7 @@ Back is the Android Back button beside Home on Retroid and AYN handhelds. Menu i
 
 ![Opening the menu in Super Mario World, then a saved walkthrough and a map, each where they were left](docs/images/demo.gif)
 
-**[Read the documentation →](https://clintonium-119.github.io/es-de-overlay/)**
+**[Read the documentation →](https://clintonium-119.github.io/es-de-overlay/)** · **[Watch the two-minute demo →](https://youtu.be/F3vhguSjiW8)**
 
 | MinUI Menu (Overlay) | Art Book Next | Iconic |
 | --- | --- | --- |

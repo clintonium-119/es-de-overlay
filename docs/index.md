@@ -19,6 +19,9 @@ wide: true
 
 <video autoplay muted loop playsinline controls poster="images/menu.png" src="assets/demo-loop.mp4" aria-label="Opening the menu in Super Mario World, then a saved walkthrough and a map, each where they were left"></video>
 
+[Watch the two-minute demo on YouTube](https://youtu.be/F3vhguSjiW8)
+{: .watch}
+
 </div>
 </div>
 
