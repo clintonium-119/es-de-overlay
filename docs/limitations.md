@@ -15,7 +15,7 @@ Everything here was found on a Retroid Pocket Nova with Android 13, the only dev
 - **Home closes the menu at once only on the Nova.** Its Home button sends a key the app can see. On other devices the menu closes within a second of the game leaving the screen.
 - **RetroArch pauses while the menu or viewer is open.** Other emulators and Android games weren't checked and may keep running.
 - **You can't save or load states from the menu.** RetroArch's Android build leaves out its network command interface, which is the only way another app could ask it to save or load. Android doesn't let an app press another app's buttons either.
-- **On the Nova, a Switch game that uses nearly all its memory can make Android end the app as the game loads.** In Eden, Super Mario Odyssey and Mario + Rabbids did this, so the menu button went to the game and Quit Game wasn't available. Clearing the game's cache in Eden fixed it for Super Mario Odyssey, which has since been played with the menu and a guide working throughout. A lower CPU clock made no difference. When it does happen, Android starts the app again by itself a few seconds later, but the screen-capture permission is lost, so your next Capture asks for it again.
+- **On the Nova, a heavy Switch game can make Android end the app while the game loads.** The menu button then goes to the game until Android starts the app again, a few seconds later. If this happens, clear that game's cache in Eden: that fixed it for Super Mario Odyssey.
 - **If an emulator hands the game to a second app after launch, the menu and captures won't work for it.** No emulator has been seen doing this so far.
 
 ## Screen
