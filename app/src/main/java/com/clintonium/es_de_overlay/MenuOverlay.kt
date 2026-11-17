@@ -49,18 +49,20 @@ fun capCentring(font: Typeface): Float {
  * The window shrinks to stay clear of [fitInsets]: `WindowInsets.Type.ime()` keeps a text field above the
  * keyboard, which is what a resize soft-input mode would do if setting the insets didn't turn that off.
  * On a second screen it never takes focus, so the game keeps the controller and isn't paused; it's worked by touch.
+ * With [hidden], the window is invisible and takes no focus, so the game under it carries on as if it weren't there.
  */
-fun WindowManager.addFullScreen(view: View, format: Int, fitInsets: Int = 0) {
-    val focus = if (view.context.onSecondScreen) WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE else 0
+fun WindowManager.addFullScreen(view: View, format: Int, fitInsets: Int = 0, hidden: Boolean = false) {
+    val unfocused = hidden || view.context.onSecondScreen
     addView(
         view,
         WindowManager.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or focus,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or if (unfocused) WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE else 0,
             format,
         ).apply {
+            if (hidden) alpha = 0f
             // Cover the bars' area as well, instead of leaving the game showing there.
             fitInsetsTypes = fitInsets
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
@@ -266,6 +268,30 @@ class MenuOverlay(private val service: Context) {
         screenH = wm.maximumWindowMetrics.bounds.height()
     }
 
+    /**
+     * While set, menu windows are added invisible and unfocusable, under a document that opens over them; [reveal]
+     * shows them. Unfocusable because a game that loses focus may pause while it's still on screen: RetroArch then
+     * stops drawing its shader, and the game looks brighter until the document covers it.
+     */
+    private var hidden = false
+
+    /** Adds the menu invisible until [reveal], so a document opening over it shows straight over the game. */
+    fun hideUntilRevealed() {
+        hidden = true
+    }
+
+    fun reveal() {
+        hidden = false
+        val view = root ?: return
+        val params = view.layoutParams as WindowManager.LayoutParams
+        if (params.alpha < 1f) {
+            params.alpha = 1f
+            // On a second screen the menu stays unfocusable: the game keeps the controller there.
+            if (!onSecondScreen) params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+            wm.updateViewLayout(view, params)
+        }
+    }
+
     /** Shows [items] with the cursor on [start]; with [alt], X calls it with the selected row and the help pill names it. */
     fun show(
         items: List<String>,
@@ -458,7 +484,7 @@ class MenuOverlay(private val service: Context) {
                 if (event.action == KeyEvent.ACTION_DOWN) onKey(code, event.repeatCount > 0) else code in KEYS
             }
         }
-        wm.addFullScreen(view, PixelFormat.TRANSLUCENT)
+        wm.addFullScreen(view, PixelFormat.TRANSLUCENT, hidden = hidden)
         root = view
         // close() left the last window up for this one. It goes once this one's frame is on screen, or after a
         // quarter second if no frame is reported.
@@ -505,6 +531,7 @@ class MenuOverlay(private val service: Context) {
     /** Closes the menu for good, dropping its [title] and [art]. */
     fun release() {
         close()
+        hidden = false
         title = ""
         art?.recycle()
         art = null

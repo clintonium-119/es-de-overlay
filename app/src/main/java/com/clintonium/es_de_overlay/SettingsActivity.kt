@@ -159,6 +159,7 @@ class SettingsActivity : ComponentActivity() {
         var sleepMinutes by remember { mutableIntStateOf(prefs.sleepMinutes) }
         var quitOnHome by remember { mutableStateOf(prefs.quitOnHome) }
         var confirmQuit by remember { mutableStateOf(prefs.confirmQuit) }
+        var reopenLastDoc by remember { mutableStateOf(prefs.reopenLastDoc) }
         var systemScreenshots by remember { mutableStateOf(prefs.systemScreenshots) }
         var onSecondScreen by remember { mutableStateOf(prefs.secondScreen) }
         var openAtLaunch by remember { mutableStateOf(prefs.openAtLaunch) }
@@ -490,6 +491,18 @@ class SettingsActivity : ComponentActivity() {
             }
             if (esde != null) {
                 Section("Guides")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Open the menu at the last guide")
+                        Text(
+                            "The menu button opens the guide, map or manual you last opened for the game, where you left " +
+                                "it. B goes back to the menu.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = reopenLastDoc, onCheckedChange = { reopenLastDoc = it; prefs.reopenLastDoc = it })
+                }
                 Setting("Saved guides", "Browse guides by game and delete the ones you no longer need", "Manage Guides") {
                     startActivity(Intent(this@SettingsActivity, GuidesActivity::class.java))
                 }
@@ -518,6 +531,7 @@ class SettingsActivity : ComponentActivity() {
             PermissionRow(
                 "Notifications",
                 Manifest.permission.POST_NOTIFICATIONS,
+                granted(Manifest.permission.POST_NOTIFICATIONS),
                 "Shows the service's notification with Open Menu, and capture results.",
                 ask,
             )
@@ -534,22 +548,26 @@ class SettingsActivity : ComponentActivity() {
             PermissionRow(
                 "Game sound in clips",
                 Manifest.permission.RECORD_AUDIO,
+                granted(Manifest.permission.RECORD_AUDIO),
                 "Records the game's sound only. Android calls it audio recording; the microphone is never recorded.",
                 ask,
             )
             PermissionRow(
                 "Read screenshots",
                 Manifest.permission.READ_MEDIA_IMAGES,
+                granted(Manifest.permission.READ_MEDIA_IMAGES),
                 "Only needed for Use system screenshots as game images, under Capture.",
                 ask,
             )
         }
     }
 
-    /** A runtime permission's row: [ask] requests it, or App Info turns it off once it's on. */
+    /**
+     * A runtime permission's row: [ask] requests it, or App Info turns it off once it's [on]. The screen reads [on]
+     * and passes it in: Compose skips a row whose arguments haven't changed, so a state read in here would go stale.
+     */
     @Composable
-    private fun PermissionRow(title: String, permission: String, description: String, ask: (String) -> Unit) {
-        val on = granted(permission)
+    private fun PermissionRow(title: String, permission: String, on: Boolean, description: String, ask: (String) -> Unit) {
         Setting(title, on.label, on.action, description) {
             if (on) openSettings(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, withPackage = true) else ask(permission)
         }

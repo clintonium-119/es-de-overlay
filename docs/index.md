@@ -58,7 +58,7 @@ Stuck on a level? Open the menu and the walkthrough or the map is there, on the 
 <div class="feature" markdown="1">
 <div markdown="1">
 
-**Guides follow your theme's look.** A saved web guide leaves the site's ads, scripts and layout behind. The viewer shows its text and pictures in your ES-DE theme's colours and font. Press **Y** for the contents, or **A** on a picture to see it full screen. Guides and manuals reopen where you left off.
+**Guides follow your theme's look.** A saved web guide leaves the site's ads, scripts and layout behind. The viewer shows its text and pictures in your ES-DE theme's colours and font. Press **Y** for the contents, or **A** on a picture to see it full screen. Guides and manuals reopen where you left off, and the menu button opens straight into the one you last read.
 
 </div>
 <div markdown="1">
@@ -146,7 +146,7 @@ One row per device, with the newest version tested on it.
 
 | Device | Android | ES-DE | App version | Tested | Notes |
 | --- | --- | --- | --- | --- | --- |
-| Retroid Pocket Nova | 13 | 3.5.0 | 1.3.1 | 2026-11-16 | The device the app is developed on, with RetroArch and Eden games. |
+| Retroid Pocket Nova | 13 | 3.5.0 | 1.3.3 | 2026-11-17 | The device the app is developed on, with RetroArch and Eden games. |
 
 Tried it on another device? [Send a device report](https://github.com/clintonium-119/es-de-overlay/issues/new?template=device-report.yml), even if everything worked. It asks for the device, its Android, ES-DE and app versions, and what worked. Reports are added here.
 

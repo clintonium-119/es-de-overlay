@@ -8,6 +8,7 @@ import android.os.Process
 import android.util.Log
 import com.clintonium.es_de_overlay.core.GameRef
 import com.clintonium.es_de_overlay.core.GuideTooLarge
+import com.clintonium.es_de_overlay.core.GuideUnreadable
 
 /**
  * Runs the viewer and the guide browser in their own `:viewer` process. A WebView's library, and the GPU and
@@ -45,9 +46,10 @@ class ViewerService : Service() {
             url != null && system != null && rom != null -> show(url) {
                 browser.open(url, GameRef(system, rom), theme(system).look, ::showSaved) { stopSelf() }
             }
-            uri != null && name != null && key != null -> show(name) {
+            uri != null && name != null && key != null -> show(name, key) {
                 val theme = theme(systemOf(key))
                 viewer.open(uri, name, key, theme, { video(it, theme) }) { stopSelf() }
+                viewer.onShown { opened(key) }
             }
             else -> stopSelf()
         }
@@ -61,13 +63,22 @@ class ViewerService : Service() {
     private fun showSaved(path: String) {
         browser.close()
         val name = path.substringAfterLast('/')
-        show(name) {
+        show(name, path) {
             val theme = theme(systemOf(path))
             viewer.open(treeChild(prefs.esdeTree!!, path), name, path, theme, { video(it, theme) }) {
                 startService(Intent(this, HelperService::class.java).setAction(HelperService.ACTION_GUIDE_SAVED))
                 stopSelf()
             }
+            viewer.onShown { opened(path) }
         }
+    }
+
+    /**
+     * Tells the service the viewer has the document at [key] on screen, so the menu can open straight into it next
+     * time, and a menu left invisible under it can show.
+     */
+    private fun opened(key: String) {
+        startService(Intent(this, HelperService::class.java).setAction(HelperService.ACTION_DOC_OPENED).putExtra(HelperService.EXTRA_KEY, key))
     }
 
     /** Plays the YouTube page [url] in the browser, over the guide whose link it was; closing it shows the guide again. */
@@ -84,15 +95,17 @@ class ViewerService : Service() {
     private fun systemOf(key: String) = key.removePrefix("downloaded_media/").substringBefore('/')
 
     /**
-     * Runs [open] for [name]; if it fails, says so in the menu underneath (a toast would draw below it), with the
-     * reason when the guide is over a load limit, and ends the service.
+     * Runs [open] for [name], the document at [key] if it's one; if it fails, says so in the menu underneath (a toast
+     * would draw below it), with the reason when the guide is over a load limit or has nothing to show, and ends the
+     * service.
      */
-    private fun show(name: String, open: () -> Unit) {
+    private fun show(name: String, key: String? = null, open: () -> Unit) {
         runCatching(open).onFailure {
             Log.e(TAG, "opening $name failed", it)
             startService(
                 Intent(this, HelperService::class.java).setAction(HelperService.ACTION_OPEN_FAILED).putExtra(HelperService.EXTRA_NAME, name)
-                    .putExtra(HelperService.EXTRA_REASON, (it as? GuideTooLarge)?.message),
+                    .putExtra(HelperService.EXTRA_KEY, key)
+                    .putExtra(HelperService.EXTRA_REASON, (it as? GuideTooLarge ?: it as? GuideUnreadable)?.message),
             )
             stopSelf()
         }
