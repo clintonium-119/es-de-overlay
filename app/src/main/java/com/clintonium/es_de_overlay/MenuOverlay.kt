@@ -430,7 +430,7 @@ class MenuOverlay(private val service: Context) {
                         help.forEach { (button, action) ->
                             val pill = when (button) {
                                 "B" -> helpPill(context, look, font, textPx, "" to action).apply {
-                                    setOnClickListener { onKey(KeyEvent.KEYCODE_BUTTON_B) }
+                                    setOnClickListener { onKey(KeyEvent.KEYCODE_BUTTON_B, false) }
                                 }
                                 "X" -> helpPill(context, look, font, textPx, "" to "Hold to $action")
                                 else -> return@forEach
@@ -492,11 +492,13 @@ class MenuOverlay(private val service: Context) {
         // Nothing open: B closes the menu and then the list it goes back to closes it again before opening, and
         // the window already on its way out has to last until then.
         val old = root ?: return
-        outgoing?.let { it.removeCallbacks(dropOutgoing); wm.removeView(it) }
+        outgoing?.let { it.removeCallbacks(dropOutgoing); dropOutgoing.run() }
         outgoing = old
         root = null
         list = null
-        dropOutgoing = Runnable { if (outgoing === old) { wm.removeView(old); outgoing = null } }
+        // The window manager it was added with: place() may move the menu to another screen before it goes.
+        val oldWm = wm
+        dropOutgoing = Runnable { if (outgoing === old) { oldWm.removeView(old); outgoing = null } }
         old.post(dropOutgoing)
     }
 
