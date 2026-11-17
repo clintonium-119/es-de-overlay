@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.core.content.edit
+import com.clintonium.es_de_overlay.core.GameRef
 import com.clintonium.es_de_overlay.core.Overwrite
 
 class Prefs(private val context: Context) {
@@ -12,6 +13,8 @@ class Prefs(private val context: Context) {
     // Written only by the viewer's process: a process writes back its whole cached file, so sharing "prefs"
     // with the settings screen would let one erase the other's changes.
     private val positions = context.getSharedPreferences("positions", Context.MODE_PRIVATE)
+    // Written only by the service's process, which the viewer tells what it opened.
+    private val lastDocs = context.getSharedPreferences("lastDocs", Context.MODE_PRIVATE)
 
     var esdeTree: Uri?
         get() = sp.getString("esdeTree", null)?.let(Uri::parse)
@@ -74,6 +77,19 @@ class Prefs(private val context: Context) {
     var quitOnHome: Boolean
         get() = sp.getBoolean("quitOnHome", false)
         set(v) = sp.edit { putBoolean("quitOnHome", v) }
+    /** Whether the menu opens straight into the guide, map or manual last opened for the game. */
+    var reopenLastDoc: Boolean
+        get() = sp.getBoolean("reopenLastDoc", true)
+        set(v) = sp.edit { putBoolean("reopenLastDoc", v) }
+
+    /** The key (path below the ES-DE folder) of the guide, map or manual last opened for [game], or null. */
+    fun lastDoc(game: GameRef) = lastDocs.getString("${game.system}/${game.romRelativePath}", null)
+
+    /** Remembers [key] as [game]'s last opened document, or forgets it when null. */
+    fun setLastDoc(game: GameRef, key: String?) = lastDocs.edit {
+        val name = "${game.system}/${game.romRelativePath}"
+        if (key == null) remove(name) else putString(name, key)
+    }
 
     fun esdeIsHome() = context.packageManager.resolveActivity(
         Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),

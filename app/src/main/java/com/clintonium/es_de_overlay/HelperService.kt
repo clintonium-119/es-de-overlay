@@ -164,6 +164,8 @@ class HelperService : Service() {
     private var starting = false
     /** Main thread: the capture picked before Android's capture prompt, which goes on once consent arrives. */
     private var afterConsent: (() -> Unit)? = null
+    /** Shows a menu left invisible under a reopened document whose viewer never said it was up. */
+    private val revealLate = Runnable { menu.reveal() }
     /** Main thread: while the menu asks whether a capture replaces a file, the way out that keeps the file. */
     private var unanswered: (() -> Unit)? = null
     /** Set when a capture starts: its clip has no sound because the game's app couldn't be found. Read by [report]. */
@@ -210,6 +212,10 @@ class HelperService : Service() {
      */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_OPEN_FAILED) {
+            // A remembered document that no longer opens is forgotten, so the next press opens the main menu.
+            val key = intent.getStringExtra(EXTRA_KEY)
+            currentGame()?.let { g -> if (key != null && prefs.lastDoc(g) == key) prefs.setLastDoc(g, null) }
+            menu.reveal()
             menu.error("Couldn't open ${intent.getStringExtra(EXTRA_NAME)}" + (intent.getStringExtra(EXTRA_REASON)?.let { ": $it" } ?: ""))
             return START_STICKY
         }
@@ -217,6 +223,14 @@ class HelperService : Service() {
             ButtonService.closeShade()
             // Only when nothing is up: then the menu button's way opens the menu, if ES-DE's game is in front.
             if (capture == null && !starting && !menu.isOpen && opening == null) onBack()
+            return START_STICKY
+        }
+        if (intent?.action == ACTION_DOC_OPENED) {
+            val key = intent.getStringExtra(EXTRA_KEY)
+            currentGame()?.let { g -> key?.let { prefs.setLastDoc(g, it) } }
+            // The viewer's window is up over the menu, which can now show under it.
+            main.removeCallbacks(revealLate)
+            menu.reveal()
             return START_STICKY
         }
         if (intent?.action == ACTION_GUIDE_SAVED) {
@@ -352,8 +366,27 @@ class HelperService : Service() {
                 menu.art = art
                 menu.cropArt = prefs.menuImageCrops
                 menu.theme = theme
-                openMenu(g, name, manual, guides, info)
-                Log.i(TAG, "menu: open in ${SystemClock.uptimeMillis() - started} ms")
+                // The guide or manual last opened for the game, if set to and it's still there, over the list it opens
+                // from, so B goes back as if it had been picked there.
+                val last = prefs.lastDoc(g)?.takeIf { prefs.reopenLastDoc }
+                val guide = guides.indexOfFirst { it.key == last }
+                val reopened = guides.getOrNull(guide) ?: manual?.takeIf { it.key == last }
+                if (reopened != null) {
+                    // The list stays invisible, showing the game, until the viewer says it's up; or, if it never
+                    // does, after a wait several times its usual start.
+                    menu.hideUntilRevealed()
+                    main.removeCallbacks(revealLate)
+                    main.postDelayed(revealLate, 2_000)
+                }
+                when {
+                    // Guides is the row after Resume.
+                    guide >= 0 -> guidesList(g, name, guides, { openMenu(g, name, manual, guides, info, start = 1) }, guide)
+                    // Manual is the row after Guides or Find Guides, which a game with a manual always has.
+                    reopened != null -> openMenu(g, name, manual, guides, info, start = 2)
+                    else -> openMenu(g, name, manual, guides, info)
+                }
+                reopened?.let(::view)
+                Log.i(TAG, "menu: open in ${SystemClock.uptimeMillis() - started} ms" + (reopened?.let { ", reopening ${it.name}" } ?: ""))
             }
         }
     }
@@ -809,10 +842,16 @@ class HelperService : Service() {
     companion object {
         const val EXTRA_CODE = "code"
         const val EXTRA_DATA = "data"
-        /** From the viewer's process: opening [EXTRA_NAME] failed, for [EXTRA_REASON] if given, which the menu underneath shows. */
+        /**
+         * From the viewer's process: opening [EXTRA_NAME] (the document at [EXTRA_KEY], if it was one) failed, for
+         * [EXTRA_REASON] if given, which the menu underneath shows.
+         */
         const val ACTION_OPEN_FAILED = "com.clintonium.es_de_overlay.OPEN_FAILED"
         /** From the viewer's process: the viewer on a guide just saved from the browser has closed, so list the guides again. */
         const val ACTION_GUIDE_SAVED = "com.clintonium.es_de_overlay.GUIDE_SAVED"
+        /** From the viewer's process: the document at [EXTRA_KEY] is on screen, and becomes the game's last opened. */
+        const val ACTION_DOC_OPENED = "com.clintonium.es_de_overlay.DOC_OPENED"
+        const val EXTRA_KEY = "key"
         const val EXTRA_NAME = "name"
         const val EXTRA_REASON = "reason"
         /** Open Menu on the service's notification. */

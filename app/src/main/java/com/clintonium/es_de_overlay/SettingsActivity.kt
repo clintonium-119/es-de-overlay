@@ -159,6 +159,7 @@ class SettingsActivity : ComponentActivity() {
         var sleepMinutes by remember { mutableIntStateOf(prefs.sleepMinutes) }
         var quitOnHome by remember { mutableStateOf(prefs.quitOnHome) }
         var confirmQuit by remember { mutableStateOf(prefs.confirmQuit) }
+        var reopenLastDoc by remember { mutableStateOf(prefs.reopenLastDoc) }
         var systemScreenshots by remember { mutableStateOf(prefs.systemScreenshots) }
         val shizuku = remember(tick) { ShizukuShell.state(this) }
         val screensaverReported = remember(tick, esde) { esde?.let(::esdeReportsScreensaver) }
@@ -456,6 +457,18 @@ class SettingsActivity : ComponentActivity() {
             }
             if (esde != null) {
                 Section("Guides")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Open the menu at the last guide")
+                        Text(
+                            "The menu button opens the guide, map or manual you last opened for the game, where you left " +
+                                "it. B goes back to the menu.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = reopenLastDoc, onCheckedChange = { reopenLastDoc = it; prefs.reopenLastDoc = it })
+                }
                 Setting("Saved guides", "Browse guides by game and delete the ones you no longer need", "Manage Guides") {
                     startActivity(Intent(this@SettingsActivity, GuidesActivity::class.java))
                 }

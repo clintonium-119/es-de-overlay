@@ -27,6 +27,9 @@ const val MAX_TEXT_BYTES = 8 shl 20
 /** A guide over one of the load limits; the message says which, after "Couldn't open <name>: ". */
 class GuideTooLarge(message: String) : IOException(message)
 
+/** A guide with nothing the viewer can show; the message says what, after "Couldn't open <name>: ". */
+class GuideUnreadable(message: String) : IOException(message)
+
 private const val MB = 1 shl 20
 
 /** Throws [GuideTooLarge] when a CBZ holds more than [MAX_CBZ_PAGES] pages; [count] is how many so far. */

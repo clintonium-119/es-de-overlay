@@ -7,6 +7,7 @@
 
 - Press **X** on a guide to delete it. You're asked to confirm, with **Keep** selected: **Keep** or **B** leaves it, and **Delete "*guide name*"** removes it.
 - Guides and manuals reopen where you left off, including the zoom and text size, even after a restart.
+- The menu button opens straight into the guide, map or manual you last opened for the game, at your place, however you left it, Quit Game included. **B** goes back to the Guides list with that guide selected (or the main menu, for the manual), and **B** again to the main menu. A game you haven't opened one for, or whose last one you deleted, gets the main menu. If the last one no longer opens, you see why once, and after that the main menu. Turn off **Open the menu at the last guide** under **Guides** in settings to always get the main menu.
 
 ![The Guides list](images/guides.png)
 

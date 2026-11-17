@@ -4,6 +4,11 @@ What changed in each version of ES-DE Overlay. A release's notes on GitHub are i
 
 ## Unreleased
 
+## 1.3.2 - 2026-11-17
+
+- The menu button opens straight into the guide, map or manual you last opened for the game, where you left it. **B** goes back to the menu. Turn it off with **Open the menu at the last guide** under **Guides** in settings.
+- A picture or map set the viewer can't read is refused with the reason, such as `Couldn't open Maps.cbz: no readable pictures`, instead of opening as a black page. A map set with some readable pictures still opens.
+
 ## 1.3.1 - 2026-11-16
 
 - The menu's lists wrap: Up on the first row goes to the last, and Down on the last goes to the first, as in ES-DE's gamelist. A held D-pad stops at the end.

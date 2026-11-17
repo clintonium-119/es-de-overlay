@@ -36,6 +36,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.view.doOnLayout
 import com.clintonium.es_de_overlay.core.GuideTooLarge
+import com.clintonium.es_de_overlay.core.GuideUnreadable
 import com.clintonium.es_de_overlay.core.MAX_CBZ_PAGE_BYTES
 import com.clintonium.es_de_overlay.core.MAX_IMAGE_PIXELS
 import com.clintonium.es_de_overlay.core.MAX_TEXT_BYTES
@@ -82,10 +83,16 @@ private class RegionPage(private val decoder: BitmapRegionDecoder) : Page {
     override fun close() = decoder.recycle()
 }
 
-/** Throws [GuideTooLarge] when the image [input] starts with is over [MAX_IMAGE_PIXELS]; reads only its header. */
-private fun checkBounds(input: InputStream) = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+/**
+ * Whether the image [input] starts with has a header that reads; throws [GuideTooLarge] when it's over
+ * [MAX_IMAGE_PIXELS]. Reads only its header.
+ */
+private fun checkBounds(input: InputStream): Boolean = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     .also { BitmapFactory.decodeStream(input, null, it) }
-    .let { checkImage(it.outWidth, it.outHeight) }
+    .let {
+        checkImage(it.outWidth, it.outHeight)
+        it.outWidth > 0
+    }
 
 /** A region decoder for an image's [bytes]; a GIF or BMP, which it can't read, goes through PNG first. */
 private fun regionDecoder(bytes: ByteArray): BitmapRegionDecoder {
@@ -320,7 +327,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                     "pdf" -> pdf(uri)
                     "cbz" -> cbz(uri)
                     "png", "jpg", "jpeg" -> {
-                        resolver.openInputStream(uri)!!.use(::checkBounds)
+                        if (!resolver.openInputStream(uri)!!.use(::checkBounds)) throw GuideUnreadable("not a readable picture")
                         Doc(1, { RegionPage(resolver.openInputStream(uri)!!.use { BitmapRegionDecoder.newInstance(it)!! }) }) {}
                     }
                     else -> throw IllegalArgumentException("unsupported guide format: $name")
@@ -877,10 +884,14 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         }
     }
 
-    /** A CBZ's pictures as pages. The listing reads every page, so it checks the load limits too, and refuses before any page shows. */
+    /**
+     * A CBZ's pictures as pages. The listing reads every page, so it checks the load limits too, and refuses before any
+     * page shows; it also refuses a CBZ with no picture whose header reads. A page that doesn't read stays blank.
+     */
     private fun cbz(uri: Uri): Doc {
         // Each page's size from the listing, so opening it reads into one array of that size.
         val sizes = HashMap<String, Int>()
+        var readable = false
         val entries = zip(uri) { z ->
             // What the header read took of the page, so its size adds up.
             var read = 0L
@@ -894,7 +905,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 .mapIndexed { i, entry ->
                     checkCbzPages(i + 1)
                     read = 0
-                    checkBounds(counted)
+                    if (checkBounds(counted)) readable = true
                     val size = read + z.skip(MAX_CBZ_PAGE_BYTES + 1 - read)
                     checkCbzPage(size)
                     sizes[entry.name] = size.toInt()
@@ -903,6 +914,7 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
                 .sortedWith(String.CASE_INSENSITIVE_ORDER)
                 .toList()
         }
+        if (!readable) throw GuideUnreadable("no readable pictures")
         // `003 Tail Cave.png` → Tail Cave. Maps saved before they had names show their file name, `Shantae-DribbleFountain`.
         val names = entries.map { it.substringAfterLast('/').substringBeforeLast('.').replace(Regex("^\\d+ "), "") }
         return Doc(entries.size, { n ->
@@ -912,6 +924,21 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
             }
             RegionPage(BitmapRegionDecoder.newInstance(bytes, 0, bytes.size)!!)
         }, names) {}
+    }
+
+    /** Runs [action] once the open document's first frame is on screen, or after a quarter second if none is reported. */
+    fun onShown(action: () -> Unit) {
+        val view = root ?: return
+        var done = false
+        val once = Runnable {
+            if (!done) action()
+            done = true
+        }
+        view.post {
+            view.viewTreeObserver.registerFrameCommitCallback { view.post(once) }
+            view.invalidate()
+        }
+        view.postDelayed(once, 250)
     }
 
     fun close() {
