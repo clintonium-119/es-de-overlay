@@ -12,7 +12,7 @@ Find what you're seeing, then work down its checks in order. The first ones are 
 3. **You chose another menu button.** Under **Controls**, **Menu button** names the one that opens the menu; **Reset** goes back to Back or Menu.
 4. **The game wasn't launched from ES-DE.** The menu opens only for a game ES-DE launched, and only while that game is the app in front.
 5. **You pressed the button in the game's first second.** The app reads launches from ES-DE's log once a second, so a press right after the game starts goes to the game. Press again.
-6. **Android ended the app for memory.** On the Nova, Switch games that take nearly all its memory in Eden (Super Mario Odyssey, Mario + Rabbids) make Android end the app within seconds. Android starts it again by itself a few seconds later, but while it's gone, the button goes to the game. See [Known limitations](limitations.md#controller-and-menu).
+6. **Android ended the app for memory.** On the Nova, a heavy Switch game in Eden can make Android end the app while the game loads. Android starts it again a few seconds later, but while it's gone, the button goes to the game. Clearing that game's cache in Eden fixed it for Super Mario Odyssey. See [Known limitations](limitations.md#controller-and-menu).
 7. **The controller has no Back or Menu button, or Android doesn't pass it on.** Choose another under **Controls**. Either way, **Open Menu** in the service's notification opens the menu by touch; expand the notification to see it.
 
 ## Captures don't show in ES-DE
