@@ -48,7 +48,7 @@ fun capCentring(font: Typeface): Float {
  * The window shrinks to stay clear of [fitInsets]: `WindowInsets.Type.ime()` keeps a text field above the
  * keyboard, which is what a resize soft-input mode would do if setting the insets didn't turn that off.
  */
-fun WindowManager.addFullScreen(view: View, format: Int, fitInsets: Int = 0) {
+fun WindowManager.addFullScreen(view: View, format: Int, fitInsets: Int = 0, alpha: Float = 1f) {
     addView(
         view,
         WindowManager.LayoutParams(
@@ -58,6 +58,7 @@ fun WindowManager.addFullScreen(view: View, format: Int, fitInsets: Int = 0) {
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             format,
         ).apply {
+            this.alpha = alpha
             // Cover the bars' area as well, instead of leaving the game showing there.
             fitInsetsTypes = fitInsets
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
@@ -245,17 +246,27 @@ class MenuOverlay(private val context: Context) {
 
     val isOpen get() = root != null
 
-    /** While set, menu windows are drawn invisible, under a document that opens over them; [reveal] shows them. */
+    /**
+     * While set, menu windows are added with a window alpha of 0, under a document that opens over them; [reveal] shows
+     * them. The window's alpha rather than the view's: Android leaves a window of alpha 0 out of the screen altogether,
+     * while a transparent view still has its window blended over the game, which shifts the game's brightness on the
+     * Nova until the document covers it.
+     */
     private var hidden = false
 
-    /** Draws the menu invisible until [reveal], so a document opening over it shows straight over the game. */
+    /** Adds the menu invisible until [reveal], so a document opening over it shows straight over the game. */
     fun hideUntilRevealed() {
         hidden = true
     }
 
     fun reveal() {
         hidden = false
-        root?.alpha = 1f
+        val view = root ?: return
+        val params = view.layoutParams as WindowManager.LayoutParams
+        if (params.alpha < 1f) {
+            params.alpha = 1f
+            wm.updateViewLayout(view, params)
+        }
     }
 
     /** Shows [items] with the cursor on [start]; with [alt], X calls it with the selected row and the help pill names it. */
@@ -425,8 +436,7 @@ class MenuOverlay(private val context: Context) {
                 if (event.action == KeyEvent.ACTION_DOWN) onKey(code, event.repeatCount > 0) else code in KEYS
             }
         }
-        if (hidden) view.alpha = 0f
-        wm.addFullScreen(view, PixelFormat.TRANSLUCENT)
+        wm.addFullScreen(view, PixelFormat.TRANSLUCENT, alpha = if (hidden) 0f else 1f)
         root = view
         // close() left the last window up for this one. It goes once this one's frame is on screen, or after a
         // quarter second if no frame is reported.
