@@ -47,18 +47,19 @@ fun capCentring(font: Typeface): Float {
  * Adds [view] as a focusable full-screen window over the game, with the system bars hidden, and focuses it.
  * The window shrinks to stay clear of [fitInsets]: `WindowInsets.Type.ime()` keeps a text field above the
  * keyboard, which is what a resize soft-input mode would do if setting the insets didn't turn that off.
+ * With [hidden], the window is invisible and takes no focus, so the game under it carries on as if it weren't there.
  */
-fun WindowManager.addFullScreen(view: View, format: Int, fitInsets: Int = 0, alpha: Float = 1f) {
+fun WindowManager.addFullScreen(view: View, format: Int, fitInsets: Int = 0, hidden: Boolean = false) {
     addView(
         view,
         WindowManager.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or if (hidden) WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE else 0,
             format,
         ).apply {
-            this.alpha = alpha
+            if (hidden) alpha = 0f
             // Cover the bars' area as well, instead of leaving the game showing there.
             fitInsetsTypes = fitInsets
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
@@ -247,10 +248,9 @@ class MenuOverlay(private val context: Context) {
     val isOpen get() = root != null
 
     /**
-     * While set, menu windows are added with a window alpha of 0, under a document that opens over them; [reveal] shows
-     * them. The window's alpha rather than the view's: Android leaves a window of alpha 0 out of the screen altogether,
-     * while a transparent view still has its window blended over the game, which shifts the game's brightness on the
-     * Nova until the document covers it.
+     * While set, menu windows are added invisible and unfocusable, under a document that opens over them; [reveal]
+     * shows them. Unfocusable because a game that loses focus may pause while it's still on screen: RetroArch then
+     * stops drawing its shader, and the game looks brighter until the document covers it.
      */
     private var hidden = false
 
@@ -265,6 +265,7 @@ class MenuOverlay(private val context: Context) {
         val params = view.layoutParams as WindowManager.LayoutParams
         if (params.alpha < 1f) {
             params.alpha = 1f
+            params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
             wm.updateViewLayout(view, params)
         }
     }
@@ -436,7 +437,7 @@ class MenuOverlay(private val context: Context) {
                 if (event.action == KeyEvent.ACTION_DOWN) onKey(code, event.repeatCount > 0) else code in KEYS
             }
         }
-        wm.addFullScreen(view, PixelFormat.TRANSLUCENT, alpha = if (hidden) 0f else 1f)
+        wm.addFullScreen(view, PixelFormat.TRANSLUCENT, hidden = hidden)
         root = view
         // close() left the last window up for this one. It goes once this one's frame is on screen, or after a
         // quarter second if no frame is reported.
