@@ -914,6 +914,21 @@ class ViewerOverlay(private val context: Context, private val prefs: Prefs) {
         }, names) {}
     }
 
+    /** Runs [action] once the open document's first frame is on screen, or after a quarter second if none is reported. */
+    fun onShown(action: () -> Unit) {
+        val view = root ?: return
+        var done = false
+        val once = Runnable {
+            if (!done) action()
+            done = true
+        }
+        view.post {
+            view.viewTreeObserver.registerFrameCommitCallback { view.post(once) }
+            view.invalidate()
+        }
+        view.postDelayed(once, 250)
+    }
+
     fun close() {
         key?.let { prefs.setPosition(it, position(), view()) }
         key = null

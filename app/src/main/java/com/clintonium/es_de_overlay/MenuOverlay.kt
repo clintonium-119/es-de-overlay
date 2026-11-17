@@ -245,6 +245,19 @@ class MenuOverlay(private val context: Context) {
 
     val isOpen get() = root != null
 
+    /** While set, menu windows are drawn invisible, under a document that opens over them; [reveal] shows them. */
+    private var hidden = false
+
+    /** Draws the menu invisible until [reveal], so a document opening over it shows straight over the game. */
+    fun hideUntilRevealed() {
+        hidden = true
+    }
+
+    fun reveal() {
+        hidden = false
+        root?.alpha = 1f
+    }
+
     /** Shows [items] with the cursor on [start]; with [alt], X calls it with the selected row and the help pill names it. */
     fun show(
         items: List<String>,
@@ -412,6 +425,7 @@ class MenuOverlay(private val context: Context) {
                 if (event.action == KeyEvent.ACTION_DOWN) onKey(code, event.repeatCount > 0) else code in KEYS
             }
         }
+        if (hidden) view.alpha = 0f
         wm.addFullScreen(view, PixelFormat.TRANSLUCENT)
         root = view
         // close() left the last window up for this one. It goes once this one's frame is on screen, or after a
@@ -457,6 +471,7 @@ class MenuOverlay(private val context: Context) {
     /** Closes the menu for good, dropping its [title] and [art]. */
     fun release() {
         close()
+        hidden = false
         title = ""
         art?.recycle()
         art = null

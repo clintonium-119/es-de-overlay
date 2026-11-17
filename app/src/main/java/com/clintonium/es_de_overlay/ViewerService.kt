@@ -47,7 +47,7 @@ class ViewerService : Service() {
             uri != null && name != null && key != null -> show(name) {
                 val theme = theme(systemOf(key))
                 viewer.open(uri, name, key, theme, { video(it, theme) }) { stopSelf() }
-                opened(key)
+                viewer.onShown { opened(key) }
             }
             else -> stopSelf()
         }
@@ -67,11 +67,14 @@ class ViewerService : Service() {
                 startService(Intent(this, HelperService::class.java).setAction(HelperService.ACTION_GUIDE_SAVED))
                 stopSelf()
             }
-            opened(path)
+            viewer.onShown { opened(path) }
         }
     }
 
-    /** Tells the service the viewer opened the document at [key], so the menu can open straight into it next time. */
+    /**
+     * Tells the service the viewer has the document at [key] on screen, so the menu can open straight into it next
+     * time, and a menu left invisible under it can show.
+     */
     private fun opened(key: String) {
         startService(Intent(this, HelperService::class.java).setAction(HelperService.ACTION_DOC_OPENED).putExtra(HelperService.EXTRA_KEY, key))
     }
