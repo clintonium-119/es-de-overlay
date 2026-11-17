@@ -212,6 +212,9 @@ class HelperService : Service() {
      */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_OPEN_FAILED) {
+            // A remembered document that no longer opens is forgotten, so the next press opens the main menu.
+            val key = intent.getStringExtra(EXTRA_KEY)
+            currentGame()?.let { g -> if (key != null && prefs.lastDoc(g) == key) prefs.setLastDoc(g, null) }
             menu.reveal()
             menu.error("Couldn't open ${intent.getStringExtra(EXTRA_NAME)}" + (intent.getStringExtra(EXTRA_REASON)?.let { ": $it" } ?: ""))
             return START_STICKY
@@ -839,7 +842,10 @@ class HelperService : Service() {
     companion object {
         const val EXTRA_CODE = "code"
         const val EXTRA_DATA = "data"
-        /** From the viewer's process: opening [EXTRA_NAME] failed, for [EXTRA_REASON] if given, which the menu underneath shows. */
+        /**
+         * From the viewer's process: opening [EXTRA_NAME] (the document at [EXTRA_KEY], if it was one) failed, for
+         * [EXTRA_REASON] if given, which the menu underneath shows.
+         */
         const val ACTION_OPEN_FAILED = "com.clintonium.es_de_overlay.OPEN_FAILED"
         /** From the viewer's process: the viewer on a guide just saved from the browser has closed, so list the guides again. */
         const val ACTION_GUIDE_SAVED = "com.clintonium.es_de_overlay.GUIDE_SAVED"

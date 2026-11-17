@@ -85,7 +85,11 @@ class Prefs(private val context: Context) {
     /** The key (path below the ES-DE folder) of the guide, map or manual last opened for [game], or null. */
     fun lastDoc(game: GameRef) = lastDocs.getString("${game.system}/${game.romRelativePath}", null)
 
-    fun setLastDoc(game: GameRef, key: String) = lastDocs.edit { putString("${game.system}/${game.romRelativePath}", key) }
+    /** Remembers [key] as [game]'s last opened document, or forgets it when null. */
+    fun setLastDoc(game: GameRef, key: String?) = lastDocs.edit {
+        val name = "${game.system}/${game.romRelativePath}"
+        if (key == null) remove(name) else putString(name, key)
+    }
 
     fun esdeIsHome() = context.packageManager.resolveActivity(
         Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
