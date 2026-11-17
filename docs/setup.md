@@ -83,9 +83,10 @@ ES-DE keeps the screen on while it's in front, even behind its screensaver, so a
 - Under **Quitting games**, **Confirm before quitting** (off by default) makes Quit Game ask first, with **Keep Playing** selected.
 - Also under **Quitting games**, set up [Shizuku](shizuku.md), then tap **Allow** on the **Shizuku** row. With Shizuku, Quit Game ends a game without showing its App Info page, and you can turn on **Quit games left with Home**.
 
-### Manage Guides
+### Guides
 
-Under **Guides**, once the ES-DE folder is set, **Saved guides → Manage Guides** lists the guides you've saved, by game, and deletes the ones you no longer need. See [Manage Guides](guides.md#manage-guides).
+- Under **Guides**, once the ES-DE folder is set, **Open the menu at the last guide** (on by default) has the menu button open straight into the guide, map or manual you last opened for the game. See [Guides](guides.md).
+- Also under **Guides**, **Saved guides → Manage Guides** lists the guides you've saved, by game, and deletes the ones you no longer need. See [Manage Guides](guides.md#manage-guides).
 
 ## Updating and uninstalling
 

@@ -47,6 +47,7 @@ class ViewerService : Service() {
             uri != null && name != null && key != null -> show(name) {
                 val theme = theme(systemOf(key))
                 viewer.open(uri, name, key, theme, { video(it, theme) }) { stopSelf() }
+                opened(key)
             }
             else -> stopSelf()
         }
@@ -66,7 +67,13 @@ class ViewerService : Service() {
                 startService(Intent(this, HelperService::class.java).setAction(HelperService.ACTION_GUIDE_SAVED))
                 stopSelf()
             }
+            opened(path)
         }
+    }
+
+    /** Tells the service the viewer opened the document at [key], so the menu can open straight into it next time. */
+    private fun opened(key: String) {
+        startService(Intent(this, HelperService::class.java).setAction(HelperService.ACTION_DOC_OPENED).putExtra(HelperService.EXTRA_KEY, key))
     }
 
     /** Plays the YouTube page [url] in the browser, over the guide whose link it was; closing it shows the guide again. */

@@ -19,6 +19,7 @@ Launch a game from ES-DE and press **Back** or **Menu** on your controller: the 
 - Use the D-pad to move, **A** to open, and **B** to close the menu and go back to the game. Up on the first row goes to the last, and Down on the last goes to the first. A held D-pad stops at the end. If ES-DE's **Swap the A/B and X/Y buttons** setting is on, the app swaps them too. The screenshots here were taken with it on, so their hints read `B OPEN` and `A BACK`.
 - **B** in any screen you opened from the menu takes you back to the row that opened it. The guide browser is the exception, because you use it by touch.
 - The menu button again closes everything the menu has open, a guide or the browser included, and takes you back to the game.
+- Once you've opened a guide, map or manual for a game, the menu button opens straight into it, at your place, and **B** goes back to the menu. See [Guides](guides.md).
 - Pressing Home closes the menu and anything open over it, and takes you to your Home app. The game keeps running unless **Quit games left with Home** is on (see [Shizuku](shizuku.md)), which works only when ES-DE is your Home app.
 - Opening the menu pauses RetroArch on the Nova. Other emulators and Android games may keep running behind it.
 

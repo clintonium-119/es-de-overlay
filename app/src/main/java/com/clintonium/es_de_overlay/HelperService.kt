@@ -219,6 +219,11 @@ class HelperService : Service() {
             if (capture == null && !starting && !menu.isOpen && opening == null) onBack()
             return START_STICKY
         }
+        if (intent?.action == ACTION_DOC_OPENED) {
+            val key = intent.getStringExtra(EXTRA_KEY)
+            currentGame()?.let { g -> key?.let { prefs.setLastDoc(g, it) } }
+            return START_STICKY
+        }
         if (intent?.action == ACTION_GUIDE_SAVED) {
             val g = currentGame()
             val name = launch?.name
@@ -352,8 +357,22 @@ class HelperService : Service() {
                 menu.art = art
                 menu.cropArt = prefs.menuImageCrops
                 menu.theme = theme
-                openMenu(g, name, manual, guides, info)
-                Log.i(TAG, "menu: open in ${SystemClock.uptimeMillis() - started} ms")
+                // The guide or manual last opened for the game, if set to and it's still there, over the list it opens
+                // from, so B goes back as if it had been picked there.
+                val last = prefs.lastDoc(g)?.takeIf { prefs.reopenLastDoc }
+                val guide = guides.indexOfFirst { it.key == last }
+                val reopened = when {
+                    // Guides is the row after Resume.
+                    guide >= 0 -> guides[guide].also { guidesList(g, name, guides, { openMenu(g, name, manual, guides, info, start = 1) }, guide) }
+                    // Manual is the row after Guides or Find Guides, which a game with a manual always has.
+                    manual != null && manual.key == last -> manual.also { openMenu(g, name, manual, guides, info, start = 2) }
+                    else -> {
+                        openMenu(g, name, manual, guides, info)
+                        null
+                    }
+                }
+                reopened?.let(::view)
+                Log.i(TAG, "menu: open in ${SystemClock.uptimeMillis() - started} ms" + (reopened?.let { ", reopening ${it.name}" } ?: ""))
             }
         }
     }
@@ -813,6 +832,9 @@ class HelperService : Service() {
         const val ACTION_OPEN_FAILED = "com.clintonium.es_de_overlay.OPEN_FAILED"
         /** From the viewer's process: the viewer on a guide just saved from the browser has closed, so list the guides again. */
         const val ACTION_GUIDE_SAVED = "com.clintonium.es_de_overlay.GUIDE_SAVED"
+        /** From the viewer's process: it has opened the document at [EXTRA_KEY], which becomes the game's last opened. */
+        const val ACTION_DOC_OPENED = "com.clintonium.es_de_overlay.DOC_OPENED"
+        const val EXTRA_KEY = "key"
         const val EXTRA_NAME = "name"
         const val EXTRA_REASON = "reason"
         /** Open Menu on the service's notification. */

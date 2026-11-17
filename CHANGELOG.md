@@ -4,6 +4,8 @@ What changed in each version of ES-DE Overlay. A release's notes on GitHub are i
 
 ## Unreleased
 
+- The menu button opens straight into the guide, map or manual you last opened for the game, where you left it. **B** goes back to the menu. Turn it off with **Open the menu at the last guide** under **Guides** in settings.
+
 ## 1.3.1 - 2026-11-16
 
 - The menu's lists wrap: Up on the first row goes to the last, and Down on the last goes to the first, as in ES-DE's gamelist. A held D-pad stops at the end.
