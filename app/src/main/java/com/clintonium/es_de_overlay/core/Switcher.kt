@@ -51,6 +51,30 @@ fun recentGames(lines: Sequence<String>, max: Int = 50): List<RecentGame> {
 fun selectedRom(line: String): String? =
     line.substringAfter("Scripting::fireEvent(): game-select \"", "").substringBefore("\" \"").ifEmpty { null }
 
+/** A setting in ES-DE's es_settings.xml the switcher needs, by its name there. */
+enum class SwitcherNeed(val setting: String) {
+    EVENT_SCRIPTS("CustomEventScripts"),
+    BROWSING_EVENTS("CustomEventScriptsBrowsing"),
+    DEBUG_MODE("DebugMode"),
+    LAST_PLAYED("CollectionSystemsAuto"),
+    QUICK_SYSTEM_SELECT("QuickSystemSelect"),
+}
+
+/**
+ * What [settingsXml], ES-DE's es_settings.xml, still lacks for the switcher: the three settings that make ES-DE log
+ * each game it selects, the Last Played collection among its automatic ones, and a Quick System Select that isn't
+ * disabled, so [Step.NEXT_SYSTEM] has a press. Missing settings count as off, but a missing Quick System Select keeps
+ * ES-DE's default, which isn't disabled.
+ */
+fun switcherNeeds(settingsXml: String): List<SwitcherNeed> = SwitcherNeed.entries.filterNot {
+    val value = esSetting(settingsXml, it.setting)
+    when (it) {
+        SwitcherNeed.LAST_PLAYED -> value?.split(',')?.contains("recent") == true
+        SwitcherNeed.QUICK_SYSTEM_SELECT -> value != "disabled"
+        else -> value == "true"
+    }
+}
+
 /** One press [Steering] asks for, or how it ended. */
 enum class Step { DOWN, UP, NEXT_SYSTEM, LAUNCH, FAIL }
 

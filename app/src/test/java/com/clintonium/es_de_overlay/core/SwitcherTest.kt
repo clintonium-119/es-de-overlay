@@ -49,6 +49,49 @@ class SwitcherTest {
         assertNull(selectedRom("""Nov 17 22:05:45 Debug:  Scripting::fireEvent(): game-end "/storage/ROMs/snes/Super\ Mario\ World.zip" "Super Mario World" "snes" "x""""))
     }
 
+    /** The Nova's es_settings.xml as read on 2026-11-18, browsing events off. */
+    private val nova = """
+        <bool name="CustomEventScripts" value="true" />
+        <bool name="CustomEventScriptsBrowsing" value="false" />
+        <bool name="DebugMode" value="true" />
+        <bool name="NavigationSounds" value="false" />
+        <string name="CollectionSystemsAuto" value="recent" />
+        <string name="QuickSystemSelect" value="leftrightshoulders" />
+        <string name="SaveGamelistsMode" value="always" />
+    """.trimIndent()
+    private val ready = nova.replace("""Browsing" value="false""", """Browsing" value="true""")
+
+    @Test
+    fun `the Nova's settings lack only the browsing events and with them lack nothing`() {
+        assertEquals(listOf(SwitcherNeed.BROWSING_EVENTS), switcherNeeds(nova))
+        assertEquals(emptyList<SwitcherNeed>(), switcherNeeds(ready))
+    }
+
+    @Test
+    fun `each setting off or absent is the one need reported`() {
+        for (need in SwitcherNeed.entries - SwitcherNeed.QUICK_SYSTEM_SELECT) {
+            val line = ready.lines().single { """name="${need.setting}"""" in it }
+            assertEquals(listOf(need), switcherNeeds(ready.replace(line, "")))
+            if ("<bool" in line) assertEquals(listOf(need), switcherNeeds(ready.replace(line, line.replace("true", "false"))))
+        }
+    }
+
+    @Test
+    fun `Last Played counts only as one of the automatic collections`() {
+        val with = { names: String -> ready.replace("""value="recent"""", """value="$names"""") }
+        assertEquals(emptyList<SwitcherNeed>(), switcherNeeds(with("favorites,recent")))
+        assertEquals(listOf(SwitcherNeed.LAST_PLAYED), switcherNeeds(with("favorites")))
+        assertEquals(listOf(SwitcherNeed.LAST_PLAYED), switcherNeeds(with("")))
+    }
+
+    @Test
+    fun `Quick System Select is a need only when disabled`() {
+        val with = { mode: String -> ready.replace("leftrightshoulders", mode) }
+        assertEquals(listOf(SwitcherNeed.QUICK_SYSTEM_SELECT), switcherNeeds(with("disabled")))
+        assertEquals(emptyList<SwitcherNeed>(), switcherNeeds(with("shoulders")))
+        assertEquals(emptyList<SwitcherNeed>(), switcherNeeds(ready))
+    }
+
     private val recents = listOf("/snes/Super Mario World.zip", "/gbc/Shantae.zip", "/gb/Dr. Mario.zip", "/snes/02) Hacks/Easyland.zip")
 
     /** ES-DE as [Steering] sees it: a ring of game lists, each with its own cursor, logging the entry a press lands on. */

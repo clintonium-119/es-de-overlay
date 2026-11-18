@@ -44,6 +44,7 @@ import com.clintonium.es_de_overlay.core.RECENT_TAGS
 import com.clintonium.es_de_overlay.core.RecentGame
 import com.clintonium.es_de_overlay.core.Steering
 import com.clintonium.es_de_overlay.core.Step
+import com.clintonium.es_de_overlay.core.SwitcherNeed
 import com.clintonium.es_de_overlay.core.gamelistInfo
 import com.clintonium.es_de_overlay.core.guideEntries
 import com.clintonium.es_de_overlay.core.guidePath
@@ -54,6 +55,7 @@ import com.clintonium.es_de_overlay.core.recentGames
 import com.clintonium.es_de_overlay.core.resolveGame
 import com.clintonium.es_de_overlay.core.selectedRom
 import com.clintonium.es_de_overlay.core.startUrl
+import com.clintonium.es_de_overlay.core.switcherNeeds
 import com.clintonium.es_de_overlay.core.webSearchUrl
 import java.io.File
 import java.io.IOException
@@ -196,6 +198,8 @@ class HelperService : Service() {
     @Volatile private var recent: Pair<List<RecentGame>, List<Bitmap?>>? = null
     /** Set when another app comes to the front: ES-DE may have played a game since [recent] was read. */
     @Volatile private var recentStale = true
+    /** What ES-DE's settings lacked for the switcher when last read; null before they're read or when they can't be. */
+    @Volatile private var missing: List<SwitcherNeed>? = null
     /** Main thread: the switcher is up over ES-DE, which a poll then mustn't close. */
     private var switching = false
     /** Main thread: the switcher is steering ES-DE to the picked game. */
@@ -307,10 +311,18 @@ class HelperService : Service() {
             foreground = fg
             recentStale = true
             Log.i(TAG, "foreground: $fg (current game: ${currentGame()})")
-        } else if (recentStale && switcherReady(fg)) {
-            // A poll after ES-DE came to the front, by when it has written the game just played to its gamelist.
-            runCatching { recent = loadRecent() }.onFailure { Log.w(TAG, "switcher: reading the recent games failed", it) }
-            recentStale = false
+        } else if (recentStale && switcherOn(fg)) {
+            // A poll after ES-DE came to the front, by when it has written the game just played to its gamelist. While
+            // ES-DE's settings lack something every poll reads them again, as the user may be changing them in ES-DE.
+            val needs = runCatching {
+                contentResolver.openInputStream(treeChild(prefs.esdeTree!!, "settings/es_settings.xml"))!!.use { switcherNeeds(it.reader().readText()) }
+            }.onFailure { Log.w(TAG, "switcher: reading ES-DE's settings failed", it) }.getOrNull()
+            if (needs != missing) Log.i(TAG, "switcher: ES-DE's settings lack ${needs ?: "(unread)"}")
+            missing = needs
+            if (needs?.isEmpty() == true) {
+                runCatching { recent = loadRecent() }.onFailure { Log.w(TAG, "switcher: reading the recent games failed", it) }
+                recentStale = false
+            }
         }
         main.post { onForeground(fg) }
     }
@@ -420,11 +432,11 @@ class HelperService : Service() {
         }
     }
 
-    /**
-     * Whether the switcher can open: ES-DE is the app in front ([fg]), its folders are set, and Shizuku can send it
-     * presses. ponytail: a prototype with no setting of its own; add one, off by default, before it ships.
-     */
-    private fun switcherReady(fg: String?) = fg == ESDE && prefs.esdeTree != null && prefs.romsTree != null && ShizukuShell.ready
+    /** Whether the switcher is turned on over [fg]: it's ES-DE, the switch is on, its folders are set and Shizuku can send it presses. */
+    private fun switcherOn(fg: String?) = fg == ESDE && prefs.switcher && prefs.esdeTree != null && prefs.romsTree != null && ShizukuShell.ready
+
+    /** Whether the switcher can open over [fg]: [switcherOn], and ES-DE's settings lacked nothing when last read. */
+    private fun switcherReady(fg: String?) = switcherOn(fg) && missing?.isEmpty() == true
 
     /**
      * io thread: ES-DE's Last Played list from its gamelists, searched in one go through Shizuku (parsing them all

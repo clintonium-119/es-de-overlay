@@ -57,9 +57,13 @@ fun screensaverEvent(line: String): Boolean? = when {
     else -> null
 }
 
+/** The value of the setting [name] in ES-DE's es_settings.xml, or null when it isn't there. */
+fun esSetting(settingsXml: String, name: String) =
+    Regex("""name="$name"\s+value="([^"]*)"""").find(settingsXml)?.groupValues?.get(1)
+
 /** Whether ES-DE's es_settings.xml has both settings on that make it log its screensaver events. */
 fun reportsScreensaver(settingsXml: String) =
-    listOf("CustomEventScripts", "DebugMode").all { Regex("""name="$it"\s+value="true"""").containsMatchIn(settingsXml) }
+    listOf("CustomEventScripts", "DebugMode").all { esSetting(settingsXml, it) == "true" }
 
 /**
  * The ROM path relative to `<ROMs>/<system>/`, if any launch line names it. ES-DE only logs it for

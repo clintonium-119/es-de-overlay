@@ -77,6 +77,10 @@ class Prefs(private val context: Context) {
     var quitOnHome: Boolean
         get() = sp.getBoolean("quitOnHome", false)
         set(v) = sp.edit { putBoolean("quitOnHome", v) }
+    /** Whether the menu button over ES-DE opens the game switcher, once everything it needs is there. */
+    var switcher: Boolean
+        get() = sp.getBoolean("switcher", false)
+        set(v) = sp.edit { putBoolean("switcher", v) }
     /** Whether the menu opens straight into the guide, map or manual last opened for the game. */
     var reopenLastDoc: Boolean
         get() = sp.getBoolean("reopenLastDoc", true)

@@ -54,8 +54,10 @@ import androidx.compose.ui.unit.dp
 import com.clintonium.es_de_overlay.core.LookSource
 import com.clintonium.es_de_overlay.core.Overwrite
 import com.clintonium.es_de_overlay.core.RESERVED_KEYS
+import com.clintonium.es_de_overlay.core.SwitcherNeed
 import com.clintonium.es_de_overlay.core.mediaDirectory
 import com.clintonium.es_de_overlay.core.reportsScreensaver
+import com.clintonium.es_de_overlay.core.switcherNeeds
 import rikka.shizuku.Shizuku
 
 class SettingsActivity : ComponentActivity() {
@@ -161,8 +163,20 @@ class SettingsActivity : ComponentActivity() {
         var confirmQuit by remember { mutableStateOf(prefs.confirmQuit) }
         var reopenLastDoc by remember { mutableStateOf(prefs.reopenLastDoc) }
         var systemScreenshots by remember { mutableStateOf(prefs.systemScreenshots) }
+        var switcher by remember { mutableStateOf(prefs.switcher) }
         val shizuku = remember(tick) { ShizukuShell.state(this) }
-        val screensaverReported = remember(tick, esde) { esde?.let(::esdeReportsScreensaver) }
+        // Null when there's no settings file to read, which the folder's own warning covers.
+        val esdeSettings = remember(tick, esde) { esde?.let(::esdeSettings) }
+        val screensaverReported = esdeSettings?.let(::reportsScreensaver)
+        val switcherNeeds = esdeSettings?.let(::switcherNeeds)
+        val openShizuku: () -> Unit = {
+            // After "Deny and don't ask again", Shizuku's own app list is the only place left to allow it.
+            if (shizuku == ShizukuShell.State.NOT_ALLOWED && !Shizuku.shouldShowRequestPermissionRationale()) {
+                ShizukuShell.requestPermission()
+            } else {
+                packageManager.getLaunchIntentForPackage(ShizukuShell.PACKAGE)?.let(::startActivity)
+            }
+        }
         // No game, so no system: the theme's own theme.xml.
         val lookSource = remember(tick, esde, mediaType, menuImageType) { ThemeLook(this, prefs).current("", prefs.menuImage).look.source }
 
@@ -430,14 +444,8 @@ class SettingsActivity : ComponentActivity() {
                 },
                 "Lets Quit Game end a game without opening its App Info page, and is needed to quit games left with " +
                     "Home. Install Shizuku, or a fork that starts on boot such as Shizuku-Next.",
-            ) {
-                // After "Deny and don't ask again", Shizuku's own app list is the only place left to allow it.
-                if (shizuku == ShizukuShell.State.NOT_ALLOWED && !Shizuku.shouldShowRequestPermissionRationale()) {
-                    ShizukuShell.requestPermission()
-                } else {
-                    packageManager.getLaunchIntentForPackage(ShizukuShell.PACKAGE)?.let(::startActivity)
-                }
-            }
+                openShizuku,
+            )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Quit games left with Home")
@@ -471,6 +479,38 @@ class SettingsActivity : ComponentActivity() {
                 }
                 Setting("Saved guides", "Browse guides by game and delete the ones you no longer need", "Manage Guides") {
                     startActivity(Intent(this@SettingsActivity, GuidesActivity::class.java))
+                }
+            }
+            Section("Game Switcher")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Switch games from ES-DE")
+                    Text(
+                        "The menu button in ES-DE lists the games you played last; pick one and ES-DE starts it. It " +
+                            "opens once everything below is ticked, and ES-DE keeps its button until then.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = switcher, onCheckedChange = { switcher = it; prefs.switcher = it })
+            }
+            Need("Shizuku, to send ES-DE its button presses", shizuku == ShizukuShell.State.READY, "Tap to set it up.", openShizuku)
+            if (switcherNeeds == null) {
+                Need("ES-DE's settings", false, "They can't be read. Set the ES-DE folder above.") { pickEsde.launch(null) }
+            } else {
+                for (need in SwitcherNeed.entries) {
+                    val (label, how) = when (need) {
+                        SwitcherNeed.EVENT_SCRIPTS -> "Enable Custom Event Scripts, so ES-DE reports what it does" to
+                            "In ES-DE, turn it on under Other Settings."
+                        SwitcherNeed.BROWSING_EVENTS -> "Browsing Custom Events, so it reports the game it's on" to
+                            "In ES-DE, turn it on under Other Settings."
+                        SwitcherNeed.DEBUG_MODE -> "Debug Mode, so those reports reach its log" to "In ES-DE, turn it on under Other Settings."
+                        SwitcherNeed.LAST_PLAYED -> "Last Played, the list the switcher shows" to
+                            "In ES-DE, tick Last Played in Automatic Game Collections under Game Collection Settings."
+                        SwitcherNeed.QUICK_SYSTEM_SELECT -> "Quick System Select, to change systems from a game list" to
+                            "In ES-DE, set it to anything but Disabled under UI Settings."
+                    }
+                    Need(label, need !in switcherNeeds, how)
                 }
             }
             Section("Permissions")
@@ -563,6 +603,20 @@ class SettingsActivity : ComponentActivity() {
         Text(title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
     }
 
+    /**
+     * One thing a feature needs, ticked when [ready], else marked not ready with [how] to fix it; a tap runs [fix].
+     * The screen reads [ready] and passes it in: Compose skips a row whose arguments haven't changed.
+     */
+    @Composable
+    private fun Need(label: String, ready: Boolean, how: String, fix: (() -> Unit)? = null) {
+        Text(
+            (if (ready) "✓ " else "✗ Not ready: ") + label,
+            Modifier.fillMaxWidth().clickable(enabled = !ready && fix != null) { fix?.invoke() },
+            color = if (ready) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+        )
+        if (!ready) Text(how, style = MaterialTheme.typography.bodySmall)
+    }
+
     /** A row with a button labelled [action], or none when [action] is null. */
     @Composable
     private fun Setting(title: String, status: String, action: String?, description: String? = null, onClick: () -> Unit) {
@@ -643,9 +697,8 @@ class SettingsActivity : ComponentActivity() {
         return "ES-DE shows media from $media, so captures and guides saved in this folder won't show in ES-DE"
     }
 
-    // Null when there's no settings file to read, which the folder's own warning covers.
-    private fun esdeReportsScreensaver(esde: Uri) = runCatching {
-        contentResolver.openInputStream(treeChild(esde, "settings/es_settings.xml"))!!.use { reportsScreensaver(it.reader().readText()) }
+    private fun esdeSettings(esde: Uri) = runCatching {
+        contentResolver.openInputStream(treeChild(esde, "settings/es_settings.xml"))!!.use { it.reader().readText() }
     }.getOrNull()
 
     // Skipped while the ES-DE folder has no gamelists, which its own warning already covers.
