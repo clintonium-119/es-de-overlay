@@ -21,6 +21,7 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
@@ -270,20 +271,56 @@ class MenuOverlay(private val context: Context) {
         }
     }
 
-    /** Shows [items] with the cursor on [start]; with [alt], X calls it with the selected row and the help pill names it. */
+    /** Set by [yieldFocus]: the window on screen takes no more keys. */
+    private var yielded = false
+
+    /**
+     * Leaves the menu on screen but gives up the keys, so presses reach the app underneath; [then] runs once Android
+     * has taken the keys away, or after a quarter second if it never says so. From the call on, the menu ignores any
+     * key still sent to it: a press meant for the app underneath would otherwise move the list.
+     */
+    fun yieldFocus(then: () -> Unit) {
+        val view = root ?: return then()
+        yielded = true
+        val params = view.layoutParams as WindowManager.LayoutParams
+        params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        wm.updateViewLayout(view, params)
+        var waiting = true
+        val done = Runnable {
+            if (waiting) {
+                waiting = false
+                then()
+            }
+        }
+        if (!view.hasWindowFocus()) return done.run()
+        view.viewTreeObserver.addOnWindowFocusChangeListener(object : ViewTreeObserver.OnWindowFocusChangeListener {
+            override fun onWindowFocusChanged(hasFocus: Boolean) {
+                if (hasFocus) return
+                view.viewTreeObserver.removeOnWindowFocusChangeListener(this)
+                done.run()
+            }
+        })
+        view.postDelayed(done, 250)
+    }
+
+    /**
+     * Shows [items] with the cursor on [start]; with [alt], X calls it with the selected row and the help pill names
+     * it. With [arts], the art box shows the selected row's image.
+     */
     fun show(
         items: List<String>,
         onPick: (Int) -> Unit,
         onClose: () -> Unit,
         alt: Pair<String, (Int) -> Unit>? = null,
         start: Int = 0,
+        arts: List<Bitmap?>? = null,
     ) {
         close()
-        reshow = { show(items, onPick, onClose, alt, start) }
+        reshow = { show(items, onPick, onClose, alt, start, arts) }
         val list = PillList(context, theme.look, theme.font, screenW, screenH, items, start)
         val rows = list.rows
         val help = listOfNotNull("A" to "Select", alt?.let { "X" to it.first }, "B" to "Back")
-        open(ScrollView(context).apply { addView(list.view) }, help) { code, held ->
+        open(ScrollView(context).apply { addView(list.view) }, help, arts?.let { { it.getOrNull(list.selected) } }) { code, held ->
             when (code) {
                 // A press past an end goes round to the other, as in ES-DE's gamelist; a held D-pad stops at the end.
                 KeyEvent.KEYCODE_DPAD_UP -> list.move(-1, wrap = !held)
@@ -352,8 +389,14 @@ class MenuOverlay(private val context: Context) {
     /**
      * Adds the menu window: the [title] above [content] in the list column, the art box beside it and a help pill of
      * [help]. [onKey] gets each key press, and whether it's a repeat from a held key, and returns whether it used it.
+     * With [rowArt], the art box shows that image, read again after every key, in place of [art].
      */
-    private fun open(content: ScrollView, help: List<Pair<String, String>>, onKey: (Int, Boolean) -> Boolean) {
+    private fun open(
+        content: ScrollView,
+        help: List<Pair<String, String>>,
+        rowArt: (() -> Bitmap?)? = null,
+        onKey: (Int, Boolean) -> Boolean,
+    ) {
         val look = theme.look
         val font = theme.font
         val textPx = screenH * look.fontSize
@@ -380,8 +423,10 @@ class MenuOverlay(private val context: Context) {
             addView(titleRow)
             addView(content, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         }
-        val image = art
-        val artBox = FrameLayout(context).apply {
+        val artBox = FrameLayout(context)
+        fun fillArt() = artBox.apply {
+            val image = if (rowArt != null) rowArt() else art
+            removeAllViews()
             // The theme's art corner radius, else minUI's; the screenshot is clipped to this background's outline.
             background = GradientDrawable().apply {
                 cornerRadius = screenW * (look.artCornerRadius ?: 0.0078125f)
@@ -407,6 +452,7 @@ class MenuOverlay(private val context: Context) {
                 )
             }
         }
+        fillArt()
         val view = FrameLayout(context).apply {
             setBackgroundColor(look.background)
             // ES-DE's gamelist margins: 5% of the width at the sides, 7% of the height above, 6% below.
@@ -429,16 +475,19 @@ class MenuOverlay(private val context: Context) {
             isFocusable = true
             isFocusableInTouchMode = true
             setOnKeyListener { _, sent, event ->
+                if (yielded) return@setOnKeyListener true
                 val code = theme.button(sent, event.device?.name)
                 if (BuildConfig.DEBUG && event.action == KeyEvent.ACTION_DOWN) {
                     val swapped = if (code != sent) " as ${KeyEvent.keyCodeToString(code)}" else ""
                     Log.d(TAG, "key delivered ${SystemClock.uptimeMillis() - event.eventTime} ms: ${KeyEvent.keyCodeToString(sent)}$swapped")
                 }
-                if (event.action == KeyEvent.ACTION_DOWN) onKey(code, event.repeatCount > 0) else code in KEYS
+                if (event.action == KeyEvent.ACTION_DOWN) onKey(code, event.repeatCount > 0).also { if (rowArt != null && root === this) fillArt() }
+                else code in KEYS
             }
         }
         wm.addFullScreen(view, PixelFormat.TRANSLUCENT, hidden = hidden)
         root = view
+        yielded = false
         // close() left the last window up for this one. It goes once this one's frame is on screen, or after a
         // quarter second if no frame is reported.
         outgoing?.let { old ->

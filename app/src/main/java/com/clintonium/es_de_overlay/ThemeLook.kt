@@ -140,7 +140,7 @@ class ThemeLook(private val context: Context, private val prefs: Prefs) {
     // that theme's comes through Shizuku.
     private fun rasterColor(files: (String) -> InputStream?, theme: String, path: String): Int? {
         val bytes = runCatching { files(path)?.use { it.readBytes() } }.getOrNull()
-            ?: (if (ShizukuShell.ready) ShizukuShell.output("cat ${quote("$APP_THEMES/$theme/$path")}") else null)
+            ?: (if (ShizukuShell.ready) ShizukuShell.output("cat ${ShizukuShell.quote("$APP_THEMES/$theme/$path")}") else null)
             ?: return null
         val size = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, size)
@@ -205,7 +205,7 @@ class ThemeLook(private val context: Context, private val prefs: Prefs) {
     // their paths, sizes and times, into copies/<theme>; other themes' copies go.
     private fun copy(theme: String, copies: File) {
         val started = SystemClock.uptimeMillis()
-        val files = "cd ${quote("$APP_THEMES/$theme")} && find . \\( -name '*.xml' -o -name '*.ttf' -o -name '*.otf' -o -name '*.svg' \\)"
+        val files = "cd ${ShizukuShell.quote("$APP_THEMES/$theme")} && find . \\( -name '*.xml' -o -name '*.ttf' -o -name '*.otf' -o -name '*.svg' \\)"
         val signature = ShizukuShell.output("$files -exec stat -c '%Y %s %n' {} + | md5sum")?.decodeToString()?.trim() ?: return
         val copy = File(copies, theme)
         if (File(copy, SIGNATURE).takeIf { it.isFile }?.readText() == signature) {
@@ -249,6 +249,5 @@ class ThemeLook(private val context: Context, private val prefs: Prefs) {
         private fun isFolderName(theme: String) = theme.isNotEmpty() && '/' !in theme && theme != "." && theme != ".."
 
         // [s] as one shell word.
-        private fun quote(s: String) = "'" + s.replace("'", "'\\''") + "'"
     }
 }

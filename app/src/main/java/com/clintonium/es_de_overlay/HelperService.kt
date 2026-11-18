@@ -28,6 +28,7 @@ import android.os.SystemClock
 import android.provider.DocumentsContract
 import android.util.Log
 import android.view.Display
+import android.view.KeyEvent
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.compose.runtime.getValue
@@ -39,13 +40,19 @@ import com.clintonium.es_de_overlay.core.GuideSite
 import com.clintonium.es_de_overlay.core.Launch
 import com.clintonium.es_de_overlay.core.LeaveWatch
 import com.clintonium.es_de_overlay.core.Overwrite
+import com.clintonium.es_de_overlay.core.RECENT_TAGS
+import com.clintonium.es_de_overlay.core.RecentGame
+import com.clintonium.es_de_overlay.core.Steering
+import com.clintonium.es_de_overlay.core.Step
 import com.clintonium.es_de_overlay.core.gamelistInfo
 import com.clintonium.es_de_overlay.core.guideEntries
 import com.clintonium.es_de_overlay.core.guidePath
 import com.clintonium.es_de_overlay.core.manualPath
 import com.clintonium.es_de_overlay.core.mediaPath
 import com.clintonium.es_de_overlay.core.nextLaunch
+import com.clintonium.es_de_overlay.core.recentGames
 import com.clintonium.es_de_overlay.core.resolveGame
+import com.clintonium.es_de_overlay.core.selectedRom
 import com.clintonium.es_de_overlay.core.startUrl
 import com.clintonium.es_de_overlay.core.webSearchUrl
 import java.io.File
@@ -58,6 +65,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 const val TAG = "ESDEShot"
+/** How many of ES-DE's Last Played games the switcher lists: a screenful. */
+private const val SWITCHER_ROWS = 10
 const val ESDE = "org.es_de.frontend"
 private const val CHANNEL = "status"
 private const val ONGOING_ID = 1
@@ -183,6 +192,15 @@ class HelperService : Service() {
     // The io thread's poll, and the main thread on Back.
     private val front = ForegroundApp()
 
+    /** ES-DE's Last Played games and the first rows' pictures, read ahead so the switcher opens at once. */
+    @Volatile private var recent: Pair<List<RecentGame>, List<Bitmap?>>? = null
+    /** Set when another app comes to the front: ES-DE may have played a game since [recent] was read. */
+    @Volatile private var recentStale = true
+    /** Main thread: the switcher is up over ES-DE, which a poll then mustn't close. */
+    private var switching = false
+    /** Main thread: the switcher is steering ES-DE to the picked game. */
+    private var steering = false
+
     override fun onBind(intent: Intent?) = null
 
     override fun onCreate() {
@@ -287,7 +305,12 @@ class HelperService : Service() {
         val fg = front.read(this)
         if (fg != foreground) {
             foreground = fg
+            recentStale = true
             Log.i(TAG, "foreground: $fg (current game: ${currentGame()})")
+        } else if (recentStale && switcherReady(fg)) {
+            // A poll after ES-DE came to the front, by when it has written the game just played to its gamelist.
+            runCatching { recent = loadRecent() }.onFailure { Log.w(TAG, "switcher: reading the recent games failed", it) }
+            recentStale = false
         }
         main.post { onForeground(fg) }
     }
@@ -296,6 +319,7 @@ class HelperService : Service() {
     private fun onForeground(fg: String?) {
         leave.left(fg, launch?.pkg)?.let(::quitLeft)
         if (fg == launch?.pkg) return
+        if (switching && fg == ESDE) return
         closeMenu()
         capture?.stop()
     }
@@ -316,6 +340,7 @@ class HelperService : Service() {
      * save, and keeps the existing file when it was asking about one.
      */
     private fun closeMenu() {
+        switching = false
         opening = null
         finding?.set(true)
         unanswered?.invoke()
@@ -326,19 +351,23 @@ class HelperService : Service() {
     /**
      * Main thread: the controller's Back. Stops a recording; with the menu (and any viewer or browser over it) open, or
      * still being looked up, closes all of it so the game resumes; otherwise opens the menu for the game in front, if
-     * ES-DE launched one. Does nothing while a capture starts.
+     * ES-DE launched one, or the switcher over ES-DE. Does nothing while a capture starts or the switcher steers.
      */
     private fun onBack() {
         capture?.let {
             it.stop()
             return
         }
-        if (starting) return
+        if (starting || steering) return
         if (menu.isOpen || opening != null) {
             closeMenu()
             return
         }
-        val g = gameInFront() ?: return
+        val fg = front.read(this)
+        val g = currentGame(fg) ?: run {
+            if (switcherReady(fg)) openSwitcher()
+            return
+        }
         // ES-DE's name for the game, which Find Guides looks up.
         val name = launch?.name ?: return
         val token = Any().also { opening = it }
@@ -387,6 +416,153 @@ class HelperService : Service() {
                 }
                 reopened?.let(::view)
                 Log.i(TAG, "menu: open in ${SystemClock.uptimeMillis() - started} ms" + (reopened?.let { ", reopening ${it.name}" } ?: ""))
+            }
+        }
+    }
+
+    /**
+     * Whether the switcher can open: ES-DE is the app in front ([fg]), its folders are set, and Shizuku can send it
+     * presses. ponytail: a prototype with no setting of its own; add one, off by default, before it ships.
+     */
+    private fun switcherReady(fg: String?) = fg == ESDE && prefs.esdeTree != null && prefs.romsTree != null && ShizukuShell.ready
+
+    /**
+     * io thread: ES-DE's Last Played list from its gamelists, searched in one go through Shizuku (parsing them all
+     * takes seconds), and a picture for each of the first [SWITCHER_ROWS]: RetroArch's newest save-state picture
+     * for the ROM, else the game's scraped image.
+     * ponytail: reads every row's picture ahead; read on demand if more rows than a screenful are ever listed.
+     */
+    private fun loadRecent(): Pair<List<RecentGame>, List<Bitmap?>> {
+        val started = SystemClock.uptimeMillis()
+        val gamelists = romRoots(prefs.esdeTree!!).first() + "/gamelists"
+        val tags = RECENT_TAGS.joinToString(" ") { "-e '<$it>'" }
+        val lines = ShizukuShell.output("cd ${ShizukuShell.quote(gamelists)} && grep -H -F $tags */gamelist.xml")?.decodeToString().orEmpty()
+        val games = recentGames(lines.lineSequence())
+        // `<modified> <path>` for every picture RetroArch saved beside a state, below the folder its config names.
+        val states = ShizukuShell.output(
+            """for c in /sdcard/Android/data/com.retroarch*/files/retroarch.cfg; do d=$(sed -n 's/^savestate_directory = "\(.*\)"$/\1/p' "${'$'}c"); [ -d "${'$'}d" ] && find "${'$'}d" -name '*.state*.png' -exec stat -c '%Y %n' {} +; done; true""",
+        )?.decodeToString().orEmpty().lines().filter { ' ' in it }.sortedByDescending { it.substringBefore(' ').toLongOrNull() ?: 0 }.map { it.substringAfter(' ') }
+        var fromStates = 0
+        val arts = games.take(SWITCHER_ROWS).map { g ->
+            // ponytail: matched by ROM name alone, so two systems' ROMs of one name share a picture; match the core's folder to the system if that shows up.
+            val base = g.path.substringAfterLast('/').substringBeforeLast('.')
+            val state = states.firstOrNull { it.substringAfterLast('/').startsWith("$base.state") }
+            runCatching {
+                state?.let { path ->
+                    BitmapFactory.decodeFile(path)?.also { Log.i(TAG, "switcher: $path read without Shizuku") }
+                        ?: ShizukuShell.output("cat ${ShizukuShell.quote(path)}")?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+                }?.also { fromStates++ } ?: screenshot(GameRef(g.system, g.path))
+            }.onFailure { Log.w(TAG, "switcher: no picture for ${g.name}", it) }.getOrNull()
+        }
+        Log.i(TAG, "switcher: ${games.size} recent games, ${arts.count { it != null }} pictures ($fromStates from save states), read in ${SystemClock.uptimeMillis() - started} ms")
+        return games to arts
+    }
+
+    /** Main thread: lists the recent games over ES-DE; picking one has ES-DE launch it ([steer]). */
+    private fun openSwitcher() {
+        val token = Any().also { opening = it }
+        val started = SystemClock.uptimeMillis()
+        io.execute {
+            val (games, arts) = recent?.takeUnless { recentStale } ?: runCatching { loadRecent() }
+                .onFailure { Log.w(TAG, "switcher: reading the recent games failed", it) }
+                .getOrDefault(emptyList<RecentGame>() to emptyList())
+                .also { recent = it; recentStale = false }
+            val theme = themeLook.warmed ?: runCatching { themeLook.current(games.firstOrNull()?.system.orEmpty(), prefs.menuImage) }
+                .onFailure { Log.w(TAG, "reading the theme failed", it) }
+                .getOrDefault(ThemeLook.DEFAULT)
+            main.post {
+                if (opening !== token) return@post
+                opening = null
+                // Steering knows Last Played by two neighbours, so a list of one can't be steered to.
+                if (arts.size < 2) return@post toast("ES-DE has fewer than two recently played games")
+                switching = true
+                menu.title = "Last Played"
+                menu.cropArt = prefs.menuImageCrops
+                menu.theme = theme
+                menu.show(games.take(arts.size).map { it.name }, { steer(games, it) }, ::closeMenu, arts = arts)
+                Log.i(TAG, "switcher: open in ${SystemClock.uptimeMillis() - started} ms")
+            }
+        }
+    }
+
+    /** Main thread: keeps the switcher up, showing the picked game, while ES-DE is walked to it and launches it. */
+    private fun steer(games: List<RecentGame>, target: Int) {
+        if (steering) return
+        steering = true
+        val started = SystemClock.uptimeMillis()
+        menu.yieldFocus {
+            val yielded = SystemClock.uptimeMillis() - started
+            Thread {
+                val launched = runCatching { steerEsde(games.map { it.logSuffix }, target) }
+                    .onFailure { Log.w(TAG, "switcher: steering failed", it) }
+                    .getOrDefault(false)
+                Log.i(TAG, "switcher: ${games[target].name} ${if (launched) "launching" else "not reached"} ${SystemClock.uptimeMillis() - started} ms after the pick (keys given up in $yielded ms)")
+                main.post {
+                    steering = false
+                    closeMenu()
+                    if (!launched) toast("Couldn't reach ${games[target].name} in ES-DE")
+                }
+            }.start()
+        }
+    }
+
+    /**
+     * Its own thread: presses ES-DE's way to row [target] of its Last Played list ([recents], as ROM path endings)
+     * with keys sent through Shizuku, each press waiting for the selection ES-DE logs, then has ES-DE launch it.
+     * True once ES-DE logs that press. Pressing blind doesn't work: ES-DE drops presses sent faster than it logs them.
+     */
+    private fun steerEsde(recents: List<String>, target: Int): Boolean {
+        val pfd = contentResolver.openFileDescriptor(treeChild(prefs.esdeTree!!, "logs/es_log.txt"), "r")!!
+        ParcelFileDescriptor.AutoCloseInputStream(pfd).channel.use { log ->
+            ShizukuShell.Session().use { shell ->
+                var offset = log.size()
+                var partial = ""
+                // What [wanted] picks from the last line ES-DE logs within [ms] that it picks anything from.
+                fun <T : Any> await(ms: Long, wanted: (String) -> T?): T? {
+                    val until = SystemClock.uptimeMillis() + ms
+                    while (SystemClock.uptimeMillis() < until) {
+                        val size = log.size()
+                        if (size <= offset) {
+                            Thread.sleep(4)
+                            continue
+                        }
+                        val buffer = ByteBuffer.allocate((size - offset).toInt())
+                        val read = log.read(buffer, offset).coerceAtLeast(0)
+                        offset += read
+                        val lines = (partial + buffer.array().decodeToString(0, read)).split('\n')
+                        partial = lines.last()
+                        lines.dropLast(1).mapNotNull(wanted).lastOrNull()?.let { return it }
+                    }
+                    return null
+                }
+                var presses = 0
+                // A press ES-DE doesn't log is sent again: the first can arrive before ES-DE has the keys back.
+                fun press(key: Int): String? {
+                    repeat(3) {
+                        presses++
+                        shell.send("input keyevent $key")
+                        await(300, ::selectedRom)?.let { return it }
+                    }
+                    return null
+                }
+                val walk = Steering(recents, target)
+                var selected: String? = null
+                while (true) {
+                    when (val step = walk.next(selected)) {
+                        Step.LAUNCH -> {
+                            Log.i(TAG, "switcher: on $selected after $presses presses")
+                            // Enter is ES-DE's A on a keyboard. ES-DE notes the key at once, then shows its own
+                            // launch screen for a few seconds before it logs the launch itself.
+                            shell.send("input keyevent ${KeyEvent.KEYCODE_ENTER}")
+                            return await(1_000) { line -> line.takeIf { "isMappedTo=a," in it || "Launching game" in it } } != null
+                        }
+                        Step.FAIL -> return false.also { Log.i(TAG, "switcher: lost at $selected after $presses presses") }
+                        Step.DOWN -> selected = press(KeyEvent.KEYCODE_DPAD_DOWN)
+                        Step.UP -> selected = press(KeyEvent.KEYCODE_DPAD_UP)
+                        Step.NEXT_SYSTEM -> selected = press(KeyEvent.KEYCODE_DPAD_RIGHT)
+                    }
+                    if (selected == null) return false.also { Log.i(TAG, "switcher: ES-DE logged nothing for a press ($presses sent)") }
+                }
             }
         }
     }
@@ -862,8 +1038,13 @@ class HelperService : Service() {
         @SuppressLint("StaticFieldLeak")
         private var instance: HelperService? = null
 
-        /** Main thread: whether the controller's Back is the overlay's: a capture is running, the menu is open, or ES-DE's game is in front. */
-        fun takesBack(): Boolean = instance?.run { running && (capture != null || menu.isOpen || gameInFront() != null) } == true
+        /**
+         * Main thread: whether the controller's Back is the overlay's: a capture is running, the menu is open, ES-DE's
+         * game is in front, or ES-DE is and the switcher can open over it.
+         */
+        fun takesBack(): Boolean = instance?.run {
+            running && (capture != null || menu.isOpen || front.read(this).let { currentGame(it) != null || switcherReady(it) })
+        } == true
 
         /** Main thread: the controller's Back, taken because [takesBack] said so. */
         fun back() {
@@ -877,5 +1058,11 @@ class HelperService : Service() {
         fun closeMenuNow() {
             instance?.closeMenu()
         }
+
+        /**
+         * Main thread: whether the controller's buttons are kept from ES-DE: the switcher is steering it, and a press
+         * of A meanwhile would launch whatever its cursor is passing.
+         */
+        fun steering(): Boolean = instance?.steering == true
     }
 }

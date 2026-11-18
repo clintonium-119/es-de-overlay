@@ -95,6 +95,8 @@ class ButtonService : AccessibilityService() {
         if (event.keyCode == KeyEvent.KEYCODE_MOVE_HOME && event.action == KeyEvent.ACTION_UP && event.isFromSource(InputDevice.SOURCE_GAMEPAD)) {
             main.post(HelperService::closeMenuNow)
         }
+        // The switcher's own presses come from a keyboard; the D-pad isn't a key and can't be kept from ES-DE here.
+        if (HelperService.steering() && event.isFromSource(InputDevice.SOURCE_GAMEPAD)) return true
         // Gamepad keys only: the back swipe and other apps' Back have no gamepad source.
         if (!isMenuKey(event.keyCode, prefs.menuKey)) return false
         if (!event.isFromSource(InputDevice.SOURCE_GAMEPAD)) return false
