@@ -249,6 +249,12 @@ class HelperService : Service() {
     private var steering = false
     /** Main thread: the screen read as the menu opened over the game, for Quit Game to keep; dropped as the menu closes. */
     private var menuScreen: Future<Pair<ByteBuffer, Int>?>? = null
+    /** RetroArch's hotkeys when the last launch was in RetroArch, read on the io thread as the launch is logged. */
+    @Volatile private var hotkeys: RetroArchHotkeys? = null
+    /** Set while the overlay has RetroArch's shader turned off, taken to be on at each launch as RetroArch's config says. */
+    @Volatile private var shaderOff = false
+    /** Presses of RetroArch's hotkeys, one at a time. */
+    private val presses = Executors.newSingleThreadExecutor()
 
     override fun onBind(intent: Intent?) = null
 
@@ -350,6 +356,7 @@ class HelperService : Service() {
         screenshots.unregister()
         io.shutdownNow()
         pictureReader.shutdownNow()
+        presses.shutdownNow()
         projection?.stop()
         super.onDestroy()
     }
@@ -388,7 +395,11 @@ class HelperService : Service() {
     /** Main thread: when the game is left, close the menu and end a recording; when it's left for ES-DE, end it if set to. */
     private fun onForeground(fg: String?) {
         leave.left(fg, launch?.pkg)?.let(::quitLeft)
-        if (fg == launch?.pkg) return
+        if (fg == launch?.pkg) {
+            // A game left during a capture with RetroArch's shader off gets it back as it's in front again.
+            restoreShader(fg)
+            return
+        }
         if (switching && fg == ESDE) return
         closeMenu()
         capture?.stop()
@@ -446,14 +457,24 @@ class HelperService : Service() {
         val name = launch?.name ?: return
         val token = Any().also { opening = it }
         val started = SystemClock.uptimeMillis()
-        val screen = if (readsScreen && keepsPicture()) FutureTask(::readScreen).also { thread(name = "menu screen", block = it::run) } else null
+        val retroarch = hotkeys?.takeIf { it.pkg == fg }
+        // RetroArch with its shader on, which masks and darkens frames: the screen is read with it off.
+        val unshade = retroarch?.takeIf { it.togglesShader && !shaderOff }
+        val screen = when {
+            !readsScreen || !keepsPicture() -> null
+            // RetroArch's own state picture, with no shader, is the game's when it saves one as it exits.
+            retroarch?.savesOnExit == true -> null.also { Log.i(TAG, "menu: no screen read, RetroArch saves its state on exit") }
+            unshade != null -> FutureTask { shaderFreeScreen(unshade) }.also(presses::execute)
+            else -> FutureTask(::readScreen).also { thread(name = "menu screen", block = it::run) }
+        }
         menuScreen = screen
         io.execute {
             val (manual, guides, info) = runCatching { documents(g) }
                 .onFailure { Log.w(TAG, "looking up manual and guides failed", it) }
                 .getOrDefault(Triple(null, emptyList(), null))
-            // The menu waits for the screen to be read, so it's never in the picture.
-            runCatching { screen?.get(2, TimeUnit.SECONDS) }
+            // The menu waits for the screen to be read, so it's never in the picture, and for RetroArch's shader to be on
+            // again, as the menu takes the keys.
+            runCatching { screen?.get(if (unshade != null) 5 else 2, TimeUnit.SECONDS) }
             val art = runCatching { screenshot(g) }.getOrNull()
             // The look read when ES-DE launched the game: its theme only changes in ES-DE, before a launch, and reading
             // it here would add to the menu's opening.
@@ -938,18 +959,77 @@ class HelperService : Service() {
     }
 
     /**
-     * Main thread: force-stops the game's app, which then has no chance to save, and goes to ES-DE. The screen read as
-     * the menu opened, if it was, is then kept as [g]'s picture.
+     * Main thread: ends the game and goes to ES-DE. RetroArch, with Exit on the controller, quits through its own Exit,
+     * saving as it's set to; any other app is force-stopped, with no chance to save. The screen read as the menu
+     * opened, if it was, is then kept as [g]'s picture.
      */
     private fun quitGame(g: GameRef) {
         val pkg = launch?.pkg ?: return
         leave.forget()
         io.execute { launch = null }
-        Log.i(TAG, "quit: ending $pkg" + if (menuScreen != null) ", keeping the picture read as the menu opened" else "")
-        ButtonService.forceStop(pkg)
-        val screen = menuScreen ?: return
+        val retroarch = hotkeys?.takeIf { it.pkg == pkg && it.exits && ShizukuShell.ready }
+        val screen = menuScreen
+        Log.i(TAG, "quit: " + (if (retroarch != null) "exiting $pkg through RetroArch" else "ending $pkg") +
+            if (screen != null) ", keeping the picture read as the menu opened" else "")
+        if (retroarch != null) exitRetroArch(retroarch) else ButtonService.forceStop(pkg)
+        if (screen == null) return
         val file = keptPicture(g.system, g.romRelativePath) ?: return
         thread(name = "quit picture") { screen.get()?.let { keepPicture(g, file, it) } }
+    }
+
+    /**
+     * Main thread: closes the menu, which has the keys, then presses RetroArch's Exit, its shader back on first if the
+     * overlay turned it off (RetroArch saves its settings as it quits). Force-stops RetroArch if it's still in front a
+     * while later.
+     */
+    private fun exitRetroArch(retroarch: RetroArchHotkeys) {
+        closeMenu()
+        presses.execute {
+            Thread.sleep(RetroArchHotkeys.KEYS_BACK_MS)
+            if (shaderOff && retroarch.toggleShader()) shaderOff = false
+            val started = SystemClock.uptimeMillis()
+            val pressed = retroarch.pressExit()
+            while (pressed && SystemClock.uptimeMillis() - started < RetroArchHotkeys.EXIT_MS && front.read(this) == retroarch.pkg) {
+                Thread.sleep(100)
+            }
+            val waited = SystemClock.uptimeMillis() - started
+            if (front.read(this) != retroarch.pkg) {
+                Log.i(TAG, "quit: RetroArch exited $waited ms after Exit")
+                return@execute
+            }
+            Log.w(TAG, "quit: RetroArch still in front $waited ms after Exit (pressed: $pressed), force-stopping it")
+            ButtonService.forceStop(retroarch.pkg)
+        }
+    }
+
+    /**
+     * Main thread: turns RetroArch's shader back on, if the overlay turned it off and RetroArch is in front ([fg]) with
+     * nothing of the overlay's taking the keys, then runs [then]. Otherwise runs [then] at once, leaving the shader for
+     * when RetroArch is in front again, or for Quit Game.
+     */
+    private fun restoreShader(fg: String? = front.read(this), then: () -> Unit = {}) {
+        val retroarch = hotkeys
+        if (!shaderOff || retroarch == null || fg != retroarch.pkg || capture != null || starting || menu.isOpen || switcher.isOpen || opening != null) {
+            return then()
+        }
+        shaderOff = false
+        presses.execute {
+            if (!retroarch.toggleShader()) shaderOff = true
+            then()
+        }
+    }
+
+    /**
+     * Off the main thread: the screen read with RetroArch's shader turned off, and on again after; null without a read
+     * when the shader couldn't be turned off.
+     */
+    private fun shaderFreeScreen(retroarch: RetroArchHotkeys): Pair<ByteBuffer, Int>? {
+        if (!retroarch.toggleShader()) return null
+        Thread.sleep(RetroArchHotkeys.CLEAN_MS)
+        val screen = readScreen()
+        // Left for the next chance if it couldn't be turned on.
+        shaderOff = !retroarch.toggleShader()
+        return screen
     }
 
     /** Whether a game ended through the overlay has its picture kept: the setting is on and Shizuku can read the screen. */
@@ -1174,8 +1254,7 @@ class HelperService : Service() {
         }
         menu.beginCapture()
         starting = true
-        // Let the closed menu leave the screen before the first frame.
-        main.postDelayed({
+        val begin = Runnable {
             starting = false
             try {
                 // A screenshot alone stops as soon as its frame is taken, too soon for a usable clip.
@@ -1187,16 +1266,33 @@ class HelperService : Service() {
                 capture = Capture(windowContext, p, prefs.clipSeconds, gameUid, menu::nudge, onRecording) { png, mp4 ->
                     capture = null
                     menu.endCapture()
-                    io.execute { save(g, png?.takeIf { keepShot }, mp4?.takeIf { keepVideo }) }
+                    // RetroArch's shader goes back on before a menu asking about a file there can take the keys.
+                    restoreShader { io.execute { save(g, png?.takeIf { keepShot }, mp4?.takeIf { keepVideo }) } }
                 }.also { it.start() }
                 Log.i(TAG, "capturing $g, sound from uid $gameUid")
             } catch (e: Exception) {
                 Log.e(TAG, "capture failed to start", e)
                 menu.endCapture()
+                restoreShader()
                 toast("Capture failed: ${e.message}")
                 notify(this, RESULT_ID, "Capture failed: ${e.message}")
             }
-        }, 100)
+        }
+        val retroarch = hotkeys?.takeIf { it.pkg == launch?.pkg && it.togglesShader && !shaderOff && ShizukuShell.ready }
+        if (retroarch == null) {
+            // Let the closed menu leave the screen before the first frame.
+            main.postDelayed(begin, 100)
+            return
+        }
+        // RetroArch's shader masks and darkens frames: it's turned off once RetroArch has the keys back from the menu.
+        presses.execute {
+            Thread.sleep(RetroArchHotkeys.KEYS_BACK_MS)
+            if (retroarch.toggleShader()) {
+                shaderOff = true
+                Thread.sleep(RetroArchHotkeys.CLEAN_MS)
+            }
+            main.post(begin)
+        }
     }
 
     private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
@@ -1339,6 +1435,10 @@ class HelperService : Service() {
         if (latest != before && latest != null) {
             launch = latest
             game = resolve(latest)
+            if (latest.stamp != before?.stamp || latest.pkg != before.pkg) {
+                hotkeys = latest.pkg?.let { pkg -> runCatching { RetroArchHotkeys.read(pkg) }.onFailure { Log.w(TAG, "reading RetroArch's hotkeys failed", it) }.getOrNull() }
+                shaderOff = false
+            }
             // Pictures PPSSPP or ARMSX2 saves from now until ES-DE is back are this game's.
             val emulator = when {
                 latest.pkg?.startsWith("org.ppsspp.") == true -> "ppsspp"
