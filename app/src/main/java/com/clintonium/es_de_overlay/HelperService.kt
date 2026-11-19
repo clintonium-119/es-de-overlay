@@ -29,6 +29,8 @@ import android.os.SystemClock
 import android.provider.DocumentsContract
 import android.util.Log
 import android.util.LruCache
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import android.view.Display
 import android.view.KeyEvent
 import android.view.WindowManager
@@ -43,6 +45,7 @@ import com.clintonium.es_de_overlay.core.Launch
 import com.clintonium.es_de_overlay.core.LeaveWatch
 import com.clintonium.es_de_overlay.core.Look
 import com.clintonium.es_de_overlay.core.Overwrite
+import com.clintonium.es_de_overlay.core.PictureSource
 import com.clintonium.es_de_overlay.core.RECENT_TAGS
 import com.clintonium.es_de_overlay.core.RecentGame
 import com.clintonium.es_de_overlay.core.Selection
@@ -51,19 +54,24 @@ import com.clintonium.es_de_overlay.core.Step
 import com.clintonium.es_de_overlay.core.SwitcherNeed
 import com.clintonium.es_de_overlay.core.contentBounds
 import com.clintonium.es_de_overlay.core.detailLine
+import com.clintonium.es_de_overlay.core.displaySize
 import com.clintonium.es_de_overlay.core.esSetting
 import com.clintonium.es_de_overlay.core.gamelistInfo
 import com.clintonium.es_de_overlay.core.guideEntries
 import com.clintonium.es_de_overlay.core.guidePath
+import com.clintonium.es_de_overlay.core.keptPicturePath
 import com.clintonium.es_de_overlay.core.manualPath
 import com.clintonium.es_de_overlay.core.mediaPath
 import com.clintonium.es_de_overlay.core.nextLaunch
+import com.clintonium.es_de_overlay.core.pictureSource
 import com.clintonium.es_de_overlay.core.playedFirst
 import com.clintonium.es_de_overlay.core.recentGames
 import com.clintonium.es_de_overlay.core.resolveGame
 import com.clintonium.es_de_overlay.core.selection
+import com.clintonium.es_de_overlay.core.sessionPicture
 import com.clintonium.es_de_overlay.core.systemNames
 import com.clintonium.es_de_overlay.core.startUrl
+import com.clintonium.es_de_overlay.core.statePicture
 import com.clintonium.es_de_overlay.core.steer
 import com.clintonium.es_de_overlay.core.steerKeys
 import com.clintonium.es_de_overlay.core.switcherNeeds
@@ -71,11 +79,15 @@ import com.clintonium.es_de_overlay.core.webSearchUrl
 import java.io.File
 import java.io.IOException
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.util.concurrent.CancellationException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import java.util.concurrent.Future
+import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
@@ -201,6 +213,11 @@ class HelperService : Service() {
     @Volatile private var launch: Launch? = null
     @Volatile private var game: GameRef? = null
     @Volatile private var foreground: String? = null
+    /**
+     * The game ES-DE launched last in PPSSPP or ARMSX2 (`ppsspp`, `armsx2`), which name save states by the disc, and when
+     * (epoch seconds), until the pictures saved in its session are looked for.
+     */
+    @Volatile private var discSession: Triple<GameRef, String, Long>? = null
 
     // io thread only.
     private val log = EsLogTail()
@@ -209,8 +226,12 @@ class HelperService : Service() {
 
     /** ES-DE's Last Played games and the look to show them in, read ahead so the switcher opens at once. */
     @Volatile private var recent: Pair<List<RecentGame>, ThemeLook.Current>? = null
-    /** RetroArch's save-state pictures, newest first, as read with [recent]. */
-    @Volatile private var states = emptyList<String>()
+    /** RetroArch's save-state pictures, by when each was written (epoch seconds), as read with [recent]. */
+    @Volatile private var states = emptyList<Pair<Long, String>>()
+    /** Whether RetroArch starts a game from its auto save state (Auto Load State), as read with [recent]. */
+    @Volatile private var retroarchResumes = false
+    /** Whether PPSSPP starts a game from a save state (Auto Load Savestate), as read with [recent] once it has saved a picture here. */
+    @Volatile private var ppssppResumes = false
     /** Switcher pictures read, by ROM path ending: those either side of the game shown, and a few passed. */
     private val pictures = LruCache<String, Bitmap>(15)
     /** Keys of [pictures] being read. */
@@ -226,6 +247,8 @@ class HelperService : Service() {
     private var switching = false
     /** Main thread: the switcher is steering ES-DE to the picked game. */
     private var steering = false
+    /** Main thread: the screen read as the menu opened over the game, for Quit Game to keep; dropped as the menu closes. */
+    private var menuScreen: Future<Pair<ByteBuffer, Int>?>? = null
 
     override fun onBind(intent: Intent?) = null
 
@@ -276,7 +299,8 @@ class HelperService : Service() {
         if (intent?.action == ACTION_OPEN_MENU) {
             ButtonService.closeShade()
             // Only when nothing is up: then the menu button's way opens the menu, if ES-DE's game is in front.
-            if (capture == null && !starting && !menu.isOpen && !switcher.isOpen && opening == null) onBack()
+            // The shade may still be over the game, so the screen isn't read for Quit Game.
+            if (capture == null && !starting && !menu.isOpen && !switcher.isOpen && opening == null) onBack(readsScreen = false)
             return START_STICKY
         }
         if (intent?.action == ACTION_DOC_OPENED) {
@@ -388,6 +412,7 @@ class HelperService : Service() {
     private fun closeMenu() {
         switching = false
         opening = null
+        menuScreen = null
         finding?.set(true)
         unanswered?.invoke()
         closeViewer()
@@ -399,8 +424,10 @@ class HelperService : Service() {
      * Main thread: the controller's Back. Stops a recording; with the menu (and any viewer or browser over it) open, or
      * still being looked up, closes all of it so the game resumes; otherwise opens the menu for the game in front, if
      * ES-DE launched one, or the switcher over ES-DE. Does nothing while a capture starts or the switcher steers.
+     * With [readsScreen] and [keepsPicture], the screen is read for Quit Game as the menu opens: once the menu is up, a
+     * game that pauses draws differently (RetroArch's frame-splitting shaders come back wrong for a moment as it resumes).
      */
-    private fun onBack() {
+    private fun onBack(readsScreen: Boolean = true) {
         capture?.let {
             it.stop()
             return
@@ -419,10 +446,14 @@ class HelperService : Service() {
         val name = launch?.name ?: return
         val token = Any().also { opening = it }
         val started = SystemClock.uptimeMillis()
+        val screen = if (readsScreen && keepsPicture()) FutureTask(::readScreen).also { thread(name = "menu screen", block = it::run) } else null
+        menuScreen = screen
         io.execute {
             val (manual, guides, info) = runCatching { documents(g) }
                 .onFailure { Log.w(TAG, "looking up manual and guides failed", it) }
                 .getOrDefault(Triple(null, emptyList(), null))
+            // The menu waits for the screen to be read, so it's never in the picture.
+            runCatching { screen?.get(2, TimeUnit.SECONDS) }
             val art = runCatching { screenshot(g) }.getOrNull()
             // The look read when ES-DE launched the game: its theme only changes in ES-DE, before a launch, and reading
             // it here would add to the menu's opening.
@@ -498,33 +529,143 @@ class HelperService : Service() {
         val theme = runCatching { games.firstOrNull()?.system.orEmpty().let { themeLook.warm(it, prefs.menuImage); themeLook.current(it, prefs.menuImage) } }
             .onFailure { Log.w(TAG, "reading the theme failed", it) }
             .getOrDefault(ThemeLook.DEFAULT)
-        // `<modified> <path>` for every picture RetroArch saved beside a state, below the folder its config names.
-        states = ShizukuShell.output(
-            """for c in /sdcard/Android/data/com.retroarch*/files/retroarch.cfg; do d=$(sed -n 's/^savestate_directory = "\(.*\)"$/\1/p' "${'$'}c"); [ -d "${'$'}d" ] && find "${'$'}d" -name '*.state*.png' -exec stat -c '%Y %n' {} +; done; true""",
-        )?.decodeToString().orEmpty().lines().filter { ' ' in it }.sortedByDescending { it.substringBefore(' ').toLongOrNull() ?: 0 }.map { it.substringAfter(' ') }
+        // `autoload` if RetroArch's Auto Load State is on, then `<modified> <path>` for every picture it saved beside a
+        // state, below the folder its config names.
+        val retroarch = ShizukuShell.output(
+            """for c in /sdcard/Android/data/com.retroarch*/files/retroarch.cfg; do grep -q '^savestate_auto_load = "true"' "${'$'}c" && echo autoload; d=$(sed -n 's/^savestate_directory = "\(.*\)"$/\1/p' "${'$'}c"); [ -d "${'$'}d" ] && find "${'$'}d" -name '*.state*.png' -exec stat -c '%Y %n' {} +; done; true""",
+        )?.decodeToString().orEmpty().lines()
+        retroarchResumes = "autoload" in retroarch
+        states = retroarch.mapNotNull { line -> line.substringBefore(' ').toLongOrNull()?.let { it to line.substringAfter(' ') } }
+        discSession?.let { (g, emulator, since) ->
+            discSession = null
+            runCatching { keepSessionPicture(g, emulator, since) }.onFailure { Log.w(TAG, "switcher: reading $emulator's save states failed", it) }
+        }
+        // Read only once PPSSPP has saved a picture here, as finding its folders takes a while.
+        if (File(filesDir, "ppsspp").exists()) {
+            ppssppResumes = ppssppStates.isNotEmpty() && ShizukuShell.output(
+                "cat " + ppssppStates.joinToString(" ") { ShizukuShell.quote("$it/../SYSTEM/ppsspp.ini") } + " 2>/dev/null | sed -n 's/^AutoLoadSaveState = //p'; true",
+            )?.decodeToString()?.lines()?.any { it.isNotBlank() && it.trim() != "0" } == true
+        }
         pictures.evictAll()
         recent = games to theme
         Log.i(TAG, "switcher: ${games.size} recent games (${played.size - kept.size} files gone), ${states.size} state pictures, read in ${SystemClock.uptimeMillis() - started} ms")
         if (games.isNotEmpty()) main.post { wantPictures(games, 0) }
     }
 
+    /** Where the picture kept of a game when it's quit goes in the app's own files; null for a path that would leave them. */
+    private fun keptPicture(system: String, path: String) = keptPicturePath(system, path)?.let { File(filesDir, "kept/$it") }
+
     /**
-     * Picture thread: [g]'s picture for the switcher: RetroArch's newest save-state picture for the ROM, else the
-     * game's scraped image; null when it has neither. Black bars baked into it are trimmed off.
+     * Where a copy of a game's save-state picture from [emulator] (`ppsspp` or `armsx2`, which name their states by the
+     * disc) goes; null as for [keptPicture]. BitmapFactory reads ARMSX2's PNG whatever the name says.
+     */
+    private fun copiedPicture(emulator: String, system: String, path: String) = keptPicturePath(system, path)?.let { File(filesDir, "$emulator/$it") }
+
+    /** Set while [findDiscStates] runs. */
+    private val findingStates = AtomicBoolean()
+
+    /**
+     * Its own thread: finds where PPSSPP and ARMSX2 keep their save states, into [Prefs.discStates]: the
+     * `PSP/PPSSPP_STATE` folders of PPSSPP's memory stick, and ARMSX2's settings files (`PCSX2-Android.ini`, which name
+     * its folder). Either may be anywhere in shared storage, and walking it takes seconds (7 on the Nova, half of it in
+     * RetroArch's thumbnails, which are skipped), so it runs when one of them starts a game ES-DE launched, which lasts
+     * longer.
+     */
+    private fun findDiscStates() {
+        if (!findingStates.compareAndSet(false, true)) return
+        thread(name = "state folders") {
+            try {
+                val started = SystemClock.uptimeMillis()
+                val found = ShizukuShell.output(
+                    "find /storage/emulated/0 /storage/*-* -maxdepth 4 -name RetroArch -prune -o \\( -type d -name PPSSPP_STATE -o -type f -name PCSX2-Android.ini \\) -print 2>/dev/null; " +
+                        "ls -d /storage/emulated/0/Android/data/org.ppsspp.*/files/PSP/PPSSPP_STATE /storage/*-*/Android/data/org.ppsspp.*/files/PSP/PPSSPP_STATE " +
+                        "/storage/emulated/0/Android/data/com.armsx2/files/PCSX2-Android.ini /storage/*-*/Android/data/com.armsx2/files/PCSX2-Android.ini 2>/dev/null; true",
+                )?.decodeToString()?.lines()?.filter { it.isNotBlank() }?.toSet() ?: return@thread
+                prefs.discStates = found
+                Log.i(TAG, "switcher: save-state folders $found, found in ${SystemClock.uptimeMillis() - started} ms")
+            } finally {
+                findingStates.set(false)
+            }
+        }
+    }
+
+    private val ppssppStates get() = prefs.discStates.filterNot { it.endsWith(".ini") }
+
+    /** ARMSX2's save-state folders, as its settings' `Savestates = sstates` names them, relative to the settings' folder unless absolute. */
+    private fun armsx2States() = prefs.discStates.filter { it.endsWith(".ini") }.mapNotNull { ini ->
+        val dir = ShizukuShell.output("sed -n 's/^Savestates = //p' ${ShizukuShell.quote(ini)}")?.decodeToString()?.trim()?.ifEmpty { null } ?: return@mapNotNull null
+        if (dir.startsWith('/')) dir else ini.substringBeforeLast('/') + "/" + dir
+    }
+
+    /**
+     * io thread: copies the picture [emulator] (`ppsspp` or `armsx2`) saved last with a state during [g]'s session, from
+     * [since] until now, as [g]'s, keeping its time. Both name states by the disc (`ULUS10466_1.00_0.jpg`,
+     * `SLUS-20071 (23AF6876).00.p2s`), so the time is what ties one to the game. PPSSPP writes a JPEG beside the state;
+     * ARMSX2 packs a PNG in the state, a zip, as `Screenshot.png`.
+     */
+    private fun keepSessionPicture(g: GameRef, emulator: String, since: Long) {
+        val armsx2 = emulator == "armsx2"
+        val files = if (armsx2) armsx2States().map { ShizukuShell.quote(it) + "/*.p2s" } else ppssppStates.map { ShizukuShell.quote(it) + "/*.jpg" }
+        if (files.isEmpty()) return
+        val written = ShizukuShell.output("stat -c '%Y %n' ${files.joinToString(" ")} 2>/dev/null; true")
+            ?.decodeToString().orEmpty().lines().mapNotNull { line -> line.substringBefore(' ').toLongOrNull()?.let { it to line.substringAfter(' ') } }
+        val (at, path) = sessionPicture(written, since, System.currentTimeMillis() / 1000) ?: return
+        val file = copiedPicture(emulator, g.system, g.romRelativePath) ?: return
+        val bytes = ShizukuShell.output(if (armsx2) "unzip -p ${ShizukuShell.quote(path)} Screenshot.png" else "cat ${ShizukuShell.quote(path)}")?.takeIf { it.isNotEmpty() } ?: return
+        file.parentFile!!.mkdirs()
+        val part = File(file.path + ".part")
+        part.writeBytes(bytes)
+        if (!part.renameTo(file) || !file.setLastModified(at * 1000)) error("couldn't store ${file.name}")
+        Log.i(TAG, "switcher: $emulator's ${path.substringAfterLast('/')} kept for ${g.romRelativePath}")
+    }
+
+    /**
+     * Which picture [g] shows, and its file: the picture of the save state its emulator starts it from, if it's set to
+     * (RetroArch's auto state, or PPSSPP's copied picture); else the newer of its save-state picture (RetroArch's, or a
+     * copy of PPSSPP's or ARMSX2's) and the one kept when it was quit; else the scraped image, whose file [screenshot]
+     * finds.
+     */
+    private fun pictureOf(g: RecentGame): Pair<PictureSource, String?> {
+        val zone = ZoneId.systemDefault()
+        // RetroArch's Auto Load State loads the auto state; a numbered slot only when the player picks it.
+        val auto = statePicture(states.filter { ".state.auto." in it.second.substringAfterLast('/') }, g, zone)?.takeIf { retroarchResumes }
+        fun copied(emulator: String) = copiedPicture(emulator, g.system, g.path)?.let { it.lastModified() / 1000 to it.path }?.takeIf { it.first > 0 }
+        val ppsspp = copied("ppsspp")
+        // ponytail: ARMSX2 counts as never starting from a state (the Nova's has SaveStateOnShutdown off); read its settings if one turns up that does.
+        val armsx2 = copied("armsx2")
+        val (saved, resumes) = when {
+            auto != null -> auto to true
+            // ponytail: any Auto Load Savestate but Off counts as resuming from the newest picture; its Oldest and slot choices would need the slot read too.
+            ppsspp != null && ppssppResumes -> ppsspp to true
+            else -> listOfNotNull(statePicture(states, g, zone), ppsspp, armsx2).maxByOrNull { it.first } to false
+        }
+        val kept = keptPicture(g.system, g.path)
+        return when (pictureSource(saved?.first, kept?.lastModified()?.takeIf { it > 0 }?.div(1000), resumes)) {
+            PictureSource.SAVED -> PictureSource.SAVED to saved!!.second
+            PictureSource.LEFT -> PictureSource.LEFT to kept!!.path
+            PictureSource.SCRAPED -> PictureSource.SCRAPED to null
+        }
+    }
+
+    /**
+     * Picture thread: [g]'s picture for the switcher, as [pictureOf] chooses, else the game's scraped image; null when
+     * it has none. Black bars baked into it are trimmed off.
      */
     private fun switcherPicture(g: RecentGame): Bitmap? = runCatching {
-        // ponytail: matched by ROM name alone, so two systems' ROMs of one name share a picture; match the core's folder to the system if that shows up.
-        val base = g.path.substringAfterLast('/').substringBeforeLast('.')
-        val picture = states.firstOrNull { it.substringAfterLast('/').startsWith("$base.state") }?.let { path ->
+        val picture = pictureOf(g).second?.let { path ->
             BitmapFactory.decodeFile(path) ?: ShizukuShell.output("cat ${ShizukuShell.quote(path)}")?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
         } ?: screenshot(GameRef(g.system, g.path)) ?: return@runCatching null
         val started = SystemClock.uptimeMillis()
         val (left, top, right, bottom) = contentBounds(picture.width, picture.height) { x, y ->
             picture.getPixel(x, y).let { Color.red(it) < 24 && Color.green(it) < 24 && Color.blue(it) < 24 }
         }
-        if (left == 0 && top == 0 && right == picture.width && bottom == picture.height) return@runCatching picture
-        Bitmap.createBitmap(picture, left, top, right - left, bottom - top).also {
+        val trimmed = if (left == 0 && top == 0 && right == picture.width && bottom == picture.height) picture
+        else Bitmap.createBitmap(picture, left, top, right - left, bottom - top).also {
             Log.i(TAG, "switcher: bars trimmed off ${g.name}, ${picture.width}×${picture.height} to ${it.width}×${it.height}, in ${SystemClock.uptimeMillis() - started} ms")
+        }
+        val (width, height) = displaySize(trimmed.width, trimmed.height)
+        if (height == trimmed.height) trimmed else trimmed.scale(width, height).also {
+            Log.i(TAG, "switcher: ${g.name}'s ${trimmed.width}×${trimmed.height} picture shown at ${it.width}×${it.height}")
         }
     }.onFailure { Log.w(TAG, "switcher: no picture for ${g.name}", it) }.getOrNull()
 
@@ -583,7 +724,7 @@ class HelperService : Service() {
         val names = prefs.systemNames()
         val today = LocalDate.now()
         switcher.show(
-            theme, prefs.switcherStrip, shown.map { it.name }, shown.takeIf { prefs.switcherDetails }?.map { detailLine(it, names, today) }, 0,
+            theme, prefs.switcherStrip, shown.map { it.name }, shown.takeIf { prefs.switcherDetails }?.map { detailLine(it, names, today, pictureOf(it).first) }, 0,
             picture = { pictures.get(shown[it].logSuffix) },
             onSelect = { wantPictures(shown, it) },
             onPick = { steer(games, it, theme.look) },
@@ -746,8 +887,8 @@ class HelperService : Service() {
                 }, back)
                 "Quit Game" -> if (prefs.confirmQuit) {
                     // The cursor starts on the safe row: A pressed out of habit keeps the game.
-                    menu.show(listOf("Keep Playing", "Quit \"$name\""), { if (it == 1) quitGame() else back() }, back)
-                } else quitGame()
+                    menu.show(listOf("Keep Playing", "Quit \"$name\""), { if (it == 1) quitGame(g) else back() }, back)
+                } else quitGame(g)
                 else -> guidesList(g, name, guides, back)
             }
         }, menu::release, start = start)
@@ -796,12 +937,69 @@ class HelperService : Service() {
         }
     }
 
-    /** Main thread: force-stops the game's app, which then has no chance to save, and goes to ES-DE. */
-    private fun quitGame() {
+    /**
+     * Main thread: force-stops the game's app, which then has no chance to save, and goes to ES-DE. The screen read as
+     * the menu opened, if it was, is then kept as [g]'s picture.
+     */
+    private fun quitGame(g: GameRef) {
         val pkg = launch?.pkg ?: return
         leave.forget()
         io.execute { launch = null }
+        Log.i(TAG, "quit: ending $pkg" + if (menuScreen != null) ", keeping the picture read as the menu opened" else "")
         ButtonService.forceStop(pkg)
+        val screen = menuScreen ?: return
+        val file = keptPicture(g.system, g.romRelativePath) ?: return
+        thread(name = "quit picture") { screen.get()?.let { keepPicture(g, file, it) } }
+    }
+
+    /** Whether a game ended through the overlay has its picture kept: the setting is on and Shizuku can read the screen. */
+    private fun keepsPicture() = prefs.keepQuitPicture && ShizukuShell.ready
+
+    /**
+     * Any thread: the screen as `screencap` reads it through Shizuku, raw (a PNG takes longer to make): a 12- or 16-byte
+     * header (width, height and format as little-endian ints), then RGBA rows, which start at the second value; null
+     * when it can't be read.
+     */
+    private fun readScreen(): Pair<ByteBuffer, Int>? = runCatching {
+        val started = SystemClock.uptimeMillis()
+        val raw = ShizukuShell.output("screencap")?.let { ByteBuffer.wrap(it).order(ByteOrder.LITTLE_ENDIAN) } ?: return null
+        val pixels = raw.getInt(0) * raw.getInt(4) * 4
+        // PixelFormat.RGBA_8888.
+        if (raw.getInt(8) != 1 || raw.capacity() - pixels !in 12..16) error("screencap gave format ${raw.getInt(8)}, ${raw.capacity()} bytes")
+        Log.i(TAG, "screen read in ${SystemClock.uptimeMillis() - started} ms")
+        raw to raw.capacity() - pixels
+    }.onFailure { Log.w(TAG, "reading the screen failed", it) }.getOrNull()
+
+    /** Its own thread: keeps [screen], as [readScreen] gave it, as [g]'s picture for the switcher in [file]. */
+    private fun keepPicture(g: GameRef, file: File, screen: Pair<ByteBuffer, Int>) {
+        val started = SystemClock.uptimeMillis()
+        val (raw, start) = screen
+        runCatching {
+            // The mean of red, green and blue over a spread of pixels, 0 to 255, for telling a dark picture in the log.
+            val samples = (start until raw.capacity() step 4 * 97)
+            val mean = samples.sumOf { i -> (0..2).sumOf { raw.get(i + it).toLong() and 255 } } / (3L * samples.count())
+            val picture = createBitmap(raw.getInt(0), raw.getInt(4))
+            picture.copyPixelsFromBuffer(raw.position(start))
+            file.parentFile!!.mkdirs()
+            val part = File(file.path + ".part")
+            part.outputStream().use { picture.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+            picture.recycle()
+            if (!part.renameTo(file)) error("couldn't rename ${part.name}")
+            pictures.remove("/${g.system}/${g.romRelativePath}")
+            Log.i(TAG, "picture of ${g.romRelativePath} kept in ${SystemClock.uptimeMillis() - started} ms (mean $mean)")
+        }.onFailure { Log.w(TAG, "keeping the picture of ${g.romRelativePath} failed", it) }
+    }
+
+    /**
+     * Main thread: the controller's Home, as it goes down: keeps a picture of the game in front for the switcher, if
+     * leaving it with Home ends it and [keepsPicture], unless the menu or switcher is over it.
+     */
+    private fun onHomeDown() {
+        if (!prefs.quitOnHome || !keepsPicture() || menu.isOpen || switcher.isOpen || opening != null) return
+        val g = gameInFront() ?: return
+        val file = keptPicture(g.system, g.romRelativePath) ?: return
+        Log.i(TAG, "home: keeping a picture of ${g.romRelativePath}")
+        thread(name = "home picture") { readScreen()?.let { keepPicture(g, file, it) } }
     }
 
     /**
@@ -1141,6 +1339,18 @@ class HelperService : Service() {
         if (latest != before && latest != null) {
             launch = latest
             game = resolve(latest)
+            // Pictures PPSSPP or ARMSX2 saves from now until ES-DE is back are this game's.
+            val emulator = when {
+                latest.pkg?.startsWith("org.ppsspp.") == true -> "ppsspp"
+                latest.pkg == "com.armsx2" -> "armsx2"
+                else -> null
+            }
+            discSession = game?.let { g -> emulator?.let { Triple(g, it, System.currentTimeMillis() / 1000) } }
+            // Its folders are looked for again when none is known for it or one known is gone.
+            val known = prefs.discStates.filter { it.endsWith(".ini") == (emulator == "armsx2") }
+            if (discSession != null && (known.isEmpty() || ShizukuShell.output("ls -d " + known.joinToString(" ") { ShizukuShell.quote(it) }) == null)) {
+                findDiscStates()
+            }
             Log.i(TAG, "launch: ${latest.name} (${latest.system}) pkg=${latest.pkg} -> $game")
             // Copies a downloaded theme and reads the look now, so the menu doesn't when Back opens it.
             game?.let { g ->
@@ -1207,6 +1417,11 @@ class HelperService : Service() {
          */
         fun closeMenuNow() {
             instance?.closeMenu()
+        }
+
+        /** Main thread: the controller's Home has gone down, which Android still gets. */
+        fun homeDown() {
+            instance?.onHomeDown()
         }
 
         /**

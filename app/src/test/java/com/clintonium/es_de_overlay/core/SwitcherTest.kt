@@ -80,6 +80,104 @@ class SwitcherTest {
         assertEquals(games, playedFirst(games, "gbc", "Not Played.zip", now))
     }
 
+    // When a picture was written, in epoch seconds, from the same `YYYYMMDDTHHMMSS` ES-DE uses, in UTC.
+    private fun written(time: String) = java.time.LocalDateTime.parse(time, java.time.format.DateTimeFormatter.ofPattern("uuuuMMdd'T'HHmmss"))
+        .toEpochSecond(java.time.ZoneOffset.UTC)
+
+    @Test
+    fun `two games of one name each get the picture written nearest before their own last play`() {
+        val states = listOf(
+            written("20261117T215343") to "/states/Snes9x/Super Mario World.state.png",
+            written("20261117T212521") to "/states/Snes9x/Super Mario World.state1.png",
+            written("20261118T135900") to "/states/bsnes/Super Mario World.state.auto.png",
+            written("20261117T200000") to "/states/Snes9x/Super Mario World 2.state.png",
+        )
+        val snes = RecentGame("snes", "Super Mario World.zip", "Super Mario World", "20261117T220000")
+        val sfc = RecentGame("sfc", "hacks/Super Mario World.sfc", "Super Mario World", "20261118T140000")
+        assertEquals(states[0], statePicture(states, snes, java.time.ZoneOffset.UTC))
+        assertEquals(states[2], statePicture(states, sfc, java.time.ZoneOffset.UTC))
+        // Played before any of them: none is its own.
+        assertNull(statePicture(states, snes.copy(lastPlayed = "20261117T120000"), java.time.ZoneOffset.UTC))
+    }
+
+    @Test
+    fun `pictures in one folder give the newest whatever its time, and no picture gives none`() {
+        val states = listOf(
+            written("20261117T212521") to "/states/Snes9x/Super Mario World.state1.png",
+            written("20261118T140000") to "/states/Snes9x/Super Mario World.state.auto.png",
+        )
+        val game = RecentGame("snes", "Super Mario World.zip", "Super Mario World", "20261101T090000")
+        assertEquals(states[1], statePicture(states, game, java.time.ZoneOffset.UTC))
+        assertEquals(states[0], statePicture(states.take(1), game, java.time.ZoneOffset.UTC))
+        assertNull(statePicture(states, RecentGame("snes", "Easyland.zip", "Easyland", "20261118T140000"), java.time.ZoneOffset.UTC))
+        assertNull(statePicture(emptyList(), game, java.time.ZoneOffset.UTC))
+    }
+
+    @Test
+    fun `a kept picture's path stays inside the store, and one that would leave it is refused`() {
+        val store = java.io.File("/data/user/0/app/files/kept")
+        fun inside(path: String) = java.io.File(store, path).canonicalPath.startsWith(store.canonicalPath + "/")
+        assertEquals("snes/02) Hacks/Easyland.zip.jpg", keptPicturePath("snes", "02) Hacks/Easyland.zip"))
+        assertEquals("scummvm/dig.scummvm.jpg", keptPicturePath("scummvm", "dig.scummvm"))
+        for (path in listOf("Easyland.zip", "02) Hacks/Easyland.zip", "a b/c..d/Game (USA).7z")) {
+            assertTrue(path, inside(keptPicturePath("snes", path)!!))
+        }
+        for ((system, path) in listOf(
+            "snes" to "../../shared_prefs/prefs.xml",
+            "snes" to "02) Hacks/../../x.zip",
+            "snes" to "/storage/7BEF-E760/ROMs/snes/Easyland.zip",
+            "snes" to "./Easyland.zip",
+            "snes" to "02) Hacks//Easyland.zip",
+            ".." to "Easyland.zip",
+            "../shared_prefs" to "prefs.xml",
+            "" to "Easyland.zip",
+        )) {
+            assertNull("$system/$path", keptPicturePath(system, path))
+        }
+    }
+
+    @Test
+    fun `a picture written inside the session's times is taken, the newest, and one outside is not`() {
+        // Tekken 6 on the Nova: launched 11:09:27, its state saved 11:11:55, ES-DE back 11:12:03.
+        val launched = written("20261119T160927")
+        val back = written("20261119T161203")
+        val inside = written("20261119T161155") to "/PSP/PPSSPP_STATE/ULUS10466_1.00_0.jpg"
+        val earlier = written("20261119T160500") to "/PSP/PPSSPP_STATE/ULUS10466_1.00_1.jpg"
+        val later = written("20261119T161500") to "/PSP/PPSSPP_STATE/NPUH10197_1.00_0.jpg"
+        assertEquals(inside, sessionPicture(listOf(earlier, inside, later), launched, back))
+        assertEquals(inside, sessionPicture(listOf(inside, inside.first - 60 to "/PSP/PPSSPP_STATE/ULUS10466_1.00_2.jpg"), launched, back))
+        assertNull(sessionPicture(listOf(earlier, later), launched, back))
+        assertEquals(launched to "edge.jpg", sessionPicture(listOf(launched to "edge.jpg"), launched, back))
+    }
+
+    @Test
+    fun `the newer of the save-state and kept pictures is shown, the save state at a tie, else the scraped image`() {
+        assertEquals(PictureSource.SAVED, pictureSource(saved = 200, kept = 100))
+        assertEquals(PictureSource.LEFT, pictureSource(saved = 100, kept = 200))
+        assertEquals(PictureSource.SAVED, pictureSource(saved = 100, kept = 100))
+        assertEquals(PictureSource.SAVED, pictureSource(saved = 100, kept = null))
+        assertEquals(PictureSource.LEFT, pictureSource(saved = null, kept = 100))
+        assertEquals(PictureSource.SCRAPED, pictureSource(saved = null, kept = null))
+    }
+
+    @Test
+    fun `a save state the emulator resumes from beats a newer kept picture`() {
+        assertEquals(PictureSource.SAVED, pictureSource(saved = 100, kept = 200, resumes = true))
+        assertEquals(PictureSource.LEFT, pictureSource(saved = null, kept = 200, resumes = true))
+        assertEquals(PictureSource.SCRAPED, pictureSource(saved = null, kept = null, resumes = true))
+    }
+
+    @Test
+    fun `the detail line says Saved or Left for the picture shown`() {
+        val names = mapOf("snes" to "Nintendo SNES (Super Nintendo)")
+        val game = RecentGame("snes", "Easyland.zip", "Easyland", "20261118T130459")
+        val today = java.time.LocalDate.of(2026, 11, 18)
+        assertEquals("Nintendo SNES (Super Nintendo) · Played today, 13:04 · Saved", detailLine(game, names, today, PictureSource.SAVED))
+        assertEquals("Nintendo SNES (Super Nintendo) · Played today, 13:04 · Left", detailLine(game, names, today, PictureSource.LEFT))
+        assertEquals("Nintendo SNES (Super Nintendo) · Played today, 13:04", detailLine(game, names, today, PictureSource.SCRAPED))
+        assertEquals("Nintendo SNES (Super Nintendo) · Left", detailLine(game.copy(lastPlayed = "?"), names, today, PictureSource.LEFT))
+    }
+
     @Test
     fun `even black bars are trimmed and uneven ones or a dark picture are kept`() {
         // A 128 × 96 capture of a game 80 wide, centred: 24 black columns either side.
@@ -93,6 +191,16 @@ class SwitcherTest {
         // All black: never cut by more than a quarter each side, and both the same.
         assertEquals(listOf(32, 24, 96, 72), contentBounds(128, 96) { _, _ -> true }.toList())
         assertEquals(listOf(0, 0, 128, 96), contentBounds(128, 96) { _, _ -> false }.toList())
+    }
+
+    @Test
+    fun `a frame over twice as wide as tall is shown at 4 to 3, others as they are`() {
+        // Nestopia's NTSC filter on the Nova, a Game Boy, a SNES, a kept screen.
+        assertEquals(602 to 451, displaySize(602, 224))
+        assertEquals(160 to 144, displaySize(160, 144))
+        assertEquals(256 to 224, displaySize(256, 224))
+        assertEquals(1280 to 960, displaySize(1280, 960))
+        assertEquals(448 to 224, displaySize(448, 224))
     }
 
     @Test

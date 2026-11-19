@@ -3,6 +3,7 @@ package com.clintonium.es_de_overlay.core
 import android.view.KeyEvent
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
@@ -85,20 +86,73 @@ fun playedFirst(games: List<RecentGame>, system: String, path: String, now: Loca
     return games.toMutableList().apply { add(0, removeAt(at).copy(lastPlayed = now.format(LAST_PLAYED))) }
 }
 
+/** Which of a game's pictures the switcher shows: an emulator's save-state picture, one kept when it was quit, or the scraped image. */
+enum class PictureSource { SAVED, LEFT, SCRAPED }
+
 /**
  * The line under [game]'s title: its system's full name from [names], else its short name, then when it was last
- * played, as today or yesterday with the time, else the ISO date. Only the system shows when ES-DE's time won't read.
+ * played, as today or yesterday with the time, else the ISO date, then Saved or Left for the picture [source] shown.
+ * Only the system and source show when ES-DE's time won't read.
  */
-fun detailLine(game: RecentGame, names: Map<String, String>, today: LocalDate): String {
+fun detailLine(game: RecentGame, names: Map<String, String>, today: LocalDate, source: PictureSource = PictureSource.SCRAPED): String {
     val system = names[game.system] ?: game.system
-    val played = runCatching { LocalDateTime.parse(game.lastPlayed, LAST_PLAYED) }.getOrNull() ?: return system
+    val shown = when (source) {
+        PictureSource.SAVED -> " · Saved"
+        PictureSource.LEFT -> " · Left"
+        PictureSource.SCRAPED -> ""
+    }
+    val played = runCatching { LocalDateTime.parse(game.lastPlayed, LAST_PLAYED) }.getOrNull() ?: return system + shown
     val time = played.toLocalTime().truncatedTo(ChronoUnit.MINUTES)
     val day = when (played.toLocalDate()) {
         today -> "today, $time"
         today.minusDays(1) -> "yesterday, $time"
         else -> played.toLocalDate().toString()
     }
-    return "$system · Played $day"
+    return "$system · Played $day$shown"
+}
+
+/**
+ * [game]'s save-state picture among RetroArch's [states] (when written, in epoch seconds, and path), else null.
+ * RetroArch names a state after the ROM, in a folder per core, so games of one name on two systems can find pictures
+ * in two folders: then it's the one written nearest before the game was last played, which ES-DE sets, in [zone]'s
+ * time, as the game ends. Pictures all in one folder are one core's, so the newest is the game's whatever its time.
+ */
+fun statePicture(states: List<Pair<Long, String>>, game: RecentGame, zone: ZoneId): Pair<Long, String>? {
+    val base = game.path.substringAfterLast('/').substringBeforeLast('.')
+    val candidates = states.filter { it.second.substringAfterLast('/').startsWith("$base.state") }
+    if (candidates.distinctBy { it.second.substringBeforeLast('/') }.size <= 1) return candidates.maxByOrNull { it.first }
+    val played = runCatching { LocalDateTime.parse(game.lastPlayed, LAST_PLAYED).atZone(zone).toEpochSecond() }.getOrNull() ?: return null
+    return candidates.filter { it.first <= played }.maxByOrNull { it.first }
+}
+
+/**
+ * Where a picture the overlay keeps for a game goes, relative to one of its own stores: `<system>/<ROM path>.jpg`,
+ * [path] being relative to `<ROMs>/<system>/`. Null for a [system] or [path] that would reach outside the store (an
+ * absolute path, `..`, `.` or an empty segment), since both come from files in shared storage.
+ */
+fun keptPicturePath(system: String, path: String): String? {
+    val parts = "$system/$path".split('/')
+    if (parts.any { it.isEmpty() || it == "." || it == ".." }) return null
+    return "$system/$path.jpg"
+}
+
+/**
+ * The newest of [pictures] (when written, in epoch seconds, and path) written from [from] to [to], a game's session;
+ * else null. For an emulator that names its save-state pictures by the disc, not the ROM.
+ */
+fun sessionPicture(pictures: List<Pair<Long, String>>, from: Long, to: Long): Pair<Long, String>? =
+    pictures.filter { it.first in from..to }.maxByOrNull { it.first }
+
+/**
+ * Which picture a game shows: its save-state picture, written at [saved], when the emulator [resumes] from that state;
+ * else the newer of it and the one kept when the game was quit, at [kept] (epoch seconds, null for none), the save
+ * state at a tie; else the scraped image. A game force-stopped after the state resumes from the state, not where it
+ * was left.
+ */
+fun pictureSource(saved: Long?, kept: Long?, resumes: Boolean = false): PictureSource = when {
+    saved != null && (resumes || kept == null || saved >= kept) -> PictureSource.SAVED
+    kept != null -> PictureSource.LEFT
+    else -> PictureSource.SCRAPED
 }
 
 /**
@@ -122,6 +176,14 @@ fun contentBounds(width: Int, height: Int, dark: (Int, Int) -> Boolean): IntArra
     val (t, b) = if (even(top, bottom, height)) top to bottom else 0 to 0
     return intArrayOf(l, t, width - r, height - b)
 }
+
+/**
+ * The size to show a [width] × [height] picture at: one over twice as wide as tall is a frame of an emulator's wide
+ * pixels (RetroArch saves Nestopia's NTSC-filtered NES frames 602 × 224), shown at 4:3 with its height stretched;
+ * any other as it is.
+ */
+// ponytail: RetroArch saves no aspect with a state's picture; reading its aspect setting and the core's would fix the narrower ones too (SNES's 256 × 224 shown 4:3).
+fun displaySize(width: Int, height: Int): Pair<Int, Int> = if (width > 2 * height) width to width * 3 / 4 else width to height
 
 /** A setting in ES-DE's es_settings.xml the switcher needs, by its name there. */
 enum class SwitcherNeed(val setting: String) {

@@ -101,6 +101,14 @@ class Prefs(private val context: Context) {
     var switcherDetails: Boolean
         get() = sp.getBoolean("switcherDetails", false)
         set(v) = sp.edit { putBoolean("switcherDetails", v) }
+    /** Where PPSSPP's `PPSSPP_STATE` folders and ARMSX2's `PCSX2-Android.ini` were found in shared storage, kept as finding them takes seconds. */
+    var discStates: Set<String>
+        get() = sp.getStringSet("discStates", null).orEmpty()
+        set(v) = sp.edit { putStringSet("discStates", v) }
+    /** Whether ending a game through the overlay first keeps a picture of its screen for the switcher. */
+    var keepQuitPicture: Boolean
+        get() = sp.getBoolean("keepQuitPicture", true)
+        set(v) = sp.edit { putBoolean("keepQuitPicture", v) }
     /** Whether the menu opens straight into the guide, map or manual last opened for the game. */
     var reopenLastDoc: Boolean
         get() = sp.getBoolean("reopenLastDoc", true)

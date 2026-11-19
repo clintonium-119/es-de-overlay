@@ -91,9 +91,11 @@ class ButtonService : AccessibilityService() {
         if (BuildConfig.DEBUG && event.action == KeyEvent.ACTION_DOWN) {
             Log.d(TAG, "key held ${SystemClock.uptimeMillis() - event.eventTime} ms: ${KeyEvent.keyCodeToString(event.keyCode)} source=0x${event.source.toString(16)}")
         }
-        // The controller's Home (the Nova sends MOVE_HOME) goes on to Android; the menu closes as it lets go.
-        if (event.keyCode == KeyEvent.KEYCODE_MOVE_HOME && event.action == KeyEvent.ACTION_UP && event.isFromSource(InputDevice.SOURCE_GAMEPAD)) {
-            main.post(HelperService::closeMenuNow)
+        // The controller's Home (the Nova sends MOVE_HOME) goes on to Android; a picture of the game may be kept as it
+        // goes down, and the menu closes as it lets go.
+        if (event.keyCode == KeyEvent.KEYCODE_MOVE_HOME && event.isFromSource(InputDevice.SOURCE_GAMEPAD)) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) HelperService.homeDown()
+            if (event.action == KeyEvent.ACTION_UP) main.post(HelperService::closeMenuNow)
         }
         // The switcher's own presses come from a keyboard; the D-pad isn't a key and can't be kept from ES-DE here.
         if (HelperService.steering() && event.isFromSource(InputDevice.SOURCE_GAMEPAD)) return true

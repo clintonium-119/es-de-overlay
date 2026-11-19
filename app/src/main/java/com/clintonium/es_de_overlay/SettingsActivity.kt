@@ -167,6 +167,7 @@ class SettingsActivity : ComponentActivity() {
         var switcherStrip by remember { mutableStateOf(prefs.switcherStrip) }
         var switcherGames by remember { mutableIntStateOf(prefs.switcherGames) }
         var switcherDetails by remember { mutableStateOf(prefs.switcherDetails) }
+        var keepQuitPicture by remember { mutableStateOf(prefs.keepQuitPicture) }
         val shizuku = remember(tick) { ShizukuShell.state(this) }
         // Null when there's no settings file to read, which the folder's own warning covers.
         val esdeSettings = remember(tick, esde) { esde?.let(::esdeSettings) }
@@ -531,6 +532,18 @@ class SettingsActivity : ComponentActivity() {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Show each game's system and when it was played", Modifier.weight(1f))
                 Switch(checked = switcherDetails, onCheckedChange = { switcherDetails = it; prefs.switcherDetails = it })
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Keep a picture of where you left a game")
+                    Text(
+                        "Quit Game, and Home when it ends the game, take a picture of the game's screen first. The switcher " +
+                            "shows it unless the emulator starts the game from a save state, whose picture it shows instead.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = keepQuitPicture, onCheckedChange = { keepQuitPicture = it; prefs.keepQuitPicture = it })
             }
             Section("Permissions")
             val ask = { permission: String ->
