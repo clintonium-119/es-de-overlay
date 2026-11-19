@@ -39,6 +39,18 @@ data class Look(
     val bodyLineSpacing: Float,
     val artCornerRadius: Float?,
     val source: LookSource,
+    // ES-DE's help prompts, with its defaults (HelpStyle): the font (null for the list's) and its size; `uppercase`,
+    // `lowercase` or `capitalize`; the icon-to-text scale, below 1 shrinking the text and above it the icons; spacings
+    // between entries and between icon and text, fractions of the screen width; padding as left, right (of the width),
+    // top, bottom (of the height); the corner radius of the width.
+    val helpFontPath: String? = null,
+    val helpFontSize: Float = 0.035f,
+    val helpLetterCase: String = "uppercase",
+    val helpIconScale: Float = 1f,
+    val helpEntrySpacing: Float = 0.00833f,
+    val helpIconTextSpacing: Float = 0.00416f,
+    val helpPadding: List<Float> = listOf(0f, 0f, 0f, 0f),
+    val helpCornerRadius: Float = 0f,
 ) {
     /**
      * The selector's width when it's a thin bar at the row's left, like Linear's; null when it covers the row. A wider
@@ -117,7 +129,18 @@ fun look(style: ThemeStyle?, theme: String, scheme: String, reason: String?): Lo
         bodyLineSpacing = style.descriptionLineSpacing ?: ES_DE_TEXT_SPACING,
         artCornerRadius = style.artCornerRadius,
         source = LookSource.Theme(style.themeName ?: theme, style.colorSchemeLabel ?: scheme),
-    )
+    ).let { look ->
+        look.copy(
+            helpFontPath = path(style.helpFontPath) ?: look.fontPath,
+            helpFontSize = style.helpFontSize ?: look.helpFontSize,
+            helpLetterCase = style.helpLetterCase ?: look.helpLetterCase,
+            helpIconScale = style.helpIconScale ?: look.helpIconScale,
+            helpEntrySpacing = style.helpEntrySpacing ?: look.helpEntrySpacing,
+            helpIconTextSpacing = style.helpIconTextSpacing ?: look.helpIconTextSpacing,
+            helpPadding = style.helpPadding ?: look.helpPadding,
+            helpCornerRadius = style.helpCornerRadius ?: look.helpCornerRadius,
+        )
+    }
 }
 
 /** The `<overlay>` children of an overlay-theme.xml by tag; empty when the file isn't one. */
@@ -162,10 +185,14 @@ fun Look.with(overrides: Map<String, String>): Look {
         source = LookSource.File(source),
     ).let { look ->
         // A percentage on top of the sizes above, as the Text size setting is.
-        overrides["textScale"]?.toFloatOrNull()?.takeIf { it > 0f }?.let { look.copy(fontSize = look.fontSize * it / 100f, bodyFontSize = look.bodyFontSize * it / 100f) }
+        overrides["textScale"]?.toFloatOrNull()?.takeIf { it > 0f }?.let { look.scaled(it) }
             ?: look
     }
 }
+
+/** This look with its text sizes at [percent] of theirs, as the Text size setting and overlay-theme.xml's textScale make them. */
+fun Look.scaled(percent: Float) =
+    copy(fontSize = fontSize * percent / 100f, bodyFontSize = bodyFontSize * percent / 100f, helpFontSize = helpFontSize * percent / 100f)
 
 private const val BLACK = 0xFF000000.toInt()
 // ES-DE's textlist colours when a theme leaves them out (TextListComponent.h), and its help system's

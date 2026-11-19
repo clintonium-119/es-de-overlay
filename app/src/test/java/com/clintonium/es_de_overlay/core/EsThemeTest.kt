@@ -25,6 +25,57 @@ class EsThemeTest {
         resolveTheme(mapOf(*files)::get, ThemeSettings(theme = "inline"), system, 16 / 9f, "screenshots")
 
     @Test
+    fun `the help system's sizes are read, and ES-DE's defaults stand in for the ones left out`() {
+        // The Nova's MinUI Menu (Overlay) at 4:3 and the small font size, the menu's own help left aside.
+        val theme = """
+            <theme>
+               <variables><helpsystemFontSize>0.041666666666667</helpsystemFontSize></variables>
+               <view name="system, gamelist">
+                  <helpsystem name="help-menu"><scope>menu</scope><fontSize>0.02</fontSize></helpsystem>
+                  <helpsystem name="help-left, help-right">
+                     <fontPath>./fonts/help.otf</fontPath>
+                     <fontSize>${'$'}{helpsystemFontSize}</fontSize>
+                     <letterCase>capitalize</letterCase>
+                     <entryRelativeScale>0.65</entryRelativeScale>
+                     <entrySpacing>0.021875</entrySpacing>
+                     <iconTextSpacing>0.0125</iconTextSpacing>
+                     <backgroundHorizontalPadding>0.015625 0.0234375</backgroundHorizontalPadding>
+                     <backgroundVerticalPadding>0.01666667 0.01666667</backgroundVerticalPadding>
+                     <backgroundCornerRadius>0.05</backgroundCornerRadius>
+                  </helpsystem>
+               </view>
+            </theme>
+        """.trimIndent()
+        val style = inline("theme.xml" to theme)!!
+        assertEquals(0.041666666666667f, style.helpFontSize)
+        assertEquals("capitalize", style.helpLetterCase)
+        assertEquals(0.65f, style.helpIconScale)
+        assertEquals(0.021875f, style.helpEntrySpacing)
+        assertEquals(0.0125f, style.helpIconTextSpacing)
+        assertEquals(listOf(0.015625f, 0.0234375f, 0.01666667f, 0.01666667f), style.helpPadding)
+        assertEquals(0.05f, style.helpCornerRadius)
+        val look = look(style, "minui", "dark", null)
+        assertEquals("themes/minui/fonts/help.otf", look.helpFontPath)
+        assertEquals(0.041666666666667f, look.helpFontSize)
+        assertEquals(listOf(0.015625f, 0.0234375f, 0.01666667f, 0.01666667f), look.helpPadding)
+        // Only a vertical padding: none at the sides.
+        val vertical = inline("theme.xml" to theme.replace(Regex("<backgroundHorizontalPadding>.*</backgroundHorizontalPadding>"), ""))!!
+        assertEquals(listOf(0f, 0f, 0.01666667f, 0.01666667f), vertical.helpPadding)
+
+        // A help system with none of these: ES-DE's defaults, and the list's font.
+        val plain = look(inline("theme.xml" to """<theme><view name="gamelist"><helpsystem name="help"><textColor>FFFFFF</textColor></helpsystem><textlist name="l"><fontPath>./list.ttf</fontPath></textlist></view></theme>""")!!, "plain", "", null)
+        assertEquals("themes/plain/list.ttf", plain.helpFontPath)
+        assertEquals(0.035f, plain.helpFontSize)
+        assertEquals("uppercase", plain.helpLetterCase)
+        assertEquals(1f, plain.helpIconScale)
+        assertEquals(0.00833f, plain.helpEntrySpacing)
+        assertEquals(0.00416f, plain.helpIconTextSpacing)
+        assertEquals(listOf(0f, 0f, 0f, 0f), plain.helpPadding)
+        assertEquals(0f, plain.helpCornerRadius)
+        assertEquals(0.035f * 1.2f, plain.scaled(120f).helpFontSize, 1e-6f)
+    }
+
+    @Test
     fun `settings read with defaults`() {
         val all = """
             <?xml version="1.0"?>

@@ -2,11 +2,15 @@ package com.clintonium.es_de_overlay
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.ColorFilter
 import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.InsetDrawable
 import android.graphics.drawable.LayerDrawable
@@ -21,7 +25,6 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewTreeObserver
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
@@ -30,7 +33,9 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.core.graphics.PathParser
 import kotlin.math.ceil
+import com.clintonium.es_de_overlay.core.HelpIcon
 import com.clintonium.es_de_overlay.core.Look
 
 /**
@@ -73,21 +78,108 @@ fun WindowManager.addFullScreen(view: View, format: Int, fitInsets: Int = 0, hid
     view.requestFocus()
 }
 
-/** A rounded help pill in [look]'s help colours: `A OPEN  B BACK`, button letters in the icon color. */
-fun helpPill(context: Context, look: Look, font: Typeface, textPx: Float, vararg entries: Pair<String, String>) = TextView(context).apply {
-    text = SpannableStringBuilder().apply {
-        entries.forEachIndexed { i, (button, label) ->
-            if (i > 0) append("   ")
-            append(button, ForegroundColorSpan(look.helpIcon), 0)
-            append(" ${label.uppercase()}")
-        }
+/**
+ * ES-DE's help sizes in [theme]'s look on a screen [screenH] tall: the icon and the text size in pixels. Below 1 the
+ * theme's icon scale shrinks the text, above 1 the icons, as ES-DE's help does.
+ */
+private fun helpSizes(theme: ThemeLook.Current, screenH: Int): Pair<Float, Float> {
+    val look = theme.look
+    val base = look.helpFontSize * screenH
+    return if (look.helpIconScale < 1f) base to base * look.helpIconScale else base / look.helpIconScale to base
+}
+
+// The help's background, padding and font on [view], as ES-DE draws them around its help prompts.
+private fun helpStyle(view: View, theme: ThemeLook.Current, screenW: Int, screenH: Int) {
+    val look = theme.look
+    val (left, right, top, bottom) = look.helpPadding
+    view.setPadding((left * screenW).toInt(), (top * screenH).toInt(), (right * screenW).toInt(), (bottom * screenH).toInt())
+    view.background = GradientDrawable().apply { setColor(look.helpBackground); cornerRadius = look.helpCornerRadius * screenW }
+}
+
+private fun helpTextView(context: Context, theme: ThemeLook.Current, screenH: Int) = TextView(context).apply {
+    typeface = theme.helpFont
+    setTextColor(theme.look.helpText)
+    setTextSize(TypedValue.COMPLEX_UNIT_PX, helpSizes(theme, screenH).second)
+    includeFontPadding = false
+    isSingleLine = true
+}
+
+/** A pill of text in ES-DE's help style for [theme]: its help font, size, colours, padding and corners, in the text's own case. */
+fun helpText(context: Context, theme: ThemeLook.Current, screenW: Int, screenH: Int) =
+    helpTextView(context, theme, screenH).apply {
+        gravity = Gravity.CENTER_VERTICAL
+        minHeight = helpSizes(theme, screenH).first.toInt()
+        helpStyle(this, theme, screenW, screenH)
     }
-    typeface = font
-    setTextColor(look.helpText)
-    setTextSize(TypedValue.COMPLEX_UNIT_PX, textPx * 0.65f)
-    val pad = (textPx * 0.5f).toInt()
-    setPadding(pad * 2, pad, pad * 2, pad)
-    background = GradientDrawable().apply { setColor(look.helpBackground); cornerRadius = textPx }
+
+/**
+ * ES-DE's help prompts for [entries], each an ES-DE prompt (`a`, `b`, `x`, `y`, `left/right` or `up/down`) and its
+ * action, as ES-DE draws them in [theme]'s look on a [screenW] × [screenH] screen: ES-DE's own icon in the theme's icon
+ * colour, then the action in its help font, size and letter case, on its help background with its spacing, padding and
+ * corners. A prompt whose icon can't be read shows the button's name in the icon colour instead.
+ */
+fun helpPill(context: Context, theme: ThemeLook.Current, screenW: Int, screenH: Int, entries: List<Pair<String, String>>) =
+    LinearLayout(context).apply {
+        val look = theme.look
+        val (iconPx, textPx) = helpSizes(theme, screenH)
+        gravity = Gravity.CENTER_VERTICAL
+        entries.forEachIndexed { i, (prompt, action) ->
+            val icon = theme.helpIcons[prompt]?.let { runCatching { HelpIconDrawable(it, look.helpIcon) }.getOrNull() }
+            val iconView = if (icon != null) {
+                ImageView(context).apply { setImageDrawable(icon) }
+            } else {
+                helpTextView(context, theme, screenH).apply {
+                    setTextColor(look.helpIcon)
+                    text = when (prompt) {
+                        "left/right" -> "◀▶"
+                        "up/down" -> "▲▼"
+                        else -> theme.label(prompt.uppercase())
+                    }
+                }
+            }
+            val size = if (icon != null) iconPx.toInt() else ViewGroup.LayoutParams.WRAP_CONTENT
+            addView(iconView, LinearLayout.LayoutParams(size, size).apply { if (i > 0) leftMargin = (look.helpEntrySpacing * screenW).toInt() })
+            addView(
+                helpTextView(context, theme, screenH).apply {
+                    text = when (look.helpLetterCase) {
+                        "lowercase" -> action.lowercase()
+                        "capitalize" -> action.split(' ').joinToString(" ") { word -> word.lowercase().replaceFirstChar(Char::uppercase) }
+                        else -> action.uppercase()
+                    }
+                },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    leftMargin = (look.helpIconTextSpacing * screenW).toInt()
+                },
+            )
+        }
+        minimumHeight = iconPx.toInt()
+        helpStyle(this, theme, screenW, screenH)
+    }
+
+/** ES-DE's help [icon], drawn in [color] to fill its bounds, as ES-DE tints its white icons with the theme's colour. */
+private class HelpIconDrawable(private val icon: HelpIcon, private val color: Int) : Drawable() {
+    private val shapes = icon.shapes.map { PathParser.createPathFromPathData(it.pathData) to it }
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    override fun draw(canvas: Canvas) {
+        val scale = bounds.width() / icon.size
+        canvas.save()
+        canvas.translate(bounds.left.toFloat(), bounds.top.toFloat())
+        canvas.scale(scale, scale)
+        for ((path, shape) in shapes) {
+            paint.color = color
+            paint.alpha = (Color.alpha(color) * shape.opacity).toInt()
+            paint.style = if (shape.stroke != null) Paint.Style.STROKE else Paint.Style.FILL
+            shape.stroke?.let { paint.strokeWidth = it }
+            canvas.drawPath(path, paint)
+        }
+        canvas.restore()
+    }
+
+    override fun setAlpha(alpha: Int) {}
+    override fun setColorFilter(colorFilter: ColorFilter?) {}
+    @Deprecated("Deprecated in Java")
+    override fun getOpacity() = PixelFormat.TRANSLUCENT
 }
 
 /**
@@ -271,56 +363,20 @@ class MenuOverlay(private val context: Context) {
         }
     }
 
-    /** Set by [yieldFocus]: the window on screen takes no more keys. */
-    private var yielded = false
-
-    /**
-     * Leaves the menu on screen but gives up the keys, so presses reach the app underneath; [then] runs once Android
-     * has taken the keys away, or after a quarter second if it never says so. From the call on, the menu ignores any
-     * key still sent to it: a press meant for the app underneath would otherwise move the list.
-     */
-    fun yieldFocus(then: () -> Unit) {
-        val view = root ?: return then()
-        yielded = true
-        val params = view.layoutParams as WindowManager.LayoutParams
-        params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-        wm.updateViewLayout(view, params)
-        var waiting = true
-        val done = Runnable {
-            if (waiting) {
-                waiting = false
-                then()
-            }
-        }
-        if (!view.hasWindowFocus()) return done.run()
-        view.viewTreeObserver.addOnWindowFocusChangeListener(object : ViewTreeObserver.OnWindowFocusChangeListener {
-            override fun onWindowFocusChanged(hasFocus: Boolean) {
-                if (hasFocus) return
-                view.viewTreeObserver.removeOnWindowFocusChangeListener(this)
-                done.run()
-            }
-        })
-        view.postDelayed(done, 250)
-    }
-
-    /**
-     * Shows [items] with the cursor on [start]; with [alt], X calls it with the selected row and the help pill names
-     * it. With [arts], the art box shows the selected row's image.
-     */
+    /** Shows [items] with the cursor on [start]; with [alt], X calls it with the selected row and the help pill names it. */
     fun show(
         items: List<String>,
         onPick: (Int) -> Unit,
         onClose: () -> Unit,
         alt: Pair<String, (Int) -> Unit>? = null,
         start: Int = 0,
-        arts: List<Bitmap?>? = null,
     ) {
         close()
-        reshow = { show(items, onPick, onClose, alt, start, arts) }
+        reshow = { show(items, onPick, onClose, alt, start) }
         val list = PillList(context, theme.look, theme.font, screenW, screenH, items, start)
         val rows = list.rows
-        val help = listOfNotNull("A" to "Select", alt?.let { "X" to it.first }, "B" to "Back")
-        open(ScrollView(context).apply { addView(list.view) }, help, arts?.let { { it.getOrNull(list.selected) } }) { code, held ->
+        val help = listOfNotNull("a" to "Select", alt?.let { "x" to it.first }, "b" to "Back")
+        open(ScrollView(context).apply { addView(list.view) }, help) { code, held ->
             when (code) {
                 // A press past an end goes round to the other, as in ES-DE's gamelist; a held D-pad stops at the end.
                 KeyEvent.KEYCODE_DPAD_UP -> list.move(-1, wrap = !held)
@@ -374,7 +430,7 @@ class MenuOverlay(private val context: Context) {
             }
         }
         val scroll = ScrollView(context).apply { addView(text) }
-        open(scroll, listOf("✚" to "Scroll", "B" to "Back")) { code, _ ->
+        open(scroll, listOf("up/down" to "Scroll", "b" to "Back")) { code, _ ->
             when (code) {
                 KeyEvent.KEYCODE_DPAD_UP -> scroll.scrollBy(0, -linePx)
                 KeyEvent.KEYCODE_DPAD_DOWN -> scroll.scrollBy(0, linePx)
@@ -388,15 +444,9 @@ class MenuOverlay(private val context: Context) {
 
     /**
      * Adds the menu window: the [title] above [content] in the list column, the art box beside it and a help pill of
-     * [help]. [onKey] gets each key press, and whether it's a repeat from a held key, and returns whether it used it.
-     * With [rowArt], the art box shows that image, read again after every key, in place of [art].
+     * [help], ES-DE prompts and their actions. [onKey] gets each key press, and whether it's a repeat from a held key, and returns whether it used it.
      */
-    private fun open(
-        content: ScrollView,
-        help: List<Pair<String, String>>,
-        rowArt: (() -> Bitmap?)? = null,
-        onKey: (Int, Boolean) -> Boolean,
-    ) {
+    private fun open(content: ScrollView, help: List<Pair<String, String>>, onKey: (Int, Boolean) -> Boolean) {
         val look = theme.look
         val font = theme.font
         val textPx = screenH * look.fontSize
@@ -423,10 +473,8 @@ class MenuOverlay(private val context: Context) {
             addView(titleRow)
             addView(content, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         }
-        val artBox = FrameLayout(context)
-        fun fillArt() = artBox.apply {
-            val image = if (rowArt != null) rowArt() else art
-            removeAllViews()
+        val image = art
+        val artBox = FrameLayout(context).apply {
             // The theme's art corner radius, else minUI's; the screenshot is clipped to this background's outline.
             background = GradientDrawable().apply {
                 cornerRadius = screenW * (look.artCornerRadius ?: 0.0078125f)
@@ -452,7 +500,6 @@ class MenuOverlay(private val context: Context) {
                 )
             }
         }
-        fillArt()
         val view = FrameLayout(context).apply {
             setBackgroundColor(look.background)
             // ES-DE's gamelist margins: 5% of the width at the sides, 7% of the height above, 6% below.
@@ -467,7 +514,7 @@ class MenuOverlay(private val context: Context) {
                 topMargin = (screenH * 0.44166667f).toInt() - artH / 2 - padTop
             })
             addView(
-                helpPill(context, look, font, textPx, *help.map { (button, action) -> theme.label(button) to action }.toTypedArray()),
+                helpPill(context, theme, screenW, screenH, help),
                 FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END),
             )
             // Keep focus on the root so the ScrollView doesn't take the D-pad.
@@ -475,19 +522,16 @@ class MenuOverlay(private val context: Context) {
             isFocusable = true
             isFocusableInTouchMode = true
             setOnKeyListener { _, sent, event ->
-                if (yielded) return@setOnKeyListener true
                 val code = theme.button(sent, event.device?.name)
                 if (BuildConfig.DEBUG && event.action == KeyEvent.ACTION_DOWN) {
                     val swapped = if (code != sent) " as ${KeyEvent.keyCodeToString(code)}" else ""
                     Log.d(TAG, "key delivered ${SystemClock.uptimeMillis() - event.eventTime} ms: ${KeyEvent.keyCodeToString(sent)}$swapped")
                 }
-                if (event.action == KeyEvent.ACTION_DOWN) onKey(code, event.repeatCount > 0).also { if (rowArt != null && root === this) fillArt() }
-                else code in KEYS
+                if (event.action == KeyEvent.ACTION_DOWN) onKey(code, event.repeatCount > 0) else code in KEYS
             }
         }
         wm.addFullScreen(view, PixelFormat.TRANSLUCENT, hidden = hidden)
         root = view
-        yielded = false
         // close() left the last window up for this one. It goes once this one's frame is on screen, or after a
         // quarter second if no frame is reported.
         outgoing?.let { old ->

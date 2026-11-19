@@ -15,6 +15,8 @@ class Prefs(private val context: Context) {
     private val positions = context.getSharedPreferences("positions", Context.MODE_PRIVATE)
     // Written only by the service's process, which the viewer tells what it opened.
     private val lastDocs = context.getSharedPreferences("lastDocs", Context.MODE_PRIVATE)
+    // Written only by the service's process, as ES-DE's log names systems.
+    private val fullNames = context.getSharedPreferences("systemNames", Context.MODE_PRIVATE)
 
     var esdeTree: Uri?
         get() = sp.getString("esdeTree", null)?.let(Uri::parse)
@@ -81,6 +83,18 @@ class Prefs(private val context: Context) {
     var switcher: Boolean
         get() = sp.getBoolean("switcher", false)
         set(v) = sp.edit { putBoolean("switcher", v) }
+    /** How many of ES-DE's Last Played games the switcher shows, newest first. */
+    var switcherGames: Int
+        get() = sp.getInt("switcherGames", 10)
+        set(v) = sp.edit { putInt("switcherGames", v) }
+    /** Whether the switcher shows the neighbouring games in a strip under the one shown (the default) or one game a screen. */
+    var switcherStrip: Boolean
+        get() = sp.getBoolean("switcherStrip", true)
+        set(v) = sp.edit { putBoolean("switcherStrip", v) }
+    /** Whether the switcher shows each game's system and when it was last played under its title. */
+    var switcherDetails: Boolean
+        get() = sp.getBoolean("switcherDetails", false)
+        set(v) = sp.edit { putBoolean("switcherDetails", v) }
     /** Whether the menu opens straight into the guide, map or manual last opened for the game. */
     var reopenLastDoc: Boolean
         get() = sp.getBoolean("reopenLastDoc", true)
@@ -93,6 +107,15 @@ class Prefs(private val context: Context) {
     fun setLastDoc(game: GameRef, key: String?) = lastDocs.edit {
         val name = "${game.system}/${game.romRelativePath}"
         if (key == null) remove(name) else putString(name, key)
+    }
+
+    /** Each system's full name by its short name, as ES-DE's log has named them. */
+    fun systemNames(): Map<String, String> = fullNames.all.mapValues { it.value.toString() }
+
+    /** Keeps [names] with the names already learned; writes only when one is new or changed. */
+    fun learnSystemNames(names: Map<String, String>) {
+        val changed = names.filter { (short, full) -> fullNames.getString(short, null) != full }
+        if (changed.isNotEmpty()) fullNames.edit { changed.forEach { (short, full) -> putString(short, full) } }
     }
 
     fun esdeIsHome() = context.packageManager.resolveActivity(

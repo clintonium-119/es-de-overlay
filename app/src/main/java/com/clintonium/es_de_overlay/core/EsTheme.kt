@@ -134,6 +134,14 @@ data class ThemeStyle(
     val helpIconColor: Int? = null,
     val helpBackgroundColor: Int? = null,
     val helpFontPath: String? = null,
+    val helpFontSize: Float? = null,
+    val helpLetterCase: String? = null,
+    val helpIconScale: Float? = null,
+    val helpEntrySpacing: Float? = null,
+    val helpIconTextSpacing: Float? = null,
+    /** Left and right as fractions of the screen width, top and bottom of its height. */
+    val helpPadding: List<Float>? = null,
+    val helpCornerRadius: Float? = null,
     val artCornerRadius: Float? = null,
     val themeName: String? = null,
     val colorSchemeLabel: String? = null,
@@ -241,6 +249,16 @@ fun resolveTheme(
         helpIconColor = help["iconColor"]?.let(::themeColor),
         helpBackgroundColor = help["backgroundColor"]?.let(::themeColor) ?: helpPanel?.let(::painted),
         helpFontPath = help["fontPath"],
+        helpFontSize = help["fontSize"]?.toFloatOrNull(),
+        helpLetterCase = help["letterCase"],
+        helpIconScale = help["entryRelativeScale"]?.toFloatOrNull(),
+        helpEntrySpacing = help["entrySpacing"]?.toFloatOrNull(),
+        helpIconTextSpacing = help["iconTextSpacing"]?.toFloatOrNull(),
+        helpPadding = listOf("backgroundHorizontalPadding", "backgroundVerticalPadding")
+            .map { help[it]?.let(::pair) }
+            .takeIf { it.any { p -> p != null } }
+            ?.flatMap { it ?: listOf(0f, 0f) },
+        helpCornerRadius = help["backgroundCornerRadius"]?.toFloatOrNull(),
         artCornerRadius = art?.let { it["cornerRadius"] ?: it["imageCornerRadius"] }?.toFloatOrNull(),
         themeName = caps?.children("themeName")?.firstOrNull()?.textContent?.trim()?.ifEmpty { null },
         colorSchemeLabel = caps?.children("colorScheme")?.firstOrNull { it.getAttribute("name") == scheme }?.let { entry ->
@@ -266,7 +284,7 @@ fun svgFill(svg: String): Int? {
 }
 
 // A shape's attribute or style property.
-private fun svgAttribute(shape: String, name: String) =
+internal fun svgAttribute(shape: String, name: String) =
     Regex("""(?:^|[\s;"'])$name\s*[:=]\s*["']?([^;"'\s>]+)""").find(shape)?.groupValues?.get(1)
 
 // The first shape drawn in a plain colour (SVG's black when it names no fill): drawings often start with an unfilled

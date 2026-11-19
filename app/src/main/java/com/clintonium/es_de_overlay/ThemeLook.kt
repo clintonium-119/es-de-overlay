@@ -22,7 +22,11 @@ import com.clintonium.es_de_overlay.core.esButton
 import com.clintonium.es_de_overlay.core.esInputButtons
 import com.clintonium.es_de_overlay.core.look
 import com.clintonium.es_de_overlay.core.overlayTheme
+import com.clintonium.es_de_overlay.core.HelpIcon
+import com.clintonium.es_de_overlay.core.helpIcon
+import com.clintonium.es_de_overlay.core.helpIconName
 import com.clintonium.es_de_overlay.core.resolveTheme
+import com.clintonium.es_de_overlay.core.scaled
 import com.clintonium.es_de_overlay.core.themeSettings
 import com.clintonium.es_de_overlay.core.unpackFiles
 import com.clintonium.es_de_overlay.core.with
@@ -43,7 +47,8 @@ class ThemeLook(private val context: Context, private val prefs: Prefs) {
      * look's files by its path below the ES-DE folder, from wherever the theme was read; null when it's missing.
      * A gamepad's A, B, X and Y work as ES-DE's [inputs] (its es_input.xml, by device name) map them, then as ES-DE's
      * "Swap the A/B and X/Y buttons" ([swapButtons]) swaps them; the help names them as ES-DE's does for its
-     * [controllerType].
+     * [controllerType]. [helpFont] is the help prompts' font; [helpIcons] ES-DE's own icons for its help prompts
+     * (`a`, `b`, `x`, `y`, `left/right`, `up/down`) as ES-DE shows them, missing when ES-DE's app can't be read.
      */
     class Current(
         val look: Look,
@@ -52,6 +57,8 @@ class ThemeLook(private val context: Context, private val prefs: Prefs) {
         val swapButtons: Boolean = false,
         val controllerType: String = "xbox",
         val inputs: Map<String, Map<String, Int>> = emptyMap(),
+        val helpFont: Typeface = font,
+        val helpIcons: Map<String, HelpIcon> = emptyMap(),
         val open: (String) -> InputStream?,
     ) {
         /** Key [code] from the gamepad called [device] as ES-DE reads it. */
@@ -93,11 +100,22 @@ class ThemeLook(private val context: Context, private val prefs: Prefs) {
             files(path) ?: tree?.let { runCatching { context.contentResolver.openInputStream(treeChild(it, path)) }.getOrNull() }
         }
         val look = (overrides?.let { base.with(overlayTheme(it.byteInputStream())) } ?: base)
-            .let { it.copy(fontSize = it.fontSize * scale / 100f, bodyFontSize = it.bodyFontSize * scale / 100f) }
+            .scaled(scale.toFloat())
         val font = typeface(open, look.fontPath)
         val inputs = input?.let { runCatching { esInputButtons(it.byteInputStream()) }.getOrNull() }.orEmpty()
         val bodyFont = if (look.bodyFontPath == look.fontPath) font else typeface(open, look.bodyFontPath)
-        val current = Current(look, font, bodyFont, parsed.swapButtons, parsed.controllerType, inputs, open)
+        val helpFont = when (look.helpFontPath) {
+            look.fontPath -> font
+            look.bodyFontPath -> bodyFont
+            else -> typeface(open, look.helpFontPath)
+        }
+        // ES-DE's own help pictures, from its app's assets.
+        val assets = esde()?.assets
+        val icons = listOf("a", "b", "x", "y", "left/right", "up/down").mapNotNull { prompt ->
+            val name = helpIconName(prompt, parsed.swapButtons, parsed.controllerType) ?: return@mapNotNull null
+            runCatching { assets?.open("graphics/help/$name.svg")?.use { helpIcon(it.reader().readText()) } }.getOrNull()?.let { prompt to it }
+        }.toMap()
+        val current = Current(look, font, bodyFont, parsed.swapButtons, parsed.controllerType, inputs, helpFont, icons, open)
         cached = key to current
         val loaded = if (look.fontPath != null && font === Typeface.SANS_SERIF) " (not loaded)" else ""
         Log.i(TAG, "look: ${look.source}, font ${look.fontPath}$loaded, ${SystemClock.uptimeMillis() - started} ms")

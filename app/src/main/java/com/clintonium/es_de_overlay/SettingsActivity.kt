@@ -164,6 +164,9 @@ class SettingsActivity : ComponentActivity() {
         var reopenLastDoc by remember { mutableStateOf(prefs.reopenLastDoc) }
         var systemScreenshots by remember { mutableStateOf(prefs.systemScreenshots) }
         var switcher by remember { mutableStateOf(prefs.switcher) }
+        var switcherStrip by remember { mutableStateOf(prefs.switcherStrip) }
+        var switcherGames by remember { mutableIntStateOf(prefs.switcherGames) }
+        var switcherDetails by remember { mutableStateOf(prefs.switcherDetails) }
         val shizuku = remember(tick) { ShizukuShell.state(this) }
         // Null when there's no settings file to read, which the folder's own warning covers.
         val esdeSettings = remember(tick, esde) { esde?.let(::esdeSettings) }
@@ -512,6 +515,24 @@ class SettingsActivity : ComponentActivity() {
                     }
                     Need(label, need !in switcherNeeds, how)
                 }
+            }
+            Text("How the switcher shows the games")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for ((strip, label) in listOf(true to "Strip of Recent Games", false to "One Game a Screen")) {
+                    FilterChip(
+                        selected = switcherStrip == strip,
+                        onClick = { switcherStrip = strip; prefs.switcherStrip = strip },
+                        label = { Text(label) },
+                    )
+                }
+            }
+            Dropdown("Games the switcher shows, newest first", switcherGames, (5..50 step 5).toList(), { "$it" }) {
+                switcherGames = it
+                prefs.switcherGames = it
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Show each game's system and when it was played", Modifier.weight(1f))
+                Switch(checked = switcherDetails, onCheckedChange = { switcherDetails = it; prefs.switcherDetails = it })
             }
             Section("Permissions")
             val ask = { permission: String ->

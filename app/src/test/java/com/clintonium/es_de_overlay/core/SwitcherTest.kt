@@ -49,6 +49,71 @@ class SwitcherTest {
         assertNull(selectedRom("""Nov 17 22:05:45 Debug:  Scripting::fireEvent(): game-end "/storage/ROMs/snes/Super\ Mario\ World.zip" "Super Mario World" "snes" "x""""))
     }
 
+    @Test
+    fun `the detail line says today or yesterday with the time, else the date`() {
+        val names = mapOf("snes" to "Nintendo SNES (Super Nintendo)")
+        val today = java.time.LocalDate.of(2026, 11, 18)
+        fun line(played: String) = detailLine(RecentGame("snes", "Easyland.zip", "Easyland", played), names, today)
+        assertEquals("Nintendo SNES (Super Nintendo) · Played today, 13:04", line("20261118T130459"))
+        assertEquals("Nintendo SNES (Super Nintendo) · Played yesterday, 23:59", line("20261117T235900"))
+        assertEquals("Nintendo SNES (Super Nintendo) · Played 2026-11-16", line("20261116T090000"))
+        assertEquals("Nintendo SNES (Super Nintendo) · Played 2025-11-18", line("20251118T130400"))
+        assertEquals("Nintendo SNES (Super Nintendo)", line("not a time"))
+    }
+
+    @Test
+    fun `the game just played goes first, played now, and the rest keep their order`() {
+        val games = listOf(
+            RecentGame("snes", "Super Mario World.zip", "Super Mario World", "20261118T140000"),
+            RecentGame("switch", "Mario Kart 8 Deluxe.nsp", "Mario Kart 8 Deluxe", "20261118T134600"),
+            RecentGame("gbc", "Zelda DX.zip", "Link's Awakening DX", "20261118T134100"),
+        )
+        val now = java.time.LocalDateTime.of(2026, 11, 18, 15, 37, 2)
+        assertEquals(
+            listOf(games[2].copy(lastPlayed = "20261118T153702"), games[0], games[1]),
+            playedFirst(games, "gbc", "Zelda DX.zip", now),
+        )
+        assertEquals(games, playedFirst(games, "snes", "Super Mario World.zip", now))
+        assertEquals(games, playedFirst(games, "gbc", "Not Played.zip", now))
+    }
+
+    @Test
+    fun `even black bars are trimmed and uneven ones or a dark picture are kept`() {
+        // A 128 × 96 capture of a game 80 wide, centred: 24 black columns either side.
+        fun picture(left: Int, right: Int, top: Int = 0, bottom: Int = 0) = { x: Int, y: Int ->
+            x < left || x >= 128 - right || y < top || y >= 96 - bottom
+        }
+        assertEquals(listOf(24, 0, 104, 96), contentBounds(128, 96, picture(24, 24)).toList())
+        assertEquals(listOf(0, 6, 128, 90), contentBounds(128, 96, picture(0, 0, 6, 6)).toList())
+        // A dark scene with black down one side only is left whole.
+        assertEquals(listOf(0, 0, 128, 96), contentBounds(128, 96, picture(30, 0)).toList())
+        // All black: never cut by more than a quarter each side, and both the same.
+        assertEquals(listOf(32, 24, 96, 72), contentBounds(128, 96) { _, _ -> true }.toList())
+        assertEquals(listOf(0, 0, 128, 96), contentBounds(128, 96) { _, _ -> false }.toList())
+    }
+
+    @Test
+    fun `an unknown system shows its short name`() {
+        val game = RecentGame("tg-cd", "Ys.chd", "Ys", "20261118T080000")
+        assertEquals("tg-cd · Played today, 08:00", detailLine(game, emptyMap(), java.time.LocalDate.of(2026, 11, 18)))
+    }
+
+    @Test
+    fun `game-select and launch lines name systems and other lines don't`() {
+        val lines = sequenceOf(
+            """Nov 18 11:56:30 Debug:  Scripting::fireEvent(): game-select "/storage/7BEF-E760/ROMs/snes/02) Hacks/Easyland.zip" "Easyland" "snes" "Nintendo SNES (Super Nintendo)"""",
+            """Nov 18 12:01:02 Info:   Launching game "Pokémon (Blue)" from system "Nintendo Game Boy (gb)"...""",
+            """Nov 18 12:02:00 Debug:  Scripting::fireEvent(): game-select "/storage/ROMs/tg-cd/Ys.chd" "Ys" "tg-cd" "NEC TurboGrafx-CD"""",
+            """Nov 18 11:56:39 Debug:  Window::logInput(Xbox Wireless Controller): Button 14, isMappedTo=right, value=1""",
+            """Nov 17 22:05:45 Debug:  Scripting::fireEvent(): game-end "/storage/ROMs/snes/Super\ Mario\ World.zip" "Super Mario World" "snes" "x"""",
+        )
+        assertEquals(
+            mapOf("snes" to "Nintendo SNES (Super Nintendo)", "gb" to "Nintendo Game Boy", "tg-cd" to "NEC TurboGrafx-CD"),
+            systemNames(lines),
+        )
+        assertEquals(emptyMap<String, String>(), systemNames(lines.drop(3)))
+    }
+
     /** The Nova's es_settings.xml as read on 2026-11-18, browsing events off. */
     private val nova = """
         <bool name="CustomEventScripts" value="true" />
