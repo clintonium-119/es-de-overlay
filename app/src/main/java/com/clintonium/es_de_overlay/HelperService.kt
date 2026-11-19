@@ -41,14 +41,17 @@ import com.clintonium.es_de_overlay.core.GameRef
 import com.clintonium.es_de_overlay.core.GuideSite
 import com.clintonium.es_de_overlay.core.Launch
 import com.clintonium.es_de_overlay.core.LeaveWatch
+import com.clintonium.es_de_overlay.core.Look
 import com.clintonium.es_de_overlay.core.Overwrite
 import com.clintonium.es_de_overlay.core.RECENT_TAGS
 import com.clintonium.es_de_overlay.core.RecentGame
+import com.clintonium.es_de_overlay.core.Selection
 import com.clintonium.es_de_overlay.core.Steering
 import com.clintonium.es_de_overlay.core.Step
 import com.clintonium.es_de_overlay.core.SwitcherNeed
 import com.clintonium.es_de_overlay.core.contentBounds
 import com.clintonium.es_de_overlay.core.detailLine
+import com.clintonium.es_de_overlay.core.esSetting
 import com.clintonium.es_de_overlay.core.gamelistInfo
 import com.clintonium.es_de_overlay.core.guideEntries
 import com.clintonium.es_de_overlay.core.guidePath
@@ -58,9 +61,11 @@ import com.clintonium.es_de_overlay.core.nextLaunch
 import com.clintonium.es_de_overlay.core.playedFirst
 import com.clintonium.es_de_overlay.core.recentGames
 import com.clintonium.es_de_overlay.core.resolveGame
-import com.clintonium.es_de_overlay.core.selectedRom
+import com.clintonium.es_de_overlay.core.selection
 import com.clintonium.es_de_overlay.core.systemNames
 import com.clintonium.es_de_overlay.core.startUrl
+import com.clintonium.es_de_overlay.core.steer
+import com.clintonium.es_de_overlay.core.steerKeys
 import com.clintonium.es_de_overlay.core.switcherNeeds
 import com.clintonium.es_de_overlay.core.webSearchUrl
 import java.io.File
@@ -489,7 +494,8 @@ class HelperService : Service() {
         }
         val kept = played.filter { present == null || "${it.system}/${it.path}" in present }
         val games = kept.take(50)
-        val theme = runCatching { themeLook.current(games.firstOrNull()?.system.orEmpty(), prefs.menuImage) }
+        // Warmed, so a downloaded theme chosen since the last launch is copied first.
+        val theme = runCatching { games.firstOrNull()?.system.orEmpty().let { themeLook.warm(it, prefs.menuImage); themeLook.current(it, prefs.menuImage) } }
             .onFailure { Log.w(TAG, "reading the theme failed", it) }
             .getOrDefault(ThemeLook.DEFAULT)
         // `<modified> <path>` for every picture RetroArch saved beside a state, below the folder its config names.
@@ -580,21 +586,21 @@ class HelperService : Service() {
             theme, prefs.switcherStrip, shown.map { it.name }, shown.takeIf { prefs.switcherDetails }?.map { detailLine(it, names, today) }, 0,
             picture = { pictures.get(shown[it].logSuffix) },
             onSelect = { wantPictures(shown, it) },
-            onPick = { steer(games, it) },
+            onPick = { steer(games, it, theme.look) },
             onClose = ::closeMenu,
         )
         Log.i(TAG, "switcher: open in ${SystemClock.uptimeMillis() - started} ms")
     }
 
     /** Main thread: keeps the switcher up, showing the picked game, while ES-DE is walked to it and launches it. */
-    private fun steer(games: List<RecentGame>, target: Int) {
+    private fun steer(games: List<RecentGame>, target: Int, look: Look) {
         if (steering) return
         steering = true
         val started = SystemClock.uptimeMillis()
         switcher.yieldFocus {
             val yielded = SystemClock.uptimeMillis() - started
             Thread {
-                val launched = runCatching { steerEsde(games.map { it.logSuffix }, target) }
+                val launched = runCatching { steerEsde(games.map { it.logSuffix }, target, look) }
                     .onFailure { Log.w(TAG, "switcher: steering failed", it) }
                     .getOrDefault(false)
                 Log.i(TAG, "switcher: ${games[target].name} ${if (launched) "launching" else "not reached"} ${SystemClock.uptimeMillis() - started} ms after the pick (keys given up in $yielded ms)")
@@ -610,60 +616,100 @@ class HelperService : Service() {
     /**
      * Its own thread: presses ES-DE's way to row [target] of its Last Played list ([recents], as ROM path endings)
      * with keys sent through Shizuku, each press waiting for the selection ES-DE logs, then has ES-DE launch it.
+     * The keys are those ES-DE moves with in [look]'s layouts under its Quick System Select setting.
      * True once ES-DE logs that press. Pressing blind doesn't work: ES-DE drops presses sent faster than it logs them.
      */
-    private fun steerEsde(recents: List<String>, target: Int): Boolean {
-        val pfd = contentResolver.openFileDescriptor(treeChild(prefs.esdeTree!!, "logs/es_log.txt"), "r")!!
+    private fun steerEsde(recents: List<String>, target: Int, look: Look): Boolean {
+        val tree = prefs.esdeTree!!
+        val quickSystemSelect = contentResolver.openInputStream(treeChild(tree, "settings/es_settings.xml"))
+            ?.use { esSetting(it.reader().readText(), "QuickSystemSelect") }
+        val keys = steerKeys(look.gamelistLayout, look.systemLayout, quickSystemSelect)
+        val pfd = contentResolver.openFileDescriptor(treeChild(tree, "logs/es_log.txt"), "r")!!
         ParcelFileDescriptor.AutoCloseInputStream(pfd).channel.use { log ->
             ShizukuShell.Session().use { shell ->
                 var offset = log.size()
+                // The view ES-DE shows, by the last selection it logged in the log's tail.
+                val tail = ByteBuffer.allocate(minOf(offset, 65_536L).toInt())
+                log.read(tail, offset - tail.capacity())
+                val start = tail.array().decodeToString(0, tail.position()).lineSequence().mapNotNull(::selection).lastOrNull()
                 var partial = ""
+                // The whole lines ES-DE has logged since the last read.
+                fun lines(): List<String> {
+                    val size = log.size()
+                    if (size <= offset) return emptyList()
+                    val buffer = ByteBuffer.allocate((size - offset).toInt())
+                    val read = log.read(buffer, offset).coerceAtLeast(0)
+                    offset += read
+                    val lines = (partial + buffer.array().decodeToString(0, read)).split('\n')
+                    partial = lines.last()
+                    return lines.dropLast(1)
+                }
                 // What [wanted] picks from the last line ES-DE logs within [ms] that it picks anything from.
                 fun <T : Any> await(ms: Long, wanted: (String) -> T?): T? {
                     val until = SystemClock.uptimeMillis() + ms
                     while (SystemClock.uptimeMillis() < until) {
-                        val size = log.size()
-                        if (size <= offset) {
-                            Thread.sleep(4)
-                            continue
-                        }
-                        val buffer = ByteBuffer.allocate((size - offset).toInt())
-                        val read = log.read(buffer, offset).coerceAtLeast(0)
-                        offset += read
-                        val lines = (partial + buffer.array().decodeToString(0, read)).split('\n')
-                        partial = lines.last()
-                        lines.dropLast(1).mapNotNull(wanted).lastOrNull()?.let { return it }
+                        lines().mapNotNull(wanted).lastOrNull()?.let { return it }
+                        Thread.sleep(4)
                     }
                     return null
                 }
                 var presses = 0
-                // A press ES-DE doesn't log is sent again: the first can arrive before ES-DE has the keys back.
-                fun press(key: Int): String? {
-                    repeat(3) {
+                var selected = start
+                // A press ES-DE doesn't log is sent again: the first can arrive before ES-DE has the keys back. A in
+                // the system view isn't: sent twice, the second could launch the game the opened list is on.
+                fun press(step: Step): Selection? {
+                    // What ES-DE logged before this press is passed over.
+                    lines()
+                    repeat(if (step == Step.OPEN) 1 else 3) {
                         presses++
-                        shell.send("input keyevent $key")
-                        await(300, ::selectedRom)?.let { return it }
+                        shell.send("input keyevent ${keys.key(step)}")
+                        // ES-DE logs a key before what it selects for it, so only a selection after the key's own line
+                        // counts. One before it is a nudged D-pad's: taken for this press's, every later press would
+                        // be taken for the one before it.
+                        var keyed = false
+                        val logged = { line: String ->
+                            if ("logInput(Keyboard)" in line && "value=1" in line) keyed = true
+                            val found = selection(line)
+                            if (found != null && !keyed) Log.i(TAG, "switcher: nudged to $found")
+                            found?.takeIf { keyed }
+                        }
+                        await(if (step == Step.OPEN) 1_000 else 300, logged)?.let { found ->
+                            selected = found
+                            return found
+                        }
                     }
+                    Log.i(TAG, "switcher: ES-DE logged nothing for $step at $selected ($presses sent)")
                     return null
                 }
-                val walk = Steering(recents, target)
-                var selected: String? = null
-                while (true) {
-                    when (val step = walk.next(selected)) {
-                        Step.LAUNCH -> {
-                            Log.i(TAG, "switcher: on $selected after $presses presses")
-                            // Enter is ES-DE's A on a keyboard. ES-DE notes the key at once, then shows its own
-                            // launch screen for a few seconds before it logs the launch itself.
-                            shell.send("input keyevent ${KeyEvent.KEYCODE_ENTER}")
-                            return await(1_000) { line -> line.takeIf { "isMappedTo=a," in it || "Launching game" in it } } != null
-                        }
-                        Step.FAIL -> return false.also { Log.i(TAG, "switcher: lost at $selected after $presses presses") }
-                        Step.DOWN -> selected = press(KeyEvent.KEYCODE_DPAD_DOWN)
-                        Step.UP -> selected = press(KeyEvent.KEYCODE_DPAD_UP)
-                        Step.NEXT_SYSTEM -> selected = press(KeyEvent.KEYCODE_DPAD_RIGHT)
-                    }
-                    if (selected == null) return false.also { Log.i(TAG, "switcher: ES-DE logged nothing for a press ($presses sent)") }
+                // Back by the previous-system key, or in the system view when there's no next-system key either.
+                val ring = prefs.systemRing
+                val walk = Steering(
+                    recents,
+                    target,
+                    canChangeSystem = keys.nextSystem != null,
+                    canGoBack = keys.previousSystem != null || keys.nextSystem == null,
+                    ring = ring,
+                )
+                val launched = steer(
+                    walk,
+                    start,
+                    ::press,
+                    // About two of ES-DE's frames for a nudged D-pad's selection, which steering then walks back from.
+                    settle = { await(40, ::selection)?.also { selected = it; Log.i(TAG, "switcher: nudged to $it") } },
+                    launch = {
+                        Log.i(TAG, "switcher: on $selected after $presses presses")
+                        // ES-DE notes the key at once, then shows its own launch screen for a few seconds before it
+                        // logs the launch itself.
+                        shell.send("input keyevent ${KeyEvent.KEYCODE_ENTER}")
+                        await(1_000) { line -> line.takeIf { "isMappedTo=a," in it || "Launching game" in it } } != null
+                    },
+                )
+                if (!launched) Log.i(TAG, "switcher: lost at $selected after $presses presses (started at $start, keys $keys)")
+                walk.learned?.takeIf { it != ring }?.let {
+                    prefs.systemRing = it
+                    Log.i(TAG, "switcher: learned ${it.ahead} with ${it.size ?: "no"} ring size")
                 }
+                return launched
             }
         }
     }
@@ -1087,6 +1133,8 @@ class HelperService : Service() {
         val tree = prefs.esdeTree ?: return
         val lines = log.read(this, tree) { launch = null }
         prefs.learnSystemNames(systemNames(lines.asSequence()))
+        // A theme or variant changed in ES-DE's menu: the switcher's look and the layouts it steers by are read again.
+        if (lines.any { "Finished loading theme" in it }) recentStale = true
         val before = launch
         var latest = before
         lines.forEach { latest = nextLaunch(latest, it) }

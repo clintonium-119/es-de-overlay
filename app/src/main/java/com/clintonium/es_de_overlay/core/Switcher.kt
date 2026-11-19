@@ -1,9 +1,11 @@
 package com.clintonium.es_de_overlay.core
 
+import android.view.KeyEvent
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import kotlin.math.abs
 
 /** A played game: [path] is relative to `<ROMs>/<system>/`, [lastPlayed] ES-DE's raw `YYYYMMDDTHHMMSS`. */
 data class RecentGame(val system: String, val path: String, val name: String, val lastPlayed: String) {
@@ -127,63 +129,262 @@ enum class SwitcherNeed(val setting: String) {
     BROWSING_EVENTS("CustomEventScriptsBrowsing"),
     DEBUG_MODE("DebugMode"),
     LAST_PLAYED("CollectionSystemsAuto"),
-    QUICK_SYSTEM_SELECT("QuickSystemSelect"),
 }
 
 /**
  * What [settingsXml], ES-DE's es_settings.xml, still lacks for the switcher: the three settings that make ES-DE log
- * each game it selects, the Last Played collection among its automatic ones, and a Quick System Select that isn't
- * disabled, so [Step.NEXT_SYSTEM] has a press. Missing settings count as off, but a missing Quick System Select keeps
- * ES-DE's default, which isn't disabled.
+ * each game it selects, and the Last Played collection among its automatic ones. Missing settings count as off.
  */
 fun switcherNeeds(settingsXml: String): List<SwitcherNeed> = SwitcherNeed.entries.filterNot {
     val value = esSetting(settingsXml, it.setting)
-    when (it) {
-        SwitcherNeed.LAST_PLAYED -> value?.split(',')?.contains("recent") == true
-        SwitcherNeed.QUICK_SYSTEM_SELECT -> value != "disabled"
-        else -> value == "true"
+    if (it == SwitcherNeed.LAST_PLAYED) value?.split(',')?.contains("recent") == true else value == "true"
+}
+
+/**
+ * Keys for steering ES-DE, as Android key codes from ES-DE's keyboard map: one game on and back in a game list, one
+ * system on and back from a game list (null where Quick System Select gives none), and one system on and back in
+ * the system view.
+ */
+data class SteerKeys(
+    val nextGame: Int,
+    val previousGame: Int,
+    val nextSystem: Int?,
+    val previousSystem: Int?,
+    val nextInSystemView: Int,
+    val previousInSystemView: Int,
+) {
+    /** The key for [step]: Backspace is ES-DE's B and Enter its A. [Step.NEXT_SYSTEM] and [Step.PREVIOUS_SYSTEM] only when there's one. */
+    fun key(step: Step): Int = when (step) {
+        Step.NEXT_GAME -> nextGame
+        Step.PREVIOUS_GAME -> previousGame
+        Step.NEXT_SYSTEM -> nextSystem!!
+        Step.PREVIOUS_SYSTEM -> previousSystem!!
+        Step.SYSTEM_VIEW -> KeyEvent.KEYCODE_DEL
+        Step.NEXT_IN_SYSTEM_VIEW -> nextInSystemView
+        Step.PREVIOUS_IN_SYSTEM_VIEW -> previousInSystemView
+        Step.OPEN, Step.LAUNCH, Step.FAIL -> KeyEvent.KEYCODE_ENTER
     }
 }
 
-/** One press [Steering] asks for, or how it ended. */
-enum class Step { DOWN, UP, NEXT_SYSTEM, LAUNCH, FAIL }
+// One entry on and back in a view drawn as [layout]: a grid's right runs on to the next row, so it walks in order.
+private fun moves(layout: Layout) =
+    if (layout == Layout.TEXT_LIST || layout == Layout.VERTICAL_CAROUSEL) KeyEvent.KEYCODE_DPAD_DOWN to KeyEvent.KEYCODE_DPAD_UP
+    else KeyEvent.KEYCODE_DPAD_RIGHT to KeyEvent.KEYCODE_DPAD_LEFT
+
+/**
+ * The [SteerKeys] for a game list drawn as [gamelist] and a system view drawn as [systemView], with ES-DE's Quick
+ * System Select setting [quickSystemSelect] (null when unset). ES-DE gives left/right to system changes only where a
+ * game list doesn't move with them; the shoulders are Page Up and Down, the right trigger End. The left trigger is
+ * Home, which `input keyevent` doesn't get to ES-DE, so the triggers give no previous system. ES-DE's default and its
+ * fallback for a value it doesn't know is left/right, else the shoulders.
+ */
+fun steerKeys(gamelist: Layout, systemView: Layout, quickSystemSelect: String?): SteerKeys {
+    val (nextGame, previousGame) = moves(gamelist)
+    val free = nextGame == KeyEvent.KEYCODE_DPAD_DOWN
+    val sides: Pair<Int?, Int?> = KeyEvent.KEYCODE_DPAD_RIGHT to KeyEvent.KEYCODE_DPAD_LEFT
+    val shoulders: Pair<Int?, Int?> = KeyEvent.KEYCODE_PAGE_DOWN to KeyEvent.KEYCODE_PAGE_UP
+    val triggers: Pair<Int?, Int?> = KeyEvent.KEYCODE_MOVE_END to null
+    val none: Pair<Int?, Int?> = null to null
+    val (nextSystem, previousSystem) = when (quickSystemSelect) {
+        "disabled" -> none
+        "leftright" -> if (free) sides else none
+        "shoulders" -> shoulders
+        "triggers" -> triggers
+        "leftrighttriggers" -> if (free) sides else triggers
+        else -> if (free) sides else shoulders
+    }
+    val (nextInSystemView, previousInSystemView) = moves(systemView)
+    return SteerKeys(nextGame, previousGame, nextSystem, previousSystem, nextInSystemView, previousInSystemView)
+}
+
+/**
+ * What ES-DE logs on selecting: a game list's ROM path with the short name of the game's own system, or the short name
+ * of the system the system view is on.
+ */
+sealed interface Selection {
+    data class Game(val path: String, val system: String? = null) : Selection
+    data class System(val name: String) : Selection
+}
+
+/** Last Played's short name in ES-DE's system view. */
+const val LAST_PLAYED_SYSTEM = "recent"
+
+/**
+ * The selection in a line of ES-DE's log, else null: a `game-select "<path>" "<name>" "<system>" "<full name>"`, or the
+ * system view's `Scripting::fireEvent(): system-select "recent" "last played" "recent" ""`.
+ */
+fun selection(line: String): Selection? = selectedRom(line)?.let { Selection.Game(it, line.substringAfter("game-select \"").split("\" \"").getOrNull(2)) }
+    ?: line.substringAfter("Scripting::fireEvent(): system-select \"", "").substringBefore('"').ifEmpty { null }?.let(Selection::System)
+
+/**
+ * How many steps ES-DE's lists are from Last Played by the next-system key ([ahead], by the system a list's selection
+ * names), and how many lists there are ([size]), as walks that reached Last Played found them. Without a size the
+ * longest distance known stands for it.
+ */
+data class SystemRing(val ahead: Map<String, Int> = emptyMap(), val size: Int? = null) {
+    /** Whether Last Played is nearer from [system]'s list by the previous-system key; false when unknown. */
+    fun backward(system: String?): Boolean {
+        val distance = system?.let(ahead::get) ?: return false
+        return distance * 2 > (size ?: (ahead.values.max() + 1))
+    }
+
+    /**
+     * This ring once a walk ([backward] or not) reached Last Played after leaving lists of the systems [passed], in
+     * order (null for one whose system wasn't logged). A walk back from a known place gives the size. A system seen
+     * at two distances, in the walk or against what was known, is dropped as unknown, and the size with it.
+     */
+    fun learned(passed: List<String?>, backward: Boolean): SystemRing {
+        val moves = passed.size
+        val lists = if (backward) passed.firstOrNull()?.let(ahead::get)?.plus(moves) ?: return this else size
+        val seen = HashMap<String, Int?>()
+        passed.forEachIndexed { i, system ->
+            if (system == null) return@forEachIndexed
+            val distance = if (backward) lists!! - (moves - i) else moves - i
+            seen[system] = if (system in seen && seen[system] != distance) null else distance
+        }
+        val known = ahead.toMutableMap()
+        var changed = false
+        for ((system, distance) in seen) {
+            val was = known[system]
+            when {
+                distance == null -> known.remove(system)
+                was != null && was != distance -> {
+                    known.remove(system)
+                    changed = true
+                }
+                else -> known[system] = distance
+            }
+        }
+        return SystemRing(known, lists.takeUnless { changed || it != null && !backward && moves >= it })
+    }
+}
+
+/**
+ * A press [Steering] asks for, by what it does in ES-DE: one game on or back, one system on or back from a game list,
+ * B to the system view, one system on or back there, A there to open the list; or how it ended.
+ */
+enum class Step {
+    NEXT_GAME, PREVIOUS_GAME, NEXT_SYSTEM, PREVIOUS_SYSTEM, SYSTEM_VIEW, NEXT_IN_SYSTEM_VIEW, PREVIOUS_IN_SYSTEM_VIEW, OPEN, LAUNCH, FAIL,
+}
 
 /**
  * Gets ES-DE's cursor onto [recents]' game [target], one press at a time, by what ES-DE logs after each press, and
  * gives [Step.LAUNCH] only with that game's own path just logged, whichever list it's in.
  * A game list logs only its selected ROM, with no word on which list it is, so Last Played is taken to be the list
- * where two of [recents] (ROM path endings, in list order) turn up one after the other on a press down; any other
- * list is left for the next system. A short list of recent games can pass for it (three Android games played in a
- * row), so the first press there that lands off the expected row moves on as well.
+ * where two of [recents] (ROM path endings, in list order) turn up one after the other on a press to the next game;
+ * any other list is left: for the next system with [canChangeSystem], else by B for the system view. A short list of
+ * recent games can pass for Last Played (three Android games played in a row), so the first press there that lands off
+ * the expected row moves on as well. The system view names its system, so a list opened on Last Played's name is
+ * known to be it, and is opened only with that name just logged for a press of the walk's own.
+ * Lists are walked the way [ring] has Last Played nearer, back only with [canGoBack]; [learned] is the ring as this
+ * walk found it, once it launches from Last Played.
  */
-class Steering(private val recents: List<String>, private val target: Int, private val maxPresses: Int = 120) {
-    /** Row of Last Played the cursor should be on, once the list looks like Last Played. */
+class Steering(
+    private val recents: List<String>,
+    private val target: Int,
+    private val canChangeSystem: Boolean = true,
+    private val canGoBack: Boolean = false,
+    private val ring: SystemRing = SystemRing(),
+    private val maxPresses: Int = 120,
+) {
+    var learned: SystemRing? = null
+        private set
+    /** Row of Last Played the cursor should be on, once the list is taken for Last Played. */
     private var row = -1
     /** Row of [recents] last seen in the list ES-DE is on, or -1. */
     private var seen = -1
+    /** The list was opened on Last Played's name. */
+    private var known = false
+    /** B has been sent for the system view, which a folder's B doesn't reach yet. */
+    private var leaving = false
+    /** Started on Last Played in the system view: one system on, then back to open it. */
+    private var returning = false
+    private val systems = HashSet<String>()
+    /** The system of the list ES-DE is on, as its last selection named it. */
+    private var current: String? = null
+    /** The systems of the lists left on the way, in order. */
+    private val passed = mutableListOf<String?>()
+    /** Walking back, once the first list is left. */
+    private var backward: Boolean? = null
     private var last = Step.FAIL
     private var presses = 0
 
-    /** The step after ES-DE logged [selected] for the last one; null to start. [Step.FAIL] when it logged nothing. */
-    fun next(selected: String?): Step {
-        if (selected == null) return if (presses == 0) press(Step.DOWN) else Step.FAIL
-        val at = recents.indexOfFirst(selected::endsWith)
+    /** The first step, from [start], the selection ES-DE logged last before steering, if any. It is never A. */
+    fun begin(start: Selection?): Step {
+        if (start !is Selection.System) return press(Step.NEXT_GAME)
+        returning = start.name == LAST_PLAYED_SYSTEM
+        if (returning) return press(Step.NEXT_IN_SYSTEM_VIEW)
+        systems += start.name
+        current = start.name
+        return onward(inSystemView = true)
+    }
+
+    /** The step after ES-DE logged [selected] for the last one. */
+    fun next(selected: Selection): Step = when (selected) {
+        is Selection.System -> inSystemView(selected.name.also { current = it })
+        is Selection.Game -> inGameList(recents.indexOfFirst(selected.path::endsWith).also { current = selected.system })
+    }
+
+    // One list on toward Last Played, the way chosen on leaving the first: from a game list by its key, else B for
+    // the system view, which doesn't change the list.
+    private fun onward(inSystemView: Boolean): Step {
+        val back = backward ?: (canGoBack && ring.backward(current)).also { backward = it }
+        if (!inSystemView && !canChangeSystem) {
+            leaving = true
+            return press(Step.SYSTEM_VIEW)
+        }
+        passed += current
+        return press(
+            when {
+                inSystemView -> if (back) Step.PREVIOUS_IN_SYSTEM_VIEW else Step.NEXT_IN_SYSTEM_VIEW
+                else -> if (back) Step.PREVIOUS_SYSTEM else Step.NEXT_SYSTEM
+            },
+        )
+    }
+
+    private fun inSystemView(name: String): Step {
+        row = -1
+        seen = -1
+        leaving = false
+        known = false
+        return when {
+            name == LAST_PLAYED_SYSTEM -> press(Step.OPEN).also { known = true }
+            // Round the systems once without Last Played.
+            !systems.add(name) -> Step.FAIL
+            returning -> press(Step.PREVIOUS_IN_SYSTEM_VIEW)
+            else -> onward(inSystemView = true)
+        }
+    }
+
+    private fun inGameList(at: Int): Step {
+        // Two of the recent games one after the other on a press to the next: taken for Last Played.
+        val confirmed = last == Step.NEXT_GAME && row < 0 && seen >= 0 && at == seen + 1
         when {
-            at == target -> return Step.LAUNCH
+            at == target -> {
+                if (known || row >= 0 || confirmed) learned = ring.learned(passed, backward == true)
+                row = at
+                last = Step.LAUNCH
+                return Step.LAUNCH
+            }
+            // B from a folder went up a folder.
+            leaving -> return press(Step.SYSTEM_VIEW)
+            known -> if (at >= 0) row = at
+            // A nudge off the target: the list's neighbours are Last Played's.
+            last == Step.LAUNCH && row >= 0 && abs(at - target) == 1 -> row = at
             row >= 0 && at == row -> {}
-            last == Step.DOWN && row < 0 && seen >= 0 && at == seen + 1 -> row = at
+            confirmed -> row = at
             row < 0 && at >= 0 -> {
                 seen = at
-                return press(Step.DOWN)
+                return press(Step.NEXT_GAME)
             }
             else -> {
                 row = -1
                 seen = -1
-                return press(Step.NEXT_SYSTEM)
+                return onward(inSystemView = false)
             }
         }
-        val step = if (target > row) Step.DOWN else Step.UP
-        row += if (step == Step.DOWN) 1 else -1
+        val step = if (target > row) Step.NEXT_GAME else Step.PREVIOUS_GAME
+        row += if (step == Step.NEXT_GAME) 1 else -1
         return press(step)
     }
 
@@ -191,5 +392,22 @@ class Steering(private val recents: List<String>, private val target: Int, priva
         if (++presses > maxPresses) return Step.FAIL
         last = step
         return step
+    }
+}
+
+/**
+ * Walks ES-DE with [walk] from [start], the selection ES-DE logged last before steering: [press] sends a step's key
+ * and gives what ES-DE logged for it, null for nothing; [settle] gives a selection ES-DE logs a moment after the
+ * target's, as a nudged D-pad makes, else null; [launch] sends A on the target. False when the walk fails.
+ */
+fun steer(walk: Steering, start: Selection?, press: (Step) -> Selection?, settle: () -> Selection?, launch: () -> Boolean): Boolean {
+    var step = walk.begin(start)
+    while (true) {
+        val logged = when (step) {
+            Step.FAIL -> return false
+            Step.LAUNCH -> settle() ?: return launch()
+            else -> press(step) ?: return false
+        }
+        step = walk.next(logged)
     }
 }

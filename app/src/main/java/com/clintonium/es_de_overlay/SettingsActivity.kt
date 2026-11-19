@@ -510,8 +510,6 @@ class SettingsActivity : ComponentActivity() {
                         SwitcherNeed.DEBUG_MODE -> "Debug Mode, so those reports reach its log" to "In ES-DE, turn it on under Other Settings."
                         SwitcherNeed.LAST_PLAYED -> "Last Played, the list the switcher shows" to
                             "In ES-DE, tick Last Played in Automatic Game Collections under Game Collection Settings."
-                        SwitcherNeed.QUICK_SYSTEM_SELECT -> "Quick System Select, to change systems from a game list" to
-                            "In ES-DE, set it to anything but Disabled under UI Settings."
                     }
                     Need(label, need !in switcherNeeds, how)
                 }

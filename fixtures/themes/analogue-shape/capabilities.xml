@@ -1,0 +1,16 @@
+<themeCapabilities>
+   <themeName>Analogue Shape</themeName>
+   <aspectRatio>4:3</aspectRatio>
+   <variant name="gamelist-list">
+      <label>List</label>
+   </variant>
+   <variant name="gamelist-carousel">
+      <label>Carousel</label>
+   </variant>
+   <variant name="gamelist-grid">
+      <label>Grid</label>
+   </variant>
+   <variant name="gamelist-row">
+      <label>Row</label>
+   </variant>
+</themeCapabilities>

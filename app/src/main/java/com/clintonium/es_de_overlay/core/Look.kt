@@ -51,6 +51,10 @@ data class Look(
     val helpIconTextSpacing: Float = 0.00416f,
     val helpPadding: List<Float> = listOf(0f, 0f, 0f, 0f),
     val helpCornerRadius: Float = 0f,
+    // How ES-DE's game list and system view move, for steering. ponytail: a theme that can't be read gets ES-DE's
+    // layouts for a view without a list, which may not be the theme's; steering then fails and says so.
+    val gamelistLayout: Layout = Layout.TEXT_LIST,
+    val systemLayout: Layout = Layout.HORIZONTAL_CAROUSEL,
 ) {
     /**
      * The selector's width when it's a thin bar at the row's left, like Linear's; null when it covers the row. A wider
@@ -129,6 +133,8 @@ fun look(style: ThemeStyle?, theme: String, scheme: String, reason: String?): Lo
         bodyLineSpacing = style.descriptionLineSpacing ?: ES_DE_TEXT_SPACING,
         artCornerRadius = style.artCornerRadius,
         source = LookSource.Theme(style.themeName ?: theme, style.colorSchemeLabel ?: scheme),
+        gamelistLayout = style.gamelistLayout,
+        systemLayout = style.systemLayout,
     ).let { look ->
         look.copy(
             helpFontPath = path(style.helpFontPath) ?: look.fontPath,

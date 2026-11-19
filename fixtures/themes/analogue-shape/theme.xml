@@ -1,0 +1,45 @@
+<theme>
+   <view name="system,gamelist">
+      <textlist name="item-list">
+         <primaryColor>B0B0B0</primaryColor>
+         <selectedColor>FFFFFF</selectedColor>
+      </textlist>
+   </view>
+   <variant name="gamelist-list">
+      <aspectRatio name="4:3,16:9">
+         <view name="system,gamelist">
+            <textlist name="item-list">
+               <pos>0.25 0.025</pos>
+            </textlist>
+         </view>
+      </aspectRatio>
+   </variant>
+   <variant name="gamelist-carousel">
+      <aspectRatio name="4:3,16:9">
+         <view name="gamelist">
+            <carousel name="item-carousel">
+               <type>vertical</type>
+            </carousel>
+         </view>
+      </aspectRatio>
+   </variant>
+   <variant name="gamelist-grid">
+      <aspectRatio name="4:3,16:9">
+         <view name="gamelist">
+            <grid name="item-grid">
+               <itemSize>0.2 0.2</itemSize>
+            </grid>
+         </view>
+      </aspectRatio>
+   </variant>
+   <variant name="gamelist-row">
+      <view name="gamelist">
+         <carousel name="row">
+            <maxItemCount>3</maxItemCount>
+         </carousel>
+      </view>
+      <view name="system">
+         <carousel name="system-row" />
+      </view>
+   </variant>
+</theme>

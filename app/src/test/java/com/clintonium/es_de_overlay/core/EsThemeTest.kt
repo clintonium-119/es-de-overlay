@@ -163,6 +163,7 @@ class EsThemeTest {
                 artCornerRadius = 0.025f,
                 themeName = "MinUI Shape",
                 colorSchemeLabel = "Dark",
+                systemLayout = Layout.TEXT_LIST,
             ),
             resolve("minui-shape", dark),
         )
@@ -571,5 +572,38 @@ class EsThemeTest {
         assertEquals(listOf("A", "B", "X", "Y"), "ABXY".map { buttonLabel(it.toString(), swap = true, "snes") })
         assertEquals("○", buttonLabel("A", swap = true, "ps5"))
         assertEquals("✚", buttonLabel("✚", swap = true, "ps5"))
+    }
+
+    @Test
+    fun `each variant's game list gives its layout, the carousel and grid winning over the shared text list`() {
+        fun layouts(variant: String) = resolve("analogue-shape", ThemeSettings("analogue-shape", variant), aspect = 4 / 3f)
+            .let { it.gamelistLayout to it.systemLayout }
+        assertEquals(Layout.TEXT_LIST to Layout.TEXT_LIST, layouts("gamelist-list"))
+        assertEquals(Layout.VERTICAL_CAROUSEL to Layout.TEXT_LIST, layouts("gamelist-carousel"))
+        assertEquals(Layout.GRID to Layout.TEXT_LIST, layouts("gamelist-grid"))
+        // A carousel without a type is horizontal; the system view takes its carousel over the text list too.
+        assertEquals(Layout.HORIZONTAL_CAROUSEL to Layout.HORIZONTAL_CAROUSEL, layouts("gamelist-row"))
+        // The Look carries them to the service.
+        val look = look(resolve("analogue-shape", ThemeSettings("analogue-shape", "gamelist-grid"), aspect = 4 / 3f), "analogue-shape", "", null)
+        assertEquals(Layout.GRID to Layout.TEXT_LIST, look.gamelistLayout to look.systemLayout)
+    }
+
+    @Test
+    fun `a view without a list, carousel or grid takes ES-DE's own, and wheels move as their straight kinds`() {
+        // Slate's shape gives only the game list a text list.
+        val slate = resolve("slate-shape", ThemeSettings("slate-shape", "withVideos"))
+        assertEquals(Layout.TEXT_LIST to Layout.HORIZONTAL_CAROUSEL, slate.gamelistLayout to slate.systemLayout)
+        fun carousel(type: String) = inline("theme.xml" to """<theme><view name="gamelist, system"><carousel name="c"><type>$type</type></carousel></view></theme>""")!!
+        assertEquals(Layout.VERTICAL_CAROUSEL, carousel("verticalWheel").gamelistLayout)
+        assertEquals(Layout.HORIZONTAL_CAROUSEL, carousel("horizontalWheel").systemLayout)
+        // ES-DE takes a type it doesn't know as horizontal.
+        assertEquals(Layout.HORIZONTAL_CAROUSEL, carousel("diagonal").gamelistLayout)
+        assertEquals(Layout.TEXT_LIST to Layout.HORIZONTAL_CAROUSEL, inline("theme.xml" to "<theme/>")!!.let { it.gamelistLayout to it.systemLayout })
+    }
+
+    @Test
+    fun `the Nova's own theme shape gives a text list in both views`() {
+        val minui = resolve("minui-shape", ThemeSettings("minui-shape", "list-screenshot", "dark", "small"))
+        assertEquals(Layout.TEXT_LIST to Layout.TEXT_LIST, minui.gamelistLayout to minui.systemLayout)
     }
 }

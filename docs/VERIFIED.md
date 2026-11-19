@@ -288,3 +288,47 @@ The code was reviewed for the ways an app with screen capture, a key-filtering a
 - **Lint and CI.** Android Lint's 62 security checks fail the build; `lintDebug` reports 0 errors (18 warnings, none security). CI runs the unit tests and Lint on every push and pull request; CodeQL and Scorecard are written but skip while the repository is private. Every action is pinned to a commit SHA, and every workflow's token is read-only unless it needs more.
 - **Found in the dry run.** Saving the VGMaps atlas renamed 21 of Shantae's 56 maps inside the `.cbz` ("L1: Dribble Fountain Labyrinth" became "L1 - …"), because entry names had gone through the SD-card file-name rules. Entry names now keep the atlas's own, with only slashes and control characters replaced; the recorded pass's atlas had the same 56 names as before.
 - **Not checked:** CodeQL and Scorecard runs (they need the repository public), the release build on the device, and the overlay refusing to end itself or ES-DE on the Nova (ES-DE can't launch itself; the same check covers all three).
+
+## How ES-DE moves on each layout (2026-11-18)
+
+Read on the Nova from ES-DE 3.5.0's log with custom event scripts, their browsing events and Debug Mode on, one `adb shell input keyevent` at a time, each followed by the lines ES-DE added to `es_log.txt`. The user switched themes in ES-DE's menu: MinUI Menu (Overlay) for a text list, Analogue OS Menu's carousel and grid variants, and TechDweeb's carousel variant. Quick System Select was *Left/Right or Shoulders* throughout, apart from one check under *Left/Right*. Where a rule comes from ES-DE's source (tag `v3.5.0`), the file is named. Every key logs `Window::logInput(Keyboard): Key <name>, isMappedTo=<button>, value=1` and `value=0`; the table gives what came with it.
+
+| Where | Key sent | What ES-DE logged |
+| --- | --- | --- |
+| Text list (MinUI) | Down / Up | `game-select` of the next / previous game; from the last game Down wraps to the first, and Up from the first to the last |
+| Text list | Right / Left | `game-select` of the selected game in the next / previous system's list (Last Played to Arcade's `01) CPS I` folder and back); no line names the list |
+| Text list | Page Down / Page Up | `rightshoulder` / `leftshoulder`; `game-select` ten games on / back |
+| Text list | End | `righttrigger`; `game-select` of the last game |
+| Text list | Backspace | `b`; `system-select "recent" "last played" "recent" ""`: the system view, on the list just left |
+| Vertical carousel (Analogue OS) | Down / Up | `game-select` of the next / previous game |
+| Vertical carousel | Right / Left | `game-select` of the next / previous system's selected game, as on the text list |
+| Vertical carousel | Page Down / Page Up | `game-select` ten games on / back, stopping at the ends (Descent to Portal, the last; then to Turok) |
+| Grid, 3 columns (Analogue OS) | Right / Left | `game-select` of the next / previous game in list order; Right at a row's end gave the next row's first (Ratchet & Clank 3 to Turok); Right on the last game wrapped to the first, Left on the first to the last |
+| Grid | Down / Up | `game-select` a row on / back (Okami to Tekken 6 and back) |
+| Grid, last row | Down | the key line only |
+| Grid | Page Down / Page Up | `game-select` of the next / previous system's selected game |
+| Grid | End | `game-select` of the last game |
+| Grid, Quick System Select *Left/Right* | Page Down / Page Up | the key lines only |
+| Grid, Quick System Select *Left/Right* | Right / Left | one game on / back, no system change |
+| Horizontal carousel (TechDweeb) | Right / Left | `game-select` of the next / previous game |
+| Horizontal carousel | Down / Up | the key lines only |
+| Horizontal carousel | Page Down / Page Up | `game-select` of the next / previous system's selected game |
+| System view, text list (MinUI, Analogue OS) | Down / Up | `system-select "<short>" "<full name>" "<ROMs folder>" ""` one system on / back |
+| System view, text list | Right / Left | the key lines only |
+| System view, text list | Page Down / Page Up | `system-select` several systems on / back (Atari Lynx to Nintendo 64 and back) |
+| System view, text list | End | `system-select "recent" "last played" "recent" ""`: Last Played is the last system on the Nova |
+| System view, text list, on Last Played | Enter | `a`; `game-select` of the game Last Played had selected |
+| System view, horizontal carousel (TechDweeb) | Right / Left | `system-select` one system on / back; Right from Last Played wrapped to Arcade |
+| System view, horizontal carousel | Down / Up, Page Down / Page Up | the key lines only |
+| System view, horizontal carousel, on Last Played | Enter | `a`; `game-select` of the game Last Played had selected |
+
+- **ES-DE's keyboard keys.** The Nova's `es_input.xml` has no keyboard entry, so ES-DE uses its built-in map (`es-core/src/InputManager.cpp`, `loadDefaultKBConfig`): the arrows, Enter for a, Backspace for b, Page Up and Page Down for the left and right shoulders, Home and End for the left and right triggers. `input keyevent MOVE_HOME` (122), sent twice, logged nothing, so the left trigger has no key that `input keyevent` can send; End (123) logged as the right trigger every time. Page Down and Page Up logged at every press; an earlier note of Page Down logging nothing didn't recur.
+- **Which keys change system.** ES-DE gives left and right to a game list only when it is a text list or a vertical carousel or wheel; a horizontal carousel or wheel and a grid keep them for moving (`es-app/src/views/GamelistView.cpp`, `mLeftRightAvailable`). Quick System Select then picks the keys (`es-app/src/views/GamelistBase.cpp`, `getQuickSystemSelectLeftButton` and `…RightButton`): *Left/Right or Shoulders* gives left/right where they're free, else the shoulders; *Left/Right or Triggers* left/right, else the triggers; *Shoulders* and *Triggers* those keys on every layout; *Left/Right* left/right where free and nothing on a grid or horizontal carousel; *Disabled* nothing. The table above checks *Left/Right or Shoulders* on all four layouts and *Left/Right* on the grid.
+- **The system view reaches every list.** Backspace from a game list's top level opens the system view and logs `system-select` for the list it left, whatever Quick System Select is. There each move logs the system it lands on by short name, Last Played as `recent`, and Enter logs the selected game of the list it opens. In a folder, Backspace goes up a folder first (`GamelistBase.cpp`); not checked on the device.
+- **A press that doesn't move logs no game.** ES-DE skips `game-select` when the selected game is unchanged (`GamelistView::updateView`), as for Down in a grid's last row and Up or Down on a horizontal carousel. Showing a list logs its selected game afresh (`GamelistView::onShow`), as on a system change or Enter from the system view.
+- **A stray system line.** Closing ES-DE's menu after a theme change reloaded the theme and logged `system-select "fbneo" …` while a game list was showing.
+- **Lists keep their place.** Each list kept its selected game when left and entered again, by a system change or through the system view.
+- **A key's line comes before its selection.** In every case above ES-DE logged a keyboard key's `value=1` line before the selection it made, so the switcher counts for a press only a selection after its own key line. A D-pad press reaching ES-DE between the switcher's reading the log and ES-DE handling the switcher's next key had, before that, been taken for the key's result, and every later press was read one step late.
+- **A theme change logs `Finished loading theme "<name>"`** when ES-DE's menu closes, which is when the switcher now reads the theme again (copying a downloaded one) without waiting for a game launch.
+- **Steering pass (2026-11-18 and 19).** Release builds on MinUI (text list), TechDweeb (horizontal carousel), Analogue OS Menu (vertical carousel and grid, the grid also under *Left/Right*): every pick from Last Played, from Arcade, from inside a folder and from the system view launched the picked game, in 136–788 ms. Last Played is the last of 38 lists here: the first walk from Arcade went round (46 presses, 1.3 s) and learned the ring, and the next went back one list (4 presses, 226 ms); from the Game Boy list, 20 on, it went 18 back. Under *Left/Right* on the grid it went through the system view, out of a folder with two Bs. D-pad presses sent during the walk launched the picked game once the switcher matched presses to their key lines.
+- The user's theme (MinUI Menu (Overlay), `gamelist-list-screenshot`, `dark-bold`) and Quick System Select (*Left/Right or Shoulders*) were set back afterwards and read back from `es_settings.xml`.

@@ -1,7 +1,10 @@
 package com.clintonium.es_de_overlay.core
 
+import android.view.KeyEvent
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SwitcherTest {
@@ -134,7 +137,7 @@ class SwitcherTest {
 
     @Test
     fun `each setting off or absent is the one need reported`() {
-        for (need in SwitcherNeed.entries - SwitcherNeed.QUICK_SYSTEM_SELECT) {
+        for (need in SwitcherNeed.entries) {
             val line = ready.lines().single { """name="${need.setting}"""" in it }
             assertEquals(listOf(need), switcherNeeds(ready.replace(line, "")))
             if ("<bool" in line) assertEquals(listOf(need), switcherNeeds(ready.replace(line, line.replace("true", "false"))))
@@ -150,33 +153,103 @@ class SwitcherTest {
     }
 
     @Test
-    fun `Quick System Select is a need only when disabled`() {
-        val with = { mode: String -> ready.replace("leftrightshoulders", mode) }
-        assertEquals(listOf(SwitcherNeed.QUICK_SYSTEM_SELECT), switcherNeeds(with("disabled")))
-        assertEquals(emptyList<SwitcherNeed>(), switcherNeeds(with("shoulders")))
-        assertEquals(emptyList<SwitcherNeed>(), switcherNeeds(ready))
+    fun `Quick System Select is no need, disabled or not`() {
+        assertEquals(emptyList<SwitcherNeed>(), switcherNeeds(ready.replace("leftrightshoulders", "disabled")))
+        assertEquals(emptyList<SwitcherNeed>(), switcherNeeds(ready.lines().filterNot { "QuickSystemSelect" in it }.joinToString("\n")))
+    }
+
+    @Test
+    fun `each layout and Quick System Select value gives the keys ES-DE moves with, or none for a system`() {
+        val down = KeyEvent.KEYCODE_DPAD_DOWN
+        val up = KeyEvent.KEYCODE_DPAD_UP
+        val right = KeyEvent.KEYCODE_DPAD_RIGHT
+        val left = KeyEvent.KEYCODE_DPAD_LEFT
+        val pageDown = KeyEvent.KEYCODE_PAGE_DOWN
+        val pageUp = KeyEvent.KEYCODE_PAGE_UP
+        val end = KeyEvent.KEYCODE_MOVE_END
+        // Next and previous system from a game list, by Quick System Select value, for a game list moved by up/down
+        // (text list, vertical carousel) and by left/right (horizontal carousel, grid), as docs/VERIFIED.md has it.
+        val systems = mapOf(
+            "leftrightshoulders" to listOf(right to left, pageDown to pageUp),
+            "leftrighttriggers" to listOf(right to left, end to null),
+            "shoulders" to listOf(pageDown to pageUp, pageDown to pageUp),
+            "triggers" to listOf(end to null, end to null),
+            "leftright" to listOf(right to left, null to null),
+            "disabled" to listOf(null to null, null to null),
+            // Unset, and a value ES-DE doesn't know, act as its default.
+            null to listOf(right to left, pageDown to pageUp),
+            "sideways" to listOf(right to left, pageDown to pageUp),
+        )
+        for ((qss, expected) in systems) {
+            val (upDownLists, leftRightLists) = expected
+            for (layout in Layout.entries) {
+                val upDown = layout == Layout.TEXT_LIST || layout == Layout.VERTICAL_CAROUSEL
+                val keys = steerKeys(layout, Layout.TEXT_LIST, qss)
+                assertEquals("$layout $qss", if (upDown) down to up else right to left, keys.nextGame to keys.previousGame)
+                assertEquals("$layout $qss", if (upDown) upDownLists else leftRightLists, keys.nextSystem to keys.previousSystem)
+            }
+        }
+        // The system view moves as its own layout does, whatever the game list's.
+        assertEquals(down to up, steerKeys(Layout.GRID, Layout.TEXT_LIST, null).let { it.nextInSystemView to it.previousInSystemView })
+        assertEquals(down to up, steerKeys(Layout.GRID, Layout.VERTICAL_CAROUSEL, null).let { it.nextInSystemView to it.previousInSystemView })
+        assertEquals(right to left, steerKeys(Layout.TEXT_LIST, Layout.HORIZONTAL_CAROUSEL, null).let { it.nextInSystemView to it.previousInSystemView })
+        assertEquals(right to left, steerKeys(Layout.TEXT_LIST, Layout.GRID, null).let { it.nextInSystemView to it.previousInSystemView })
+    }
+
+    @Test
+    fun `the Nova's setup changes system with left and right`() {
+        val keys = steerKeys(Layout.TEXT_LIST, Layout.TEXT_LIST, esSetting(nova, "QuickSystemSelect"))
+        assertEquals(SteerKeys(KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_UP), keys)
     }
 
     private val recents = listOf("/snes/Super Mario World.zip", "/gbc/Shantae.zip", "/gb/Dr. Mario.zip", "/snes/02) Hacks/Easyland.zip")
 
-    /** ES-DE as [Steering] sees it: a ring of game lists, each with its own cursor, logging the entry a press lands on. */
-    private class FakeEsde(val lists: List<List<String>>, var list: Int, val cursors: IntArray) {
+    /**
+     * ES-DE as [Steering] sees it: a ring of game lists, each with its own cursor, and the system view over them, as the
+     * Nova logged them: a press logs the entry it lands on, or nothing where it doesn't move (a game list's keys in the
+     * system view and back). A list with games of several systems is Last Played (`recent`); [depth] is how many
+     * folders deep each list's cursor is. [nudges] move the cursor by their amount when steering looks again before A.
+     */
+    private class FakeEsde(val lists: List<List<String>>, var list: Int, val cursors: IntArray, var systemView: Boolean = false) {
+        val names = lists.map { l -> l.map { it.split('/')[1] }.distinct().singleOrNull() ?: LAST_PLAYED_SYSTEM }
+        val depth = IntArray(lists.size)
+        val nudges = ArrayDeque<Int>()
+        val pressed = mutableListOf<Step>()
         var launched: String? = null
-        val selected get() = "/storage/ROMs" + lists[list][cursors[list]]
+        val game get() = lists[list][cursors[list]].let { Selection.Game("/storage/ROMs$it", it.split('/')[1]) }
+        val logged get() = if (systemView) Selection.System(names[list]) else game
 
-        fun run(steering: Steering): Step {
-            var logged: String? = null
-            while (true) {
-                when (val step = steering.next(logged)) {
-                    Step.DOWN -> cursors[list] = (cursors[list] + 1) % lists[list].size
-                    Step.UP -> cursors[list] = Math.floorMod(cursors[list] - 1, lists[list].size)
-                    Step.NEXT_SYSTEM -> list = (list + 1) % lists.size
-                    Step.LAUNCH -> return step.also { launched = selected }
-                    Step.FAIL -> return step
-                }
-                logged = selected
-            }
+        private fun move(by: Int) {
+            cursors[list] = Math.floorMod(cursors[list] + by, lists[list].size)
         }
+
+        fun press(step: Step): Selection? {
+            pressed += step
+            when (step) {
+                Step.NEXT_GAME, Step.PREVIOUS_GAME -> if (systemView) return null else move(if (step == Step.NEXT_GAME) 1 else -1)
+                Step.NEXT_SYSTEM, Step.PREVIOUS_SYSTEM ->
+                    if (systemView) return null else list = Math.floorMod(list + if (step == Step.NEXT_SYSTEM) 1 else -1, lists.size)
+                Step.SYSTEM_VIEW -> when {
+                    systemView -> return null
+                    depth[list] > 0 -> return Selection.Game("/storage/ROMs/${names[list]}/01) Folder ${depth[list]--}")
+                    else -> systemView = true
+                }
+                Step.NEXT_IN_SYSTEM_VIEW, Step.PREVIOUS_IN_SYSTEM_VIEW ->
+                    if (!systemView) return null else list = Math.floorMod(list + if (step == Step.NEXT_IN_SYSTEM_VIEW) 1 else -1, lists.size)
+                // A in a game list launches its game.
+                Step.OPEN -> if (systemView) systemView = false else return null.also { launched = game.path }
+                Step.LAUNCH, Step.FAIL -> error("$step isn't a press")
+            }
+            return logged
+        }
+
+        fun run(steering: Steering, start: Selection? = null) = steer(
+            steering,
+            start,
+            ::press,
+            settle = { nudges.removeFirstOrNull()?.let { move(it); game } },
+            launch = { launched = game.path; true },
+        )
     }
 
     private val snes = listOf("/snes/01) All but the Best", "/snes/Super Mario World.zip", "/snes/Zelda.zip")
@@ -185,14 +258,14 @@ class SwitcherTest {
     @Test
     fun `from the top of Last Played it goes down to the target and launches it`() {
         val esde = FakeEsde(listOf(recents, snes, gb), 0, intArrayOf(0, 0, 0))
-        assertEquals(Step.LAUNCH, esde.run(Steering(recents, 3)))
+        assertTrue(esde.run(Steering(recents, 3)))
         assertEquals("/storage/ROMs/snes/02) Hacks/Easyland.zip", esde.launched)
     }
 
     @Test
     fun `from the bottom of Last Played it goes round and back up to the first`() {
         val esde = FakeEsde(listOf(recents, snes, gb), 0, intArrayOf(3, 0, 0))
-        assertEquals(Step.LAUNCH, esde.run(Steering(recents, 0)))
+        assertTrue(esde.run(Steering(recents, 0)))
         assertEquals("/storage/ROMs/snes/Super Mario World.zip", esde.launched)
     }
 
@@ -200,7 +273,7 @@ class SwitcherTest {
     fun `from another system it walks to Last Played, past a list whose cursor is on a recent game`() {
         // The SNES list's cursor is on Super Mario World and the Game Boy list's on Dr. Mario: both recent, neither list is Last Played.
         val esde = FakeEsde(listOf(gb, snes, recents), 0, intArrayOf(0, 1, 2))
-        assertEquals(Step.LAUNCH, esde.run(Steering(recents, 1)))
+        assertTrue(esde.run(Steering(recents, 1)))
         assertEquals(2, esde.list)
         assertEquals("/storage/ROMs/gbc/Shantae.zip", esde.launched)
     }
@@ -208,11 +281,13 @@ class SwitcherTest {
     @Test
     fun `it fails without launching when Last Played isn't found or nothing is logged`() {
         val esde = FakeEsde(listOf(gb, snes), 0, intArrayOf(0, 0))
-        assertEquals(Step.FAIL, esde.run(Steering(recents, 1)))
+        assertFalse(esde.run(Steering(recents, 1)))
         assertNull(esde.launched)
-        val steering = Steering(recents, 1)
-        assertEquals(Step.DOWN, steering.next(null))
-        assertEquals(Step.FAIL, steering.next(null))
+        // In the system view with no line to tell it so, a game list's press logs nothing.
+        val lost = FakeEsde(listOf(gb, snes, recents), 0, intArrayOf(0, 0, 0), systemView = true)
+        assertFalse(lost.run(Steering(recents, 1)))
+        assertEquals(listOf(Step.NEXT_GAME), lost.pressed)
+        assertNull(lost.launched)
     }
 
     @Test
@@ -221,7 +296,7 @@ class SwitcherTest {
         val played = listOf("/snes/Super Mario World.zip", "/gbc/Shantae.zip", "/androidgames/TMNT.app", "/androidgames/Dead Cells.app", "/androidgames/Metroid.app")
         val android = listOf("/androidgames/Dead Cells.app", "/androidgames/Metroid.app", "/androidgames/TMNT.app")
         val esde = FakeEsde(listOf(android, gb, played), 0, intArrayOf(2, 0, 0))
-        assertEquals(Step.LAUNCH, esde.run(Steering(played, 1)))
+        assertTrue(esde.run(Steering(played, 1)))
         assertEquals(2, esde.list)
         assertEquals("/storage/ROMs/gbc/Shantae.zip", esde.launched)
     }
@@ -229,8 +304,140 @@ class SwitcherTest {
     @Test
     fun `the target is launched from its own system's list when the cursor lands on it there`() {
         val esde = FakeEsde(listOf(gb, snes, recents), 0, intArrayOf(0, 1, 0))
-        assertEquals(Step.LAUNCH, esde.run(Steering(recents, 0)))
+        assertTrue(esde.run(Steering(recents, 0)))
         assertEquals(1, esde.list)
         assertEquals("/storage/ROMs/snes/Super Mario World.zip", esde.launched)
+    }
+
+    @Test
+    fun `from the system view on another system it walks to Last Played by name and opens it`() {
+        val esde = FakeEsde(listOf(gb, snes, recents), 0, intArrayOf(0, 1, 2), systemView = true)
+        assertTrue(esde.run(Steering(recents, 1), start = Selection.System("gb")))
+        assertEquals("/storage/ROMs/gbc/Shantae.zip", esde.launched)
+        assertEquals(
+            listOf(Step.NEXT_IN_SYSTEM_VIEW, Step.NEXT_IN_SYSTEM_VIEW, Step.OPEN, Step.PREVIOUS_GAME),
+            esde.pressed,
+        )
+    }
+
+    @Test
+    fun `from the system view on Last Played it steps off and back before opening it`() {
+        val esde = FakeEsde(listOf(gb, snes, recents), 2, intArrayOf(0, 1, 0), systemView = true)
+        assertTrue(esde.run(Steering(recents, 2), start = Selection.System(LAST_PLAYED_SYSTEM)))
+        assertEquals("/storage/ROMs/gb/Dr. Mario.zip", esde.launched)
+        assertEquals(Step.OPEN, esde.pressed[2])
+        // A line naming Last Played while ES-DE shows a game list: the first press logs nothing, and no A is sent.
+        val stale = FakeEsde(listOf(gb, snes, recents), 2, intArrayOf(0, 1, 0))
+        assertFalse(stale.run(Steering(recents, 2), start = Selection.System(LAST_PLAYED_SYSTEM)))
+        assertNull(stale.launched)
+        assertEquals(listOf(Step.NEXT_IN_SYSTEM_VIEW), stale.pressed)
+    }
+
+    @Test
+    fun `a nudge after the target's line is walked back from, and A follows the target's own line`() {
+        // Last Played known by its neighbours.
+        val esde = FakeEsde(listOf(recents, snes, gb), 0, intArrayOf(0, 0, 0))
+        esde.nudges += listOf(1, -1)
+        assertTrue(esde.run(Steering(recents, 2)))
+        assertEquals("/storage/ROMs/gb/Dr. Mario.zip", esde.launched)
+        assertEquals(listOf(Step.NEXT_GAME, Step.NEXT_GAME, Step.PREVIOUS_GAME, Step.NEXT_GAME), esde.pressed)
+        // Last Played opened by name.
+        val opened = FakeEsde(listOf(gb, recents), 0, intArrayOf(0, 1), systemView = true)
+        opened.nudges += -1
+        assertTrue(opened.run(Steering(recents, 1, canChangeSystem = false), start = Selection.System("gb")))
+        assertEquals("/storage/ROMs/gbc/Shantae.zip", opened.launched)
+        assertEquals(Step.NEXT_GAME, opened.pressed.last())
+    }
+
+    @Test
+    fun `without a next-system key it leaves other lists through the system view, out of a folder too`() {
+        // A grid under Quick System Select's Left/Right: next game is right, and there's no key to change system.
+        val keys = steerKeys(Layout.GRID, Layout.TEXT_LIST, "leftright")
+        assertEquals(KeyEvent.KEYCODE_DPAD_RIGHT, keys.key(Step.NEXT_GAME))
+        assertEquals(KeyEvent.KEYCODE_DEL, keys.key(Step.SYSTEM_VIEW))
+        assertEquals(KeyEvent.KEYCODE_DPAD_DOWN, keys.key(Step.NEXT_IN_SYSTEM_VIEW))
+        assertEquals(KeyEvent.KEYCODE_ENTER, keys.key(Step.OPEN))
+        val esde = FakeEsde(listOf(snes, gb, recents), 0, intArrayOf(2, 0, 3))
+        esde.depth[0] = 2
+        assertTrue(esde.run(Steering(recents, 1, canChangeSystem = keys.nextSystem != null)))
+        assertEquals("/storage/ROMs/gbc/Shantae.zip", esde.launched)
+        assertEquals(
+            listOf(Step.NEXT_GAME, Step.SYSTEM_VIEW, Step.SYSTEM_VIEW, Step.SYSTEM_VIEW) +
+                listOf(Step.NEXT_IN_SYSTEM_VIEW, Step.NEXT_IN_SYSTEM_VIEW, Step.OPEN) +
+                listOf(Step.PREVIOUS_GAME, Step.PREVIOUS_GAME),
+            esde.pressed,
+        )
+        assertTrue(Step.NEXT_SYSTEM !in esde.pressed)
+    }
+
+    @Test
+    fun `a game-select line names its game's system`() {
+        val line = """Nov 18 11:56:30 Debug:  Scripting::fireEvent(): game-select "/storage/7BEF-E760/ROMs/snes/02) Hacks/Easyland.zip" "Easyland" "snes" "Nintendo SNES (Super Nintendo)""""
+        assertEquals(Selection.Game("/storage/7BEF-E760/ROMs/snes/02) Hacks/Easyland.zip", "snes"), selection(line))
+        assertEquals(Selection.System("recent"), selection("""Nov 18 20:49:03 Debug:  Scripting::fireEvent(): system-select "recent" "last played" "recent" """""))
+    }
+
+    // Four one-system lists and Last Played, each list's cursor on a game that isn't recent.
+    private val a = listOf("/atari2600/Pitfall.zip", "/atari2600/Adventure.zip")
+    private val b = listOf("/nes/Metroid.zip", "/nes/Kid Icarus.zip")
+    private val c = listOf("/n64/Turok.z64", "/n64/F-Zero X.z64")
+    private val d = listOf("/psx/Descent.chd", "/psx/Wipeout.chd")
+    private fun ring(vararg lists: List<String>) = lists.toList() + listOf(recents)
+    private val lap = SystemRing(mapOf("atari2600" to 4, "nes" to 3, "n64" to 2, "psx" to 1))
+
+    @Test
+    fun `a walk learns each list's distance, and a lap from just past Last Played the ring`() {
+        val walk = Steering(recents, 1, canGoBack = true)
+        val esde = FakeEsde(ring(a, b, c, d), 0, IntArray(5))
+        assertTrue(esde.run(walk))
+        assertEquals(lap, walk.learned)
+        // The longest distance stands for the size, so from there it walks back one list, not round.
+        val back = Steering(recents, 1, canGoBack = true, ring = lap)
+        val again = FakeEsde(ring(a, b, c, d), 0, IntArray(5))
+        assertTrue(again.run(back))
+        assertEquals("/storage/ROMs/gbc/Shantae.zip", again.launched)
+        assertEquals(1, again.pressed.count { it == Step.PREVIOUS_SYSTEM })
+        assertTrue(Step.NEXT_SYSTEM !in again.pressed)
+        // A walk back from a known place gives the size.
+        assertEquals(lap.copy(size = 5), back.learned)
+    }
+
+    @Test
+    fun `it takes the shorter way, by the system view too, and only when it can go back`() {
+        val known = lap.copy(size = 5)
+        fun systemsPressed(start: Int, canGoBack: Boolean = true, canChangeSystem: Boolean = true): List<Step> {
+            val esde = FakeEsde(ring(a, b, c, d), start, IntArray(5))
+            assertTrue(esde.run(Steering(recents, 1, canChangeSystem, canGoBack, known)))
+            assertEquals("/storage/ROMs/gbc/Shantae.zip", esde.launched)
+            return esde.pressed.filter { it in setOf(Step.NEXT_SYSTEM, Step.PREVIOUS_SYSTEM, Step.NEXT_IN_SYSTEM_VIEW, Step.PREVIOUS_IN_SYSTEM_VIEW) }
+        }
+        assertEquals(listOf(Step.NEXT_SYSTEM, Step.NEXT_SYSTEM), systemsPressed(2))
+        // From the second of five lists, back past the first is two; on would be three.
+        assertEquals(List(2) { Step.PREVIOUS_SYSTEM }, systemsPressed(1))
+        assertEquals(List(2) { Step.PREVIOUS_IN_SYSTEM_VIEW }, systemsPressed(1, canChangeSystem = false))
+        assertEquals(List(3) { Step.NEXT_SYSTEM }, systemsPressed(1, canGoBack = false))
+    }
+
+    @Test
+    fun `a system seen at two distances is dropped, and an unknown start walks on and arrives`() {
+        // A favourites list on a SNES game, then the Game Boy list, then the SNES list itself.
+        val favourites = listOf("/snes/Zelda.zip", "/snes/F-Zero.zip")
+        val walk = Steering(recents, 1, canGoBack = true, ring = lap)
+        val esde = FakeEsde(listOf(favourites, gb, snes, recents), 0, intArrayOf(0, 0, 2, 0))
+        assertTrue(esde.run(walk))
+        assertEquals("/storage/ROMs/gbc/Shantae.zip", esde.launched)
+        assertTrue(Step.PREVIOUS_SYSTEM !in esde.pressed)
+        assertEquals(lap.ahead + ("gb" to 2), walk.learned!!.ahead)
+    }
+
+    @Test
+    fun `a ring that has changed is learned again`() {
+        val known = lap.copy(size = 5)
+        // A list joins between the N64's and the PlayStation's: from the N64 it's now three to Last Played.
+        val grown = known.learned(listOf("n64", "gba", "psx"), backward = false)
+        assertEquals(SystemRing(mapOf("atari2600" to 4, "nes" to 3, "gba" to 2, "psx" to 1)), grown)
+        assertEquals(3, grown.learned(listOf("n64", "gba", "psx"), backward = false).ahead["n64"])
+        // A forward walk longer than the size known also drops it.
+        assertNull(known.learned(listOf("x", "atari2600", "nes", "n64", "psx"), backward = false).size)
     }
 }
