@@ -7,6 +7,7 @@ import android.graphics.PixelFormat
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.InsetDrawable
+import android.os.SystemClock
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
@@ -39,6 +40,10 @@ class SwitcherOverlay(private val context: Context) {
     private var yielded = false
 
     val isOpen get() = root != null
+
+    /** Uptime of the switcher's last press, or of its opening. */
+    var pressedAt = 0L
+        private set
 
     /**
      * Leaves the game on screen without its action pills and gives up the keys, so presses reach ES-DE underneath;
@@ -264,6 +269,7 @@ class SwitcherOverlay(private val context: Context) {
                 if (yielded) return@setOnKeyListener true
                 val code = theme.button(sent, event.device?.name)
                 if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener code in KEYS
+                pressedAt = event.eventTime
                 // A press past an end goes round to the other, as the menu's list does; a held D-pad stops at the end.
                 fun move(by: Int) = select(
                     if (event.repeatCount > 0) (shown + by).coerceIn(0, titles.size - 1) else Math.floorMod(shown + by, titles.size),
@@ -285,6 +291,7 @@ class SwitcherOverlay(private val context: Context) {
         wm.addFullScreen(view, PixelFormat.OPAQUE)
         root = view
         yielded = false
+        pressedAt = SystemClock.uptimeMillis()
     }
 
     fun close() {

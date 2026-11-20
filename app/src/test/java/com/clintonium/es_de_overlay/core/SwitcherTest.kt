@@ -489,6 +489,8 @@ class SwitcherTest {
         val line = """Nov 18 11:56:30 Debug:  Scripting::fireEvent(): game-select "/storage/7BEF-E760/ROMs/snes/02) Hacks/Easyland.zip" "Easyland" "snes" "Nintendo SNES (Super Nintendo)""""
         assertEquals(Selection.Game("/storage/7BEF-E760/ROMs/snes/02) Hacks/Easyland.zip", "snes"), selection(line))
         assertEquals(Selection.System("recent"), selection("""Nov 18 20:49:03 Debug:  Scripting::fireEvent(): system-select "recent" "last played" "recent" """""))
+        // The video and slideshow screensavers' games aren't a list's selection.
+        assertNull(selection("""Nov 20 21:30:10 Debug:  Scripting::fireEvent(): screensaver-game-select "/storage/7BEF-E760/ROMs/snes/Easyland.zip" "Easyland" "snes" "Nintendo SNES (Super Nintendo)""""))
     }
 
     // Four one-system lists and Last Played, each list's cursor on a game that isn't recent.

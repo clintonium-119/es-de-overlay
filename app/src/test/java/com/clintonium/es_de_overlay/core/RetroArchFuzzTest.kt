@@ -25,4 +25,17 @@ class RetroArchFuzzTest {
             }
         }
     }
+
+    /** Any text as the state search's lines never throws working out a shape, for any core and frame. */
+    @FuzzTest(maxDuration = "10m")
+    @Timeout(10)
+    fun aspect(input: ByteArray) {
+        val text = String(input, Charsets.UTF_8)
+        val lines = text.lines()
+        val look = retroarchConfig(lines)
+        val size = (input.firstOrNull()?.toInt() ?: 0) and 0x3ff
+        for (core in listOf("Snes9x", "Genesis Plus GX", "Nestopia", "PicoDrive", "Stella", "FinalBurn Neo", "DOSBox-pure", "Beetle PSX HW", "SwanStation", "Beetle Saturn", "Mupen64Plus-Next", lines.first())) {
+            look.aspect(core, lines.last(), lines.getOrElse(1) { "" }, size + 1, (size xor 0x155) + 1, 4 / 3.0)
+        }
+    }
 }
