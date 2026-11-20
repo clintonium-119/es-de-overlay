@@ -19,6 +19,7 @@ You grant each of these yourself, in Android's settings or permission dialogs, a
 - **One controller button**, through an accessibility service: Back or Menu, or the one you choose under **Controls**.
   - Android shows the service every button press. It intercepts the menu button only during a game ES-DE launched, a capture or the open menu, and passes every other button on to the app in front.
   - The same service turns the screen off when ES-DE's screensaver has run for the time you set.
+  - It hears which app's window comes to the front, only to see at once that ES-DE is back after a game, so the game switcher can open again.
   - For Quit Game, it brings ES-DE back afterwards, and without Shizuku it presses Force stop on the game's App Info page.
 - **Drawing over other apps**, for the menu, the guide viewer and the guide browser.
 - **With [Shizuku](shizuku.md)** (optional):

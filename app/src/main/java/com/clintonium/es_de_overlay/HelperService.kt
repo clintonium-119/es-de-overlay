@@ -71,6 +71,7 @@ import com.clintonium.es_de_overlay.core.recentGames
 import com.clintonium.es_de_overlay.core.resolveGame
 import com.clintonium.es_de_overlay.core.retroarchProcesses
 import com.clintonium.es_de_overlay.core.retryPick
+import com.clintonium.es_de_overlay.core.watchesPick
 import com.clintonium.es_de_overlay.core.selection
 import com.clintonium.es_de_overlay.core.sessionPicture
 import com.clintonium.es_de_overlay.core.systemNames
@@ -264,8 +265,19 @@ class HelperService : Service() {
     private val pick = AtomicReference<Pick?>()
     /** RetroArch's packages running as the switcher's game was picked, read alongside steering. */
     @Volatile private var runningAtPick: Future<Set<String>>? = null
-    /** Set as ES-DE is back from a game the switcher launched: the switcher opens again once the games are read again. */
-    @Volatile private var reopen = false
+    /** io thread: set when ES-DE has logged the end of a game the switcher launched, having written its gamelist. */
+    private var switcherGameEnded = false
+    /** The games the switcher shows, while it's open. */
+    @Volatile private var showing: List<RecentGame>? = null
+    /** The pictures read before the games were last read again, which the switcher shows until each is read anew. */
+    @Volatile private var stale = emptyMap<String, Bitmap>()
+    /** Counts the times the games are read again; a picture read before the latest is dropped. */
+    @Volatile private var pictureRound = 0
+    /**
+     * The game just played, as its log suffix, while the newer picture it's expected to have is on its way: until its
+     * picture is read after the games are read again, past the [pictureRound] given.
+     */
+    @Volatile private var awaited: Pair<String, Int>? = null
 
     override fun onBind(intent: Intent?) = null
 
@@ -290,13 +302,30 @@ class HelperService : Service() {
                 }
             }.onFailure { Log.i(TAG, "ES-DE's previous log wasn't read: $it") }
         }
-        io.scheduleWithFixedDelay({
-            try {
-                poll()
-            } catch (e: Exception) {
-                Log.w(TAG, "poll failed", e)
-            }
-        }, 0, 1, TimeUnit.SECONDS)
+        io.scheduleWithFixedDelay(::safePoll, 0, 1, TimeUnit.SECONDS)
+    }
+
+    private fun safePoll() {
+        try {
+            poll()
+        } catch (e: Exception) {
+            Log.w(TAG, "poll failed", e)
+        }
+    }
+
+    /** Set while [pollSoon]'s first poll is waiting to run. */
+    private val soon = AtomicBoolean()
+
+    /**
+     * Polls a moment from now, and again a little later, as well as each second: a game is being left, and ES-DE is
+     * coming back to the front, or has, and may not have logged it yet.
+     */
+    private fun pollSoon() {
+        if (!soon.compareAndSet(false, true)) return
+        runCatching {
+            io.schedule(Runnable { soon.set(false); safePoll() }, 100, TimeUnit.MILLISECONDS)
+            io.schedule(Runnable { safePoll() }, 400, TimeUnit.MILLISECONDS)
+        }
     }
 
     /**
@@ -384,13 +413,19 @@ class HelperService : Service() {
         readLog()
         val fg = front.read(this)
         followSwitcherFront(fg)
-        if (fg != foreground) {
+        val changed = fg != foreground
+        if (changed) {
             foreground = fg
             recentStale = true
             Log.i(TAG, "foreground: $fg (current game: ${currentGame()})")
-        } else if (recentStale && switcherOn(fg)) {
-            // A poll after ES-DE came to the front, by when it has written the game just played to its gamelist. While
-            // ES-DE's settings lack something every poll reads them again, as the user may be changing them in ES-DE.
+        }
+        // At the end of a game the switcher launched, ES-DE has written the game to its gamelist, and the games are read
+        // again at once; until then, after such a game, not at all.
+        val ended = switcherGameEnded.also { switcherGameEnded = false }
+        if (recentStale && switcherOn(fg) && (!changed || ended) && pick.get()?.let { it.played && !it.ended } != true) {
+            // Otherwise a poll after ES-DE came to the front, by when it has written the game just played to its
+            // gamelist. While ES-DE's settings lack something every poll reads them again, as the user may be changing
+            // them in ES-DE.
             val needs = runCatching {
                 contentResolver.openInputStream(treeChild(prefs.esdeTree!!, "settings/es_settings.xml"))!!.use { switcherNeeds(it.reader().readText()) }
             }.onFailure { Log.w(TAG, "switcher: reading ES-DE's settings failed", it) }.getOrNull()
@@ -401,11 +436,8 @@ class HelperService : Service() {
                 recentStale = false
             }
         }
-        // Back from a game the switcher launched, with the game just played among the games read.
-        if (reopen && fg == ESDE && !recentStale) {
-            reopen = false
-            main.post(::reopenSwitcher)
-        }
+        // A switcher launch over a running RetroArch is looked at each quarter second until it's judged.
+        pick.get()?.let { if (watchesPick(it, SystemClock.uptimeMillis(), ::runningBefore)) runCatching { io.schedule(Runnable { safePoll() }, 250, TimeUnit.MILLISECONDS) } }
         main.post { onForeground(fg) }
     }
 
@@ -448,6 +480,9 @@ class HelperService : Service() {
         closeViewer()
         menu.release()
         switcher.close()
+        showing = null
+        stale = emptyMap()
+        awaited = null
     }
 
     /**
@@ -551,10 +586,20 @@ class HelperService : Service() {
      */
     private fun loadRecent() {
         val started = SystemClock.uptimeMillis()
+        // How long each part took, for the log.
+        val took = mutableListOf<String>()
+        var mark = started
+        fun took(part: String) {
+            val now = SystemClock.uptimeMillis()
+            took += "$part ${now - mark}"
+            mark = now
+        }
         val gamelists = romRoots(prefs.esdeTree!!).first() + "/gamelists"
         val tags = RECENT_TAGS.joinToString(" ") { "-e '<$it>'" }
         val lines = ShizukuShell.output("cd ${ShizukuShell.quote(gamelists)} && grep -H -F $tags */gamelist.xml")?.decodeToString().orEmpty()
+        took("search")
         val played = recentGames(lines.lineSequence(), max = Int.MAX_VALUE)
+        took("parse")
         // ES-DE leaves out a game whose file is gone, though its gamelist keeps the entry; unchecked if the check fails.
         val present = played.takeIf { it.isNotEmpty() }?.let {
             ShizukuShell.output(
@@ -563,17 +608,20 @@ class HelperService : Service() {
                     "; do [ -e \"${'$'}f\" ] && echo \"${'$'}f\"; done; true",
             )?.decodeToString()?.lines()?.toSet()
         }
+        took("files")
         val kept = played.filter { present == null || "${it.system}/${it.path}" in present }
         val games = kept.take(50)
         // Warmed, so a downloaded theme chosen since the last launch is copied first.
         val theme = runCatching { games.firstOrNull()?.system.orEmpty().let { themeLook.warm(it, prefs.menuImage); themeLook.current(it, prefs.menuImage) } }
             .onFailure { Log.w(TAG, "reading the theme failed", it) }
             .getOrDefault(ThemeLook.DEFAULT)
+        took("theme")
         // `autoload` if RetroArch's Auto Load State is on, then `<modified> <path>` for every picture it saved beside a
         // state, below the folder its config names.
         val retroarch = ShizukuShell.output(
             """for c in /sdcard/Android/data/com.retroarch*/files/retroarch.cfg; do grep -q '^savestate_auto_load = "true"' "${'$'}c" && echo autoload; d=$(sed -n 's/^savestate_directory = "\(.*\)"$/\1/p' "${'$'}c"); [ -d "${'$'}d" ] && find "${'$'}d" -name '*.state*.png' -exec stat -c '%Y %n' {} +; done; true""",
         )?.decodeToString().orEmpty().lines()
+        took("states")
         retroarchResumes = "autoload" in retroarch
         states = retroarch.mapNotNull { line -> line.substringBefore(' ').toLongOrNull()?.let { it to line.substringAfter(' ') } }
         discSession?.let { (g, emulator, since) ->
@@ -586,10 +634,14 @@ class HelperService : Service() {
                 "cat " + ppssppStates.joinToString(" ") { ShizukuShell.quote("$it/../SYSTEM/ppsspp.ini") } + " 2>/dev/null | sed -n 's/^AutoLoadSaveState = //p'; true",
             )?.decodeToString()?.lines()?.any { it.isNotBlank() && it.trim() != "0" } == true
         }
+        took("other")
+        // An open switcher keeps showing the pictures it has until each is read anew.
+        stale = if (showing != null) pictures.snapshot() else emptyMap()
+        pictureRound++
         pictures.evictAll()
         recent = games to theme
-        Log.i(TAG, "switcher: ${games.size} recent games (${played.size - kept.size} files gone), ${states.size} state pictures, read in ${SystemClock.uptimeMillis() - started} ms")
-        if (games.isNotEmpty()) main.post { wantPictures(games, 0) }
+        Log.i(TAG, "switcher: ${games.size} recent games (${played.size - kept.size} files gone), ${states.size} state pictures, read in ${SystemClock.uptimeMillis() - started} ms (${took.joinToString()})")
+        if (games.isNotEmpty()) main.post { showing?.let { wantPictures(it, shownGame) } ?: wantPictures(games, 0) }
     }
 
     /** Where the picture kept of a game when it's quit goes in the app's own files; null for a path that would leave them. */
@@ -721,14 +773,20 @@ class HelperService : Service() {
             val i = Math.floorMod(at + offset, games.size)
             val key = games[i].logSuffix
             if (pictures.get(key) != null || !reading.add(key)) continue
+            val round = pictureRound
             pictureReader.execute {
                 try {
                     val away = Math.floorMod(i - shownGame, games.size)
                     if (away > reach && away < games.size - reach) return@execute
-                    switcherPicture(games[i])?.let {
-                        pictures.put(key, it)
-                        main.post { switcher.pictureArrived(i) }
+                    val read = switcherPicture(games[i])
+                    if (round != pictureRound) {
+                        // Read before the games were read again: dropped, and asked for again.
+                        main.post { showing?.let { wantPictures(it, shownGame) } }
+                        return@execute
                     }
+                    if (read != null) pictures.put(key, read) else stale = stale - key
+                    if (awaited?.let { (k, after) -> k == key && round > after } == true) awaited = null
+                    main.post { switcher.pictureArrived(i) }
                 } finally {
                     reading.remove(key)
                 }
@@ -738,9 +796,10 @@ class HelperService : Service() {
 
     /**
      * Main thread: shows the recent games over ES-DE at once, as last read; picking one has ES-DE launch it ([steer]).
-     * Before any read (the service has just started) it reads them first.
+     * Before any read (the service has just started) it reads them first. Back from a game, the list was read before it
+     * was played and is being read again, past [pictureRound] [rereadFrom].
      */
-    private fun openSwitcher() {
+    private fun openSwitcher(rereadFrom: Int? = null) {
         val started = SystemClock.uptimeMillis()
         val (read, theme) = recent ?: run {
             val token = Any().also { opening = it }
@@ -750,22 +809,26 @@ class HelperService : Service() {
                 main.post {
                     if (opening !== token) return@post
                     opening = null
-                    if (recent != null) openSwitcher()
+                    if (recent != null) openSwitcher(rereadFrom)
                 }
             }
             return
         }
-        val games = game?.let { playedFirst(read, it.system, it.romRelativePath, LocalDateTime.now()) } ?: read
+        val games = game?.let { playedFirst(read, it.system, it.romRelativePath, LocalDateTime.now(), justPlayed = rereadFrom != null) } ?: read
         // The newest as many as set; steering gets them all, which tells Last Played from other lists as well as ever.
         val shown = games.take(prefs.switcherGames)
         // Steering knows Last Played by two neighbours, so a list of one can't be steered to.
         if (shown.size < 2) return toast("ES-DE has fewer than two recently played games")
         switching = true
+        showing = shown
+        // Back from a game, its saved or kept picture is shown until the one it has now is read after the reread.
+        awaited = rereadFrom?.let { round -> (shown[0].logSuffix to round).takeIf { pictureOf(shown[0]).first != PictureSource.SCRAPED } }
         val names = prefs.systemNames()
         val today = LocalDate.now()
         switcher.show(
-            theme, prefs.switcherStrip, shown.map { it.name }, shown.takeIf { prefs.switcherDetails }?.map { detailLine(it, names, today, pictureOf(it).first) }, 0,
-            picture = { pictures.get(shown[it].logSuffix) },
+            theme, prefs.switcherStrip, shown.map { it.name }, { i: Int -> detailLine(shown[i], names, today, pictureOf(shown[i]).first) }.takeIf { prefs.switcherDetails }, 0,
+            picture = { pictures.get(shown[it].logSuffix) ?: stale[shown[it].logSuffix] },
+            updating = { shown[it].logSuffix == awaited?.first },
             onSelect = { wantPictures(shown, it) },
             onPick = { steer(games, it, theme.look) },
             onClose = ::closeMenu,
@@ -775,12 +838,12 @@ class HelperService : Service() {
 
     /**
      * Main thread: opens the switcher again over ES-DE, back from a game it launched, unless something else of the
-     * overlay's is up or the switcher can't open now.
+     * overlay's is up or the switcher can't open now; the games are being read again past [rereadFrom].
      */
-    private fun reopenSwitcher() {
+    private fun reopenSwitcher(rereadFrom: Int) {
         if (capture != null || starting || steering || menu.isOpen || switcher.isOpen || opening != null || !switcherReady(front.read(this))) return
         Log.i(TAG, "switcher: opening again after its game")
-        openSwitcher()
+        openSwitcher(rereadFrom)
     }
 
     /**
@@ -1007,7 +1070,12 @@ class HelperService : Service() {
         val screen = menuScreen
         Log.i(TAG, "quit: " + (if (retroarch != null) "exiting $pkg through RetroArch" else "ending $pkg") +
             if (screen != null) ", keeping the picture read as the menu opened" else "")
-        if (retroarch != null) exitRetroArch(retroarch) else ButtonService.forceStop(pkg)
+        if (retroarch != null) {
+            exitRetroArch(retroarch)
+        } else {
+            ButtonService.forceStop(pkg)
+            pollSoon()
+        }
         if (screen == null) return
         val file = keptPicture(g.system, g.romRelativePath) ?: return
         thread(name = "quit picture") { screen.get()?.let { keepPicture(g, file, it) } }
@@ -1031,6 +1099,7 @@ class HelperService : Service() {
             val waited = SystemClock.uptimeMillis() - started
             if (front.read(this) != retroarch.pkg) {
                 Log.i(TAG, "quit: RetroArch exited $waited ms after Exit")
+                pollSoon()
                 return@execute
             }
             Log.w(TAG, "quit: RetroArch still in front $waited ms after Exit (pressed: $pressed), force-stopping it")
@@ -1111,6 +1180,7 @@ class HelperService : Service() {
      * leaving it with Home ends it and [keepsPicture], unless the menu or switcher is over it.
      */
     private fun onHomeDown() {
+        pollSoon()
         if (!prefs.quitOnHome || !keepsPicture() || menu.isOpen || switcher.isOpen || opening != null) return
         val g = gameInFront() ?: return
         val file = keptPicture(g.system, g.romRelativePath) ?: return
@@ -1464,7 +1534,6 @@ class HelperService : Service() {
         val lines = log.read(this, tree) {
             launch = null
             pick.set(null)
-            reopen = false
         }
         followSwitcherLaunch(lines)
         prefs.learnSystemNames(systemNames(lines.asSequence()))
@@ -1501,27 +1570,26 @@ class HelperService : Service() {
     }
 
     /**
-     * io thread: follows the switcher's launch through [lines], the lines ES-DE logged since the last poll; at the end
-     * of a game it launched, the switcher opens again. A press in ES-DE, or any launch, takes back a reopening still
-     * waiting: the player has gone on.
+     * io thread: follows the switcher's launch through [lines], the lines ES-DE logged since the last poll, to the end
+     * of its game, by when ES-DE has written the game's play to its gamelist.
      */
     private fun followSwitcherLaunch(lines: List<String>) {
         for (line in lines) {
-            if (nextLaunch(null, line) != null || ("Window::logInput(" in line && line.trimEnd().endsWith("value=1"))) reopen = false
-            val followed = pick.get() ?: continue
-            val (next, reopens) = followPick(followed, line, SystemClock.uptimeMillis())
+            val followed = pick.get() ?: return
+            val (next, ended) = followPick(followed, line, SystemClock.uptimeMillis())
             pick.compareAndSet(followed, next)
-            if (reopens) {
-                // ES-DE has just written the game's play to its gamelist.
+            if (ended) {
                 recentStale = true
-                reopen = true
+                switcherGameEnded = true
             }
         }
     }
 
     /**
-     * io thread: with [fg] in front, notes the switcher's game as played once it's up; with ES-DE in front, presses
-     * launch once more if the launch failed in a RetroArch that was already running ([retryPick]).
+     * io thread: with [fg] in front, notes the switcher's game as played once it's up. With ES-DE in front after it,
+     * the game has been left, and the switcher opens again at once, on the games as last read with the game just
+     * played first, whether or not ES-DE has logged the game's end yet; they're read again once it has. Before the
+     * game is up, presses launch once more if it failed in a RetroArch that was already running ([retryPick]).
      */
     private fun followSwitcherFront(fg: String?) {
         val followed = pick.get() ?: return
@@ -1530,13 +1598,27 @@ class HelperService : Service() {
             return
         }
         if (fg != ESDE) return
-        val before = { runningAtPick?.let { runCatching { it.get(5, TimeUnit.SECONDS) }.getOrNull() }.orEmpty() }
-        val retry = retryPick(followed, SystemClock.uptimeMillis(), before, ::retroarchRunning) ?: return
+        if (followed.played) {
+            if (followed.reopenedAt == 0L) {
+                if (pick.compareAndSet(followed, followed.copy(reopenedAt = SystemClock.uptimeMillis()))) {
+                    val round = pictureRound
+                    main.post { reopenSwitcher(round) }
+                }
+            } else if (followed.ended) {
+                // Reopened, and its end logged: nothing more to follow.
+                pick.compareAndSet(followed, null)
+            }
+            return
+        }
+        val retry = retryPick(followed, SystemClock.uptimeMillis(), ::runningBefore, ::retroarchRunning) ?: return
         if (!pick.compareAndSet(followed, retry)) return
         val pressed = ShizukuShell.output("input keyevent ${KeyEvent.KEYCODE_ENTER}", 5) != null
         Log.i(TAG, "switcher: ${followed.launch?.name} didn't start, RetroArch quit instead; " + if (pressed) "launching it again" else "couldn't launch it again")
         if (!pressed) pick.compareAndSet(retry, null)
     }
+
+    /** io thread: RetroArch's packages running as the switcher's last pick was made; none if they couldn't be read. */
+    private fun runningBefore(): Set<String> = runningAtPick?.let { runCatching { it.get(5, TimeUnit.SECONDS) }.getOrNull() }.orEmpty()
 
     /** Off the main thread: RetroArch's packages running now, through Shizuku; null when they can't be read. */
     private fun retroarchRunning(): Set<String>? = ShizukuShell.output("ps -A -o NAME", 5)?.decodeToString()?.let(::retroarchProcesses)
@@ -1604,6 +1686,11 @@ class HelperService : Service() {
         /** Main thread: the controller's Home has gone down, which Android still gets. */
         fun homeDown() {
             instance?.onHomeDown()
+        }
+
+        /** ES-DE's window has come to the front. */
+        fun esdeShown() {
+            instance?.pollSoon()
         }
 
         /**

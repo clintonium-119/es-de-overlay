@@ -78,11 +78,12 @@ private val LAST_PLAYED = DateTimeFormatter.ofPattern("uuuuMMdd'T'HHmmss")
 
 /**
  * [games] with ES-DE's latest launch, the ROM [path] of [system], first, as Last Played has it once the game is left:
- * a list read before the game can't show that yet. Moved up, it's played at [now]; unchanged when first or not there.
+ * a list read before the game can't show that yet. Moved up, it's played at [now]; unchanged when not there, or when
+ * first unless [justPlayed] says the list was read before this play.
  */
-fun playedFirst(games: List<RecentGame>, system: String, path: String, now: LocalDateTime): List<RecentGame> {
+fun playedFirst(games: List<RecentGame>, system: String, path: String, now: LocalDateTime, justPlayed: Boolean = false): List<RecentGame> {
     val at = games.indexOfFirst { it.system == system && it.path == path }
-    if (at <= 0) return games
+    if (at < 0 || (at == 0 && !justPlayed)) return games
     return games.toMutableList().apply { add(0, removeAt(at).copy(lastPlayed = now.format(LAST_PLAYED))) }
 }
 
@@ -477,31 +478,42 @@ fun steer(walk: Steering, start: Selection?, press: (Step) -> Selection?, settle
 /**
  * A launch the switcher picked or pressed at [pressed] (uptime ms), followed through ES-DE's log: [retry] when it's
  * the launch pressed again, [launch] once ES-DE has logged it (at [launchedAt]), [played] once its game has been seen
- * in front.
+ * in front, [ended] once ES-DE has logged that game's end, [reopenedAt] once the switcher has opened again over ES-DE
+ * after it. ES-DE logs the end anywhere from a tenth to over half a second after it's back in front.
  */
-data class Pick(val pressed: Long, val retry: Boolean = false, val launch: Launch? = null, val launchedAt: Long = 0, val played: Boolean = false)
+data class Pick(
+    val pressed: Long,
+    val retry: Boolean = false,
+    val launch: Launch? = null,
+    val launchedAt: Long = 0,
+    val played: Boolean = false,
+    val ended: Boolean = false,
+    val reopenedAt: Long = 0,
+)
 
 // Steering and then ES-DE's launch screen take a few seconds each; a launch logged later than this after the pick isn't its.
 private const val CLAIM_MS = 15_000L
 
 /**
- * Folds one es_log.txt line, read at [now], into [pick], and says whether the switcher opens again. The first launch
- * ES-DE logs soon after the press is the pick's; any other is a hand launch, which ends following the pick (null). At
- * the pick's game-end ES-DE is back from it, and the switcher opens again if the game was [Pick.played]. A launch
- * whose game never came up ES-DE takes to be running until a key is pressed, which logs its end.
+ * Folds one es_log.txt line, read at [now], into [pick], and says whether a game it launched has just ended. The
+ * first launch ES-DE logs soon after the press is the pick's; any other is a hand launch, which ends following the pick
+ * (null). At the pick's game-end ES-DE has written the game to its gamelist, and it's an end if the game was
+ * [Pick.played]: a launch whose game never came up ES-DE takes to be running until a key is pressed, which logs its end.
  */
 fun followPick(pick: Pick, line: String, now: Long): Pair<Pick?, Boolean> {
     nextLaunch(null, line)?.let { logged ->
         return (if (pick.launch == null && now - pick.pressed <= CLAIM_MS) pick.copy(launch = logged, launchedAt = now) else null) to false
     }
     val launch = pick.launch ?: return pick to false
+    if (pick.ended) return pick to false
     if (!gameEnd(line)) return pick.copy(launch = nextLaunch(launch, line)) to false
-    return null to pick.played
+    return (if (pick.played) pick.copy(ended = true) else null) to pick.played
 }
 
 // RetroArch, running when it's sent another game, quits within a fraction of a second instead, and ES-DE logs nothing;
-// a RetroArch started for the game is up well within the first figure, and one that's loading it stays.
-private const val GONE_FROM_MS = 1_000L
+// a RetroArch started afresh for the game, had it quit before, is up well within the first figure, and one that's
+// loading the game stays.
+private const val GONE_FROM_MS = 300L
 private const val GONE_UNTIL_MS = 5_000L
 
 /**
@@ -515,4 +527,22 @@ fun retryPick(pick: Pick, now: Long, runningBefore: () -> Set<String>, runningNo
     if (pick.retry || pick.played || now - pick.launchedAt !in GONE_FROM_MS..GONE_UNTIL_MS || pkg !in runningBefore()) return null
     val running = runningNow() ?: return null
     return if (pkg in running) null else Pick(now, retry = true)
+}
+
+// ES-DE logged a game's end up to 0.57 s after it was back in front on the Nova.
+private const val END_MS = 3_000L
+
+/**
+ * At [now]: whether [pick] is to be looked at each moment. Once the switcher has opened again after its game, until
+ * ES-DE logs the game's end. Before, while [retryPick] may still judge it: it isn't the retry, its game hasn't come up,
+ * and one of RetroArch's packages was running as it was picked ([runningBefore]); not yet launched but soon after the
+ * pick, or launched in that RetroArch no longer ago than a failed launch is told in.
+ */
+fun watchesPick(pick: Pick, now: Long, runningBefore: () -> Set<String>): Boolean {
+    // Back over ES-DE: its log of the game's end, which can come over half a second after, is waited for.
+    if (pick.played) return pick.reopenedAt > 0 && !pick.ended && now - pick.reopenedAt <= END_MS
+    if (pick.retry) return false
+    val before = runningBefore().ifEmpty { return false }
+    val launch = pick.launch ?: return now - pick.pressed <= CLAIM_MS
+    return launch.pkg in before && now - pick.launchedAt <= GONE_UNTIL_MS
 }

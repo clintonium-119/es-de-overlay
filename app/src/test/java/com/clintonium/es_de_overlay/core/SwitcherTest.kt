@@ -78,6 +78,12 @@ class SwitcherTest {
         )
         assertEquals(games, playedFirst(games, "snes", "Super Mario World.zip", now))
         assertEquals(games, playedFirst(games, "gbc", "Not Played.zip", now))
+        // A list read before this play: the game first is played now too.
+        assertEquals(
+            listOf(games[0].copy(lastPlayed = "20261118T153702"), games[1], games[2]),
+            playedFirst(games, "snes", "Super Mario World.zip", now, justPlayed = true),
+        )
+        assertEquals(games, playedFirst(games, "gbc", "Not Played.zip", now, justPlayed = true))
     }
 
     // When a picture was written, in epoch seconds, from the same `YYYYMMDDTHHMMSS` ES-DE uses, in UTC.
@@ -563,16 +569,16 @@ class SwitcherTest {
     private val launched = aladdin.dropLast(2)
     private val ended = aladdin.takeLast(2)
 
-    /** Folds [lines], read [readAfter] ms after the pick, into [pick]; gives the pick left and whether the switcher reopens. */
+    /** Folds [lines], read [readAfter] ms after the pick, into [pick]; gives the pick left and whether its game ended. */
     private fun follow(pick: Pick?, lines: List<String>, readAfter: Long = 5_000): Pair<Pick?, Boolean> {
         var p = pick
-        var reopens = false
+        var ends = false
         for (line in lines) {
-            val (next, reopen) = followPick(p ?: break, line, (pick?.pressed ?: 0) + readAfter)
+            val (next, ended) = followPick(p ?: break, line, (pick?.pressed ?: 0) + readAfter)
             p = next
-            reopens = reopens || reopen
+            ends = ends || ended
         }
-        return p to reopens
+        return p to ends
     }
 
     @Test
@@ -585,15 +591,18 @@ class SwitcherTest {
     }
 
     @Test
-    fun `the end of a game the pick launched and that came up opens the switcher again`() {
+    fun `the end of a game the pick launched and that came up is its end`() {
         val (playing, _) = follow(Pick(1_000), launched)
-        val (left, reopens) = follow(playing!!.copy(played = true), ended)
-        assertNull(left)
-        assertTrue(reopens)
+        val (left, ends) = follow(playing!!.copy(played = true), ended)
+        assertTrue(left!!.ended)
+        assertTrue(ends)
+        // Kept, ended, until the switcher has opened again; a launch after it ends following it.
+        assertEquals(left to false, follow(left, ended))
+        assertNull(follow(left, listOf("""Nov 19 16:53:30 Info:   Launching game "Sonic Rush" from system "Nintendo DS (nds)"...""")).first)
     }
 
     @Test
-    fun `the end of a launch whose game never came up, logged at the next key, ends following it with no reopening`() {
+    fun `the end of a launch whose game never came up, logged at the next key, ends following it but isn't an end`() {
         val (playing, _) = follow(Pick(1_000), launched)
         val (left, reopens) = follow(playing, listOf("""Nov 19 21:34:44 Debug:  Window::logInput(Keyboard): Key Return, isMappedTo=a, value=1""") + ended)
         assertNull(left)
@@ -601,7 +610,7 @@ class SwitcherTest {
     }
 
     @Test
-    fun `a launch after the pick's, by hand, ends following it with no reopening`() {
+    fun `a launch after the pick's, by hand, ends following it with no end`() {
         val hand = """Nov 19 16:53:30 Info:   Launching game "Sonic Rush" from system "Nintendo DS (nds)"..."""
         val (playing, _) = follow(Pick(1_000), launched)
         val (left, reopens) = follow(playing!!.copy(played = true), listOf(hand) + ended)
@@ -629,12 +638,12 @@ class SwitcherTest {
         val running = setOf("com.retroarch.aarch64")
         val failed = follow(Pick(1_000), launched).first!!
         val at = failed.launchedAt
-        val retry = retryPick(failed, at + 1_000, { running }, { emptySet() })
+        val retry = retryPick(failed, at + 300, { running }, { emptySet() })
         assertTrue(retry!!.retry)
         assertNull(retry.launch)
-        assertEquals(at + 1_000, retry.pressed)
+        assertEquals(at + 300, retry.pressed)
         // Too soon, or too late, to tell.
-        assertNull(retryPick(failed, at + 999, { running }, { emptySet() }))
+        assertNull(retryPick(failed, at + 299, { running }, { emptySet() }))
         assertNull(retryPick(failed, at + 5_001, { running }, { emptySet() }))
         // The retry is never pressed again.
         val retried = follow(retry, launched, readAfter = 4_000).first!!
@@ -652,5 +661,30 @@ class SwitcherTest {
         assertNull(retryPick(failed, at, { emptySet() }, { emptySet() }))
         assertNull(retryPick(failed, at, { setOf("com.retroarch") }, { emptySet() }))
         assertNull(retryPick(Pick(1_000), 3_000, { running }, { emptySet() }))
+    }
+
+    @Test
+    fun `a pick over a running RetroArch is watched until it's judged`() {
+        val running = setOf("com.retroarch.aarch64")
+        val pending = Pick(1_000)
+        assertTrue(watchesPick(pending, 16_000, { running }))
+        assertFalse(watchesPick(pending, 16_001, { running }))
+        assertFalse(watchesPick(pending, 2_000, { emptySet() }))
+        val launched = follow(pending, launched).first!!
+        val at = launched.launchedAt
+        assertTrue(watchesPick(launched, at + 5_000, { running }))
+        assertFalse(watchesPick(launched, at + 5_001, { running }))
+        assertFalse(watchesPick(launched, at, { setOf("com.retroarch") }))
+        assertFalse(watchesPick(launched.copy(played = true), at, { running }))
+        assertFalse(watchesPick(Pick(1_000, retry = true), 2_000, { running }))
+    }
+
+    @Test
+    fun `back over ES-DE after its game, a pick is watched until the game's end is logged, for a while`() {
+        val reopened = follow(Pick(1_000), launched).first!!.copy(played = true, reopenedAt = 20_000)
+        assertTrue(watchesPick(reopened, 23_000) { emptySet() })
+        assertFalse(watchesPick(reopened, 23_001) { emptySet() })
+        assertFalse(watchesPick(reopened.copy(reopenedAt = 0), 20_000) { emptySet() })
+        assertFalse(watchesPick(follow(reopened, ended).first!!, 21_000) { emptySet() })
     }
 }

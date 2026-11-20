@@ -85,7 +85,10 @@ class ButtonService : AccessibilityService() {
         main.post { performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN) }
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent) {}
+    override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        // ES-DE's window at the front: the overlay looks at once, rather than at its next check a second on.
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && event.packageName?.toString() == ESDE) HelperService.esdeShown()
+    }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
         if (BuildConfig.DEBUG && event.action == KeyEvent.ACTION_DOWN) {

@@ -83,16 +83,18 @@ class SwitcherOverlay(private val context: Context) {
     /**
      * Shows game [start] of [titles], each with its [details] line if given, in [theme]'s look; with [strip], the neighbouring
      * games' pictures run along the bottom. [picture] gives a game's picture if it's been read, else null, when the
-     * game is black under its title until [pictureArrived] says it's in; [onSelect] hears of each game shown. A picks
-     * the game shown with [onPick]; B closes to [onClose].
+     * game is black under its title until [pictureArrived] says it's in; while [updating] says a newer one is on its
+     * way, the picture shown says so. Each arrival draws the game's picture and detail again. [onSelect] hears of each
+     * game shown. A picks the game shown with [onPick]; B closes to [onClose].
      */
     fun show(
         theme: ThemeLook.Current,
         strip: Boolean,
         titles: List<String>,
-        details: List<String>?,
+        details: ((Int) -> String)?,
         start: Int,
         picture: (Int) -> Bitmap?,
+        updating: (Int) -> Boolean,
         onSelect: (Int) -> Unit,
         onPick: (Int) -> Unit,
         onClose: () -> Unit,
@@ -130,6 +132,7 @@ class SwitcherOverlay(private val context: Context) {
         }
         val detail = helpText(context, theme, screenW, screenH)
         val count = helpText(context, theme, screenW, screenH)
+        val update = helpText(context, theme, screenW, screenH).apply { text = "Updating" }
         // The whole picture, in its own shape, on black where it isn't the screen's.
         val art = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
         // The mockup's strip at 1280 × 960: 4:3 pictures 132 px tall, 20 px apart, the selected one 156 px tall,
@@ -177,6 +180,8 @@ class SwitcherOverlay(private val context: Context) {
         fun drawable(i: Int) = picture(i)?.let { BitmapDrawable(context.resources, it).apply { isFilterBitmap = false } }
         fun drawArt() {
             art.setImageDrawable(drawable(shown))
+            details?.let { detail.text = it(shown) }
+            update.visibility = if (updating(shown)) View.VISIBLE else View.GONE
             offsets.forEachIndexed { n, offset ->
                 val i = Math.floorMod(shown + offset, titles.size)
                 val image = drawable(i)
@@ -190,7 +195,6 @@ class SwitcherOverlay(private val context: Context) {
             drawArt()
             onSelect(i)
             title.text = titles[i]
-            details?.let { detail.text = it[i] }
             count.text = "${i + 1} of ${titles.size}"
             // The theme's textHorizontalScrollDelay: a long title starts scrolling a second after it's shown.
             title.isSelected = false
@@ -199,6 +203,7 @@ class SwitcherOverlay(private val context: Context) {
         val view = FrameLayout(context).apply {
             setBackgroundColor(Color.BLACK)
             addView(art, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            addView(update, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
             if (strip) {
                 val band = LinearLayout(context).apply {
                     gravity = Gravity.CENTER

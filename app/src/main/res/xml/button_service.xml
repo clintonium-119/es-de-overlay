@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Filters keys only to catch the controller's Back. Reads windows, finding buttons by their view ids, only to press
-     Force stop and OK on a game's App Info page in Settings when Shizuku can't end the game. -->
+     Force stop and OK on a game's App Info page in Settings when Shizuku can't end the game. Hears which app's window
+     comes to the front only to see ES-DE back after a game at once. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityEventTypes="typeWindowStateChanged"
     android:accessibilityFlags="flagReportViewIds|flagRequestFilterKeyEvents"
     android:canRequestFilterKeyEvents="true"
     android:canRetrieveWindowContent="true" />

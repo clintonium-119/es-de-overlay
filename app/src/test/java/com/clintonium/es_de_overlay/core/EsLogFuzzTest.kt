@@ -19,7 +19,10 @@ class EsLogFuzzTest {
             screensaverEvent(line)
             pick = pick?.let { followPick(it, line, 0).first }
         }
-        pick?.let { p -> retryPick(p, p.launchedAt + 1_000, { setOf("com.retroarch.aarch64") }) { retroarchProcesses(text) } }
+        pick?.let { p ->
+            retryPick(p, p.launchedAt + 300, { setOf("com.retroarch.aarch64") }) { retroarchProcesses(text) }
+            watchesPick(p, p.launchedAt + 300) { setOf("com.retroarch.aarch64") }
+        }
         launch?.pkg?.let { assertTrue(PACKAGE_NAME.matches(it), it) }
         launch?.let { romPathHint(it, listOf("/storage/7BEF-E760/ROMs", "7BEF-E760:ROMs")) }
     }
