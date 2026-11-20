@@ -57,6 +57,9 @@ fun screensaverEvent(line: String): Boolean? = when {
     else -> null
 }
 
+/** Whether [line] is ES-DE's game-end event, logged as it's back in front after a game it launched. */
+fun gameEnd(line: String) = "Scripting::fireEvent(): game-end " in line
+
 /** The value of the setting [name] in ES-DE's es_settings.xml, or null when it isn't there. */
 fun esSetting(settingsXml: String, name: String) =
     Regex("""name="$name"\s+value="([^"]*)"""").find(settingsXml)?.groupValues?.get(1)

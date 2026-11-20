@@ -45,6 +45,7 @@ import com.clintonium.es_de_overlay.core.Launch
 import com.clintonium.es_de_overlay.core.LeaveWatch
 import com.clintonium.es_de_overlay.core.Look
 import com.clintonium.es_de_overlay.core.Overwrite
+import com.clintonium.es_de_overlay.core.Pick
 import com.clintonium.es_de_overlay.core.PictureSource
 import com.clintonium.es_de_overlay.core.RECENT_TAGS
 import com.clintonium.es_de_overlay.core.RecentGame
@@ -56,6 +57,7 @@ import com.clintonium.es_de_overlay.core.contentBounds
 import com.clintonium.es_de_overlay.core.detailLine
 import com.clintonium.es_de_overlay.core.displaySize
 import com.clintonium.es_de_overlay.core.esSetting
+import com.clintonium.es_de_overlay.core.followPick
 import com.clintonium.es_de_overlay.core.gamelistInfo
 import com.clintonium.es_de_overlay.core.guideEntries
 import com.clintonium.es_de_overlay.core.guidePath
@@ -67,6 +69,8 @@ import com.clintonium.es_de_overlay.core.pictureSource
 import com.clintonium.es_de_overlay.core.playedFirst
 import com.clintonium.es_de_overlay.core.recentGames
 import com.clintonium.es_de_overlay.core.resolveGame
+import com.clintonium.es_de_overlay.core.retroarchProcesses
+import com.clintonium.es_de_overlay.core.retryPick
 import com.clintonium.es_de_overlay.core.selection
 import com.clintonium.es_de_overlay.core.sessionPicture
 import com.clintonium.es_de_overlay.core.systemNames
@@ -90,6 +94,7 @@ import java.util.concurrent.Future
 import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
 
 const val TAG = "ESDEShot"
@@ -255,6 +260,12 @@ class HelperService : Service() {
     @Volatile private var shaderOff = false
     /** Presses of RetroArch's hotkeys, one at a time. */
     private val presses = Executors.newSingleThreadExecutor()
+    /** The launch the switcher last pressed, followed through ES-DE's log on the io thread until its game ends. */
+    private val pick = AtomicReference<Pick?>()
+    /** RetroArch's packages running as the switcher's game was picked, read alongside steering. */
+    @Volatile private var runningAtPick: Future<Set<String>>? = null
+    /** Set as ES-DE is back from a game the switcher launched: the switcher opens again once the games are read again. */
+    @Volatile private var reopen = false
 
     override fun onBind(intent: Intent?) = null
 
@@ -372,6 +383,7 @@ class HelperService : Service() {
     private fun poll() {
         readLog()
         val fg = front.read(this)
+        followSwitcherFront(fg)
         if (fg != foreground) {
             foreground = fg
             recentStale = true
@@ -389,6 +401,11 @@ class HelperService : Service() {
                 recentStale = false
             }
         }
+        // Back from a game the switcher launched, with the game just played among the games read.
+        if (reopen && fg == ESDE && !recentStale) {
+            reopen = false
+            main.post(::reopenSwitcher)
+        }
         main.post { onForeground(fg) }
     }
 
@@ -396,6 +413,8 @@ class HelperService : Service() {
     private fun onForeground(fg: String?) {
         leave.left(fg, launch?.pkg)?.let(::quitLeft)
         if (fg == launch?.pkg) {
+            // The switcher is only ever over ES-DE: one up as a game comes to the front goes.
+            if (switching) closeMenu()
             // A game left during a capture with RetroArch's shader off gets it back as it's in front again.
             restoreShader(fg)
             return
@@ -754,11 +773,27 @@ class HelperService : Service() {
         Log.i(TAG, "switcher: open in ${SystemClock.uptimeMillis() - started} ms")
     }
 
-    /** Main thread: keeps the switcher up, showing the picked game, while ES-DE is walked to it and launches it. */
+    /**
+     * Main thread: opens the switcher again over ES-DE, back from a game it launched, unless something else of the
+     * overlay's is up or the switcher can't open now.
+     */
+    private fun reopenSwitcher() {
+        if (capture != null || starting || steering || menu.isOpen || switcher.isOpen || opening != null || !switcherReady(front.read(this))) return
+        Log.i(TAG, "switcher: opening again after its game")
+        openSwitcher()
+    }
+
+    /**
+     * Main thread: keeps the switcher up, showing the picked game, while ES-DE is walked to it and launches it. The
+     * launch is then followed through ES-DE's log ([readLog]).
+     */
     private fun steer(games: List<RecentGame>, target: Int, look: Look) {
         if (steering) return
         steering = true
         val started = SystemClock.uptimeMillis()
+        // A launch in a RetroArch that's already running can fail, and is then pressed again.
+        runningAtPick = FutureTask { retroarchRunning().orEmpty() }.also { thread(name = "switcher processes", block = it::run) }
+        val mine = Pick(started).also(pick::set)
         switcher.yieldFocus {
             val yielded = SystemClock.uptimeMillis() - started
             Thread {
@@ -766,6 +801,7 @@ class HelperService : Service() {
                     .onFailure { Log.w(TAG, "switcher: steering failed", it) }
                     .getOrDefault(false)
                 Log.i(TAG, "switcher: ${games[target].name} ${if (launched) "launching" else "not reached"} ${SystemClock.uptimeMillis() - started} ms after the pick (keys given up in $yielded ms)")
+                if (!launched) pick.compareAndSet(mine, null)
                 main.post {
                     steering = false
                     closeMenu()
@@ -1425,7 +1461,12 @@ class HelperService : Service() {
     /** Folds the lines ES-DE logged since the last poll into its latest launch. */
     private fun readLog() {
         val tree = prefs.esdeTree ?: return
-        val lines = log.read(this, tree) { launch = null }
+        val lines = log.read(this, tree) {
+            launch = null
+            pick.set(null)
+            reopen = false
+        }
+        followSwitcherLaunch(lines)
         prefs.learnSystemNames(systemNames(lines.asSequence()))
         // A theme or variant changed in ES-DE's menu: the switcher's look and the layouts it steers by are read again.
         if (lines.any { "Finished loading theme" in it }) recentStale = true
@@ -1458,6 +1499,47 @@ class HelperService : Service() {
             }
         }
     }
+
+    /**
+     * io thread: follows the switcher's launch through [lines], the lines ES-DE logged since the last poll; at the end
+     * of a game it launched, the switcher opens again. A press in ES-DE, or any launch, takes back a reopening still
+     * waiting: the player has gone on.
+     */
+    private fun followSwitcherLaunch(lines: List<String>) {
+        for (line in lines) {
+            if (nextLaunch(null, line) != null || ("Window::logInput(" in line && line.trimEnd().endsWith("value=1"))) reopen = false
+            val followed = pick.get() ?: continue
+            val (next, reopens) = followPick(followed, line, SystemClock.uptimeMillis())
+            pick.compareAndSet(followed, next)
+            if (reopens) {
+                // ES-DE has just written the game's play to its gamelist.
+                recentStale = true
+                reopen = true
+            }
+        }
+    }
+
+    /**
+     * io thread: with [fg] in front, notes the switcher's game as played once it's up; with ES-DE in front, presses
+     * launch once more if the launch failed in a RetroArch that was already running ([retryPick]).
+     */
+    private fun followSwitcherFront(fg: String?) {
+        val followed = pick.get() ?: return
+        if (fg != null && fg == followed.launch?.pkg) {
+            if (!followed.played) pick.compareAndSet(followed, followed.copy(played = true))
+            return
+        }
+        if (fg != ESDE) return
+        val before = { runningAtPick?.let { runCatching { it.get(5, TimeUnit.SECONDS) }.getOrNull() }.orEmpty() }
+        val retry = retryPick(followed, SystemClock.uptimeMillis(), before, ::retroarchRunning) ?: return
+        if (!pick.compareAndSet(followed, retry)) return
+        val pressed = ShizukuShell.output("input keyevent ${KeyEvent.KEYCODE_ENTER}", 5) != null
+        Log.i(TAG, "switcher: ${followed.launch?.name} didn't start, RetroArch quit instead; " + if (pressed) "launching it again" else "couldn't launch it again")
+        if (!pressed) pick.compareAndSet(retry, null)
+    }
+
+    /** Off the main thread: RetroArch's packages running now, through Shizuku; null when they can't be read. */
+    private fun retroarchRunning(): Set<String>? = ShizukuShell.output("ps -A -o NAME", 5)?.decodeToString()?.let(::retroarchProcesses)
 
     private fun resolve(l: Launch): GameRef? {
         val esde = prefs.esdeTree ?: return null

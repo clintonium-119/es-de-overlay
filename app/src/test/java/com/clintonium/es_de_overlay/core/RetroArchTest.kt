@@ -140,6 +140,22 @@ class RetroArchTest {
     fun `every command holds only sendevent, sleep, numbers and the node`() {
         assertTrue(isPressCommand(pressCommand("/dev/input/event7", Combo(314, 305), holdMs = 1_234_567, times = 9)!!))
     }
+
+    @Test
+    fun `RetroArch's packages come from a process list, its other processes too`() {
+        val ps = """
+            NAME
+            init
+            org.es_de.frontend
+            com.retroarch.aarch64
+            com.retroarch.aarch64:remote
+            com.retroarchish
+            me.magnum.melonds.nightly
+            com.retroarch.ra32:x
+        """.trimIndent()
+        assertEquals(setOf("com.retroarch.aarch64", "com.retroarchish", "com.retroarch.ra32"), retroarchProcesses(ps))
+        assertEquals(emptySet<String>(), retroarchProcesses("NAME\ninit\n"))
+    }
 }
 
 private val COMMAND_PART = Regex("""sendevent /dev/input/event\d+ \d+ \d+ \d+|sleep \d+\.\d{3}""")

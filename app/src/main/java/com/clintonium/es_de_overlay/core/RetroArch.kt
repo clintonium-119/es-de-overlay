@@ -25,6 +25,10 @@ fun hotkeyCombo(settings: Map<String, String>, name: String): Combo? {
 /** Whether the switch [name] is on: only for `"true"`. */
 fun retroarchOn(settings: Map<String, String>, name: String) = settings[name] == "true"
 
+/** RetroArch's packages among the process names `ps -A -o NAME` lists, where an app's other processes end in `:name`. */
+fun retroarchProcesses(ps: String): Set<String> =
+    ps.lineSequence().map { it.trim().substringBefore(':') }.filter { it.startsWith("com.retroarch") && PACKAGE_NAME.matches(it) }.toSet()
+
 /** A controller's input node and its key-layout file. */
 data class Gamepad(val node: String, val keyLayout: String)
 

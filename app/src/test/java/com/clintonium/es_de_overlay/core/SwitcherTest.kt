@@ -548,4 +548,109 @@ class SwitcherTest {
         // A forward walk longer than the size known also drops it.
         assertNull(known.learned(listOf("x", "atari2600", "nes", "n64", "psx"), backward = false).size)
     }
+
+    /** Aladdin's launch from the Nova's log, as the switcher pressed it, and its end. */
+    private val aladdin = listOf(
+        """Nov 19 16:52:03 Debug:  Window::logInput(Keyboard): Key Return, isMappedTo=a, value=1""",
+        """Nov 19 16:52:06 Info:   Launching game "Aladdin" from system "Sega Genesis (genesis)"...""",
+        """Nov 19 16:52:06 Debug:  FileData::launchGame(): Found emulator package "com.retroarch.aarch64"""",
+        """Nov 19 16:52:06 Info:   Package: com.retroarch.aarch64""",
+        """Nov 19 16:52:06 Info:   Activity: com.retroarch.browser.retroactivity.RetroActivityFuture""",
+        """Nov 19 16:52:07 Debug:  Scripting::fireEvent(): game-select "/storage/7BEF-E760/ROMs/genesis/Aladdin.zip" "Aladdin" "genesis" "Sega Genesis"""",
+        """Nov 19 16:52:14 Debug:  FileData::setPlayMetadata(): Play time was 8 seconds""",
+        """Nov 19 16:52:14 Debug:  Scripting::fireEvent(): game-end "/storage/7BEF-E760/ROMs/genesis/Aladdin.zip" "Aladdin" "genesis" "Sega Genesis"""",
+    )
+    private val launched = aladdin.dropLast(2)
+    private val ended = aladdin.takeLast(2)
+
+    /** Folds [lines], read [readAfter] ms after the pick, into [pick]; gives the pick left and whether the switcher reopens. */
+    private fun follow(pick: Pick?, lines: List<String>, readAfter: Long = 5_000): Pair<Pick?, Boolean> {
+        var p = pick
+        var reopens = false
+        for (line in lines) {
+            val (next, reopen) = followPick(p ?: break, line, (pick?.pressed ?: 0) + readAfter)
+            p = next
+            reopens = reopens || reopen
+        }
+        return p to reopens
+    }
+
+    @Test
+    fun `a pick follows its own launch, with its package and when it was read`() {
+        val (left, reopens) = follow(Pick(1_000), launched)
+        assertEquals("Aladdin", left?.launch?.name)
+        assertEquals("com.retroarch.aarch64", left?.launch?.pkg)
+        assertEquals(6_000L, left?.launchedAt)
+        assertFalse(reopens)
+    }
+
+    @Test
+    fun `the end of a game the pick launched and that came up opens the switcher again`() {
+        val (playing, _) = follow(Pick(1_000), launched)
+        val (left, reopens) = follow(playing!!.copy(played = true), ended)
+        assertNull(left)
+        assertTrue(reopens)
+    }
+
+    @Test
+    fun `the end of a launch whose game never came up, logged at the next key, ends following it with no reopening`() {
+        val (playing, _) = follow(Pick(1_000), launched)
+        val (left, reopens) = follow(playing, listOf("""Nov 19 21:34:44 Debug:  Window::logInput(Keyboard): Key Return, isMappedTo=a, value=1""") + ended)
+        assertNull(left)
+        assertFalse(reopens)
+    }
+
+    @Test
+    fun `a launch after the pick's, by hand, ends following it with no reopening`() {
+        val hand = """Nov 19 16:53:30 Info:   Launching game "Sonic Rush" from system "Nintendo DS (nds)"..."""
+        val (playing, _) = follow(Pick(1_000), launched)
+        val (left, reopens) = follow(playing!!.copy(played = true), listOf(hand) + ended)
+        assertNull(left)
+        assertFalse(reopens)
+    }
+
+    @Test
+    fun `a launch logged long after the pick isn't its`() {
+        assertNull(follow(Pick(1_000), launched, readAfter = 15_001).first)
+        assertEquals("Aladdin", follow(Pick(1_000), launched, readAfter = 15_000).first?.launch?.name)
+    }
+
+    @Test
+    fun `a game-end before the pick's launch is logged, the failed launch's, is passed over`() {
+        val retry = Pick(1_000, retry = true)
+        val (left, reopens) = follow(retry, ended + launched)
+        assertEquals("Aladdin", left?.launch?.name)
+        assertTrue(left!!.retry)
+        assertFalse(reopens)
+    }
+
+    @Test
+    fun `a launch whose game didn't come up and whose RetroArch quit is pressed once more`() {
+        val running = setOf("com.retroarch.aarch64")
+        val failed = follow(Pick(1_000), launched).first!!
+        val at = failed.launchedAt
+        val retry = retryPick(failed, at + 1_000, { running }, { emptySet() })
+        assertTrue(retry!!.retry)
+        assertNull(retry.launch)
+        assertEquals(at + 1_000, retry.pressed)
+        // Too soon, or too late, to tell.
+        assertNull(retryPick(failed, at + 999, { running }, { emptySet() }))
+        assertNull(retryPick(failed, at + 5_001, { running }, { emptySet() }))
+        // The retry is never pressed again.
+        val retried = follow(retry, launched, readAfter = 4_000).first!!
+        assertNull(retryPick(retried, retried.launchedAt + 1_000, { running }, { emptySet() }))
+    }
+
+    @Test
+    fun `a launch isn't pressed again if its game came up, its RetroArch still runs or wasn't running before`() {
+        val running = setOf("com.retroarch.aarch64")
+        val failed = follow(Pick(1_000), launched).first!!
+        val at = failed.launchedAt + 2_000
+        assertNull(retryPick(failed.copy(played = true), at, { running }, { emptySet() }))
+        assertNull(retryPick(failed, at, { running }, { running }))
+        assertNull(retryPick(failed, at, { running }, { null }))
+        assertNull(retryPick(failed, at, { emptySet() }, { emptySet() }))
+        assertNull(retryPick(failed, at, { setOf("com.retroarch") }, { emptySet() }))
+        assertNull(retryPick(Pick(1_000), 3_000, { running }, { emptySet() }))
+    }
 }

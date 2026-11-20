@@ -2,7 +2,9 @@ package com.clintonium.es_de_overlay.core
 
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EsLogTest {
@@ -142,5 +144,12 @@ class EsLogTest {
         assertNull(pkg("com.1foo"))
         assertEquals("com.retroarch", pkg("com.retroarch"))
         assertEquals("dev.eden.eden_emulator", pkg("dev.eden.eden_emulator"))
+    }
+
+    @Test
+    fun `game-end comes from ES-DE's event line only`() {
+        assertTrue(gameEnd("""Nov 19 16:52:14 Debug:  Scripting::fireEvent(): game-end "/storage/7BEF-E760/ROMs/genesis/Aladdin.zip" "Aladdin" "genesis" "Sega Genesis""""))
+        assertFalse(gameEnd("""Nov 19 16:52:06 Debug:  Scripting::fireEvent(): game-start "/storage/7BEF-E760/ROMs/genesis/Aladdin.zip" "Aladdin" "genesis" "Sega Genesis""""))
+        assertFalse(gameEnd("Nov 19 16:52:14 Debug:  FileData::setPlayMetadata(): Play time was 8 seconds"))
     }
 }

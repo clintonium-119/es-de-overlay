@@ -473,3 +473,46 @@ fun steer(walk: Steering, start: Selection?, press: (Step) -> Selection?, settle
         step = walk.next(logged)
     }
 }
+
+/**
+ * A launch the switcher picked or pressed at [pressed] (uptime ms), followed through ES-DE's log: [retry] when it's
+ * the launch pressed again, [launch] once ES-DE has logged it (at [launchedAt]), [played] once its game has been seen
+ * in front.
+ */
+data class Pick(val pressed: Long, val retry: Boolean = false, val launch: Launch? = null, val launchedAt: Long = 0, val played: Boolean = false)
+
+// Steering and then ES-DE's launch screen take a few seconds each; a launch logged later than this after the pick isn't its.
+private const val CLAIM_MS = 15_000L
+
+/**
+ * Folds one es_log.txt line, read at [now], into [pick], and says whether the switcher opens again. The first launch
+ * ES-DE logs soon after the press is the pick's; any other is a hand launch, which ends following the pick (null). At
+ * the pick's game-end ES-DE is back from it, and the switcher opens again if the game was [Pick.played]. A launch
+ * whose game never came up ES-DE takes to be running until a key is pressed, which logs its end.
+ */
+fun followPick(pick: Pick, line: String, now: Long): Pair<Pick?, Boolean> {
+    nextLaunch(null, line)?.let { logged ->
+        return (if (pick.launch == null && now - pick.pressed <= CLAIM_MS) pick.copy(launch = logged, launchedAt = now) else null) to false
+    }
+    val launch = pick.launch ?: return pick to false
+    if (!gameEnd(line)) return pick.copy(launch = nextLaunch(launch, line)) to false
+    return null to pick.played
+}
+
+// RetroArch, running when it's sent another game, quits within a fraction of a second instead, and ES-DE logs nothing;
+// a RetroArch started for the game is up well within the first figure, and one that's loading it stays.
+private const val GONE_FROM_MS = 1_000L
+private const val GONE_UNTIL_MS = 5_000L
+
+/**
+ * At [now], with ES-DE in front: the pick pressed again (a new pick, the retry) when its launch failed, else null. A
+ * launch failed when, a moment after ES-DE logged it, its game hasn't come up and its RetroArch, which was running as
+ * the switcher's game was picked ([runningBefore]), has quit: it's not among RetroArch's packages running now
+ * ([runningNow], null when they can't be read). Only once: the retry is never pressed again.
+ */
+fun retryPick(pick: Pick, now: Long, runningBefore: () -> Set<String>, runningNow: () -> Set<String>?): Pick? {
+    val pkg = pick.launch?.pkg ?: return null
+    if (pick.retry || pick.played || now - pick.launchedAt !in GONE_FROM_MS..GONE_UNTIL_MS || pkg !in runningBefore()) return null
+    val running = runningNow() ?: return null
+    return if (pkg in running) null else Pick(now, retry = true)
+}
