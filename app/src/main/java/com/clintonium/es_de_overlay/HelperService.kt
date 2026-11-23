@@ -14,6 +14,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Color
 import android.graphics.drawable.Icon
 import android.content.pm.ServiceInfo
 import android.hardware.display.DisplayManager
@@ -27,7 +28,11 @@ import android.os.StrictMode
 import android.os.SystemClock
 import android.provider.DocumentsContract
 import android.util.Log
+import android.util.LruCache
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
 import android.view.Display
+import android.view.KeyEvent
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.compose.runtime.getValue
@@ -38,24 +43,66 @@ import com.clintonium.es_de_overlay.core.GameRef
 import com.clintonium.es_de_overlay.core.GuideSite
 import com.clintonium.es_de_overlay.core.Launch
 import com.clintonium.es_de_overlay.core.LeaveWatch
+import com.clintonium.es_de_overlay.core.Look
 import com.clintonium.es_de_overlay.core.Overwrite
+import com.clintonium.es_de_overlay.core.Pick
+import com.clintonium.es_de_overlay.core.PictureSource
+import com.clintonium.es_de_overlay.core.ASPECT_SETTINGS
+import com.clintonium.es_de_overlay.core.CORE_ASPECT_OPTIONS
+import com.clintonium.es_de_overlay.core.RECENT_TAGS
+import com.clintonium.es_de_overlay.core.RetroArchConfig
+import com.clintonium.es_de_overlay.core.RecentGame
+import com.clintonium.es_de_overlay.core.Selection
+import com.clintonium.es_de_overlay.core.Steering
+import com.clintonium.es_de_overlay.core.Step
+import com.clintonium.es_de_overlay.core.SwitcherNeed
+import com.clintonium.es_de_overlay.core.contentBounds
+import com.clintonium.es_de_overlay.core.detailLine
+import com.clintonium.es_de_overlay.core.displaySize
+import com.clintonium.es_de_overlay.core.esSetting
+import com.clintonium.es_de_overlay.core.followPick
 import com.clintonium.es_de_overlay.core.gamelistInfo
 import com.clintonium.es_de_overlay.core.guideEntries
 import com.clintonium.es_de_overlay.core.guidePath
+import com.clintonium.es_de_overlay.core.keptPicturePath
 import com.clintonium.es_de_overlay.core.manualPath
 import com.clintonium.es_de_overlay.core.mediaPath
 import com.clintonium.es_de_overlay.core.nextLaunch
+import com.clintonium.es_de_overlay.core.pictureSource
+import com.clintonium.es_de_overlay.core.playedFirst
+import com.clintonium.es_de_overlay.core.recentGames
 import com.clintonium.es_de_overlay.core.resolveGame
+import com.clintonium.es_de_overlay.core.retroarchConfig
+import com.clintonium.es_de_overlay.core.retroarchProcesses
+import com.clintonium.es_de_overlay.core.retryPick
+import com.clintonium.es_de_overlay.core.watchesPick
+import com.clintonium.es_de_overlay.core.selection
+import com.clintonium.es_de_overlay.core.sessionPicture
+import com.clintonium.es_de_overlay.core.systemNames
 import com.clintonium.es_de_overlay.core.startUrl
+import com.clintonium.es_de_overlay.core.statePicture
+import com.clintonium.es_de_overlay.core.steer
+import com.clintonium.es_de_overlay.core.steerKeys
+import com.clintonium.es_de_overlay.core.screensaverEvent
+import com.clintonium.es_de_overlay.core.switcherNeeds
 import com.clintonium.es_de_overlay.core.webSearchUrl
 import java.io.File
 import java.io.IOException
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneId
 import java.util.concurrent.CancellationException
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import java.util.concurrent.Future
+import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
+import kotlin.math.roundToInt
 
 const val TAG = "ESDEShot"
 const val ESDE = "org.es_de.frontend"
@@ -151,6 +198,7 @@ class HelperService : Service() {
     private val io = Executors.newSingleThreadScheduledExecutor()
     private lateinit var prefs: Prefs
     private lateinit var menu: MenuOverlay
+    private lateinit var switcher: SwitcherOverlay
     private lateinit var themeLook: ThemeLook
     private lateinit var screenshots: ScreenshotObserver
     private lateinit var windowContext: Context
@@ -177,11 +225,71 @@ class HelperService : Service() {
     @Volatile private var launch: Launch? = null
     @Volatile private var game: GameRef? = null
     @Volatile private var foreground: String? = null
+    /**
+     * The game ES-DE launched last in PPSSPP or ARMSX2 (`ppsspp`, `armsx2`), which name save states by the disc, and when
+     * (epoch seconds), until the pictures saved in its session are looked for.
+     */
+    @Volatile private var discSession: Triple<GameRef, String, Long>? = null
 
     // io thread only.
     private val log = EsLogTail()
     // The io thread's poll, and the main thread on Back.
     private val front = ForegroundApp()
+
+    /** ES-DE's Last Played games and the look to show them in, read ahead so the switcher opens at once. */
+    @Volatile private var recent: Pair<List<RecentGame>, ThemeLook.Current>? = null
+    /** RetroArch's save-state pictures, by when each was written (epoch seconds), as read with [recent]. */
+    @Volatile private var states = emptyList<Pair<Long, String>>()
+    /** Whether RetroArch starts a game from its auto save state (Auto Load State), as read with [recent]. */
+    @Volatile private var retroarchResumes = false
+    /** RetroArch's settings for the shape it shows games at, as read with [recent]. */
+    @Volatile private var retroarchLook = RetroArchConfig(emptyMap(), emptyMap())
+    /** Whether PPSSPP starts a game from a save state (Auto Load Savestate), as read with [recent] once it has saved a picture here. */
+    @Volatile private var ppssppResumes = false
+    /** Switcher pictures read, by ROM path ending: those either side of the game shown, and a few passed. */
+    private val pictures = LruCache<String, Bitmap>(15)
+    /** Keys of [pictures] being read. */
+    private val reading = ConcurrentHashMap.newKeySet<String>()
+    private val pictureReader = Executors.newSingleThreadExecutor()
+    /** The game the switcher shows, which [wantPictures] keeps its reads near. */
+    @Volatile private var shownGame = 0
+    /** Set when another app comes to the front: ES-DE may have played a game since [recent] was read. */
+    @Volatile private var recentStale = true
+    /** What ES-DE's settings lacked for the switcher when last read; null before they're read or when they can't be. */
+    @Volatile private var missing: List<SwitcherNeed>? = null
+    /** ES-DE's screensaver time in ms (ScreensaverTimer), read with its settings; null before they're read or without it. */
+    @Volatile private var screensaverMs: Long? = null
+    /** Set by ES-DE's log while its screensaver runs. */
+    @Volatile private var esdeScreensaver = false
+    /** Main thread: the switcher is up over ES-DE, which a poll then mustn't close. */
+    private var switching = false
+    /** Main thread: the switcher is steering ES-DE to the picked game. */
+    private var steering = false
+    /** Main thread: the screen read as the menu opened over the game, for Quit Game to keep; dropped as the menu closes. */
+    private var menuScreen: Future<Pair<ByteBuffer, Int>?>? = null
+    /** RetroArch's hotkeys when the last launch was in RetroArch, read on the io thread as the launch is logged. */
+    @Volatile private var hotkeys: RetroArchHotkeys? = null
+    /** Set while the overlay has RetroArch's shader turned off, taken to be on at each launch as RetroArch's config says. */
+    @Volatile private var shaderOff = false
+    /** Presses of RetroArch's hotkeys, one at a time. */
+    private val presses = Executors.newSingleThreadExecutor()
+    /** The launch the switcher last pressed, followed through ES-DE's log on the io thread until its game ends. */
+    private val pick = AtomicReference<Pick?>()
+    /** RetroArch's packages running as the switcher's game was picked, read alongside steering. */
+    @Volatile private var runningAtPick: Future<Set<String>>? = null
+    /** io thread: set when ES-DE has logged the end of a game the switcher launched, having written its gamelist. */
+    private var switcherGameEnded = false
+    /** The games the switcher shows, while it's open. */
+    @Volatile private var showing: List<RecentGame>? = null
+    /** The pictures read before the games were last read again, which the switcher shows until each is read anew. */
+    @Volatile private var stale = emptyMap<String, Bitmap>()
+    /** Counts the times the games are read again; a picture read before the latest is dropped. */
+    @Volatile private var pictureRound = 0
+    /**
+     * The game just played, as its log suffix, while the newer picture it's expected to have is on its way: until its
+     * picture is read after the games are read again, past the [pictureRound] given.
+     */
+    @Volatile private var awaited: Pair<String, Int>? = null
 
     override fun onBind(intent: Intent?) = null
 
@@ -193,16 +301,43 @@ class HelperService : Service() {
         prefs = Prefs(this)
         windowContext = overlayContext(this)
         menu = MenuOverlay(windowContext)
+        switcher = SwitcherOverlay(windowContext)
         themeLook = ThemeLook(windowContext, prefs)
         screenshots = ScreenshotObserver(this, main, ::onScreenshot)
         if (checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED) screenshots.register()
-        io.scheduleWithFixedDelay({
-            try {
-                poll()
-            } catch (e: Exception) {
-                Log.w(TAG, "poll failed", e)
-            }
-        }, 0, 1, TimeUnit.SECONDS)
+        // ES-DE's previous log names the systems browsed before ES-DE last started; read first, so the current log's win.
+        io.execute {
+            val tree = prefs.esdeTree ?: return@execute
+            runCatching {
+                contentResolver.openInputStream(treeChild(tree, "logs/es_log.txt.bak"))!!.bufferedReader().useLines {
+                    prefs.learnSystemNames(systemNames(it))
+                }
+            }.onFailure { Log.i(TAG, "ES-DE's previous log wasn't read: $it") }
+        }
+        io.scheduleWithFixedDelay(::safePoll, 0, 1, TimeUnit.SECONDS)
+    }
+
+    private fun safePoll() {
+        try {
+            poll()
+        } catch (e: Exception) {
+            Log.w(TAG, "poll failed", e)
+        }
+    }
+
+    /** Set while [pollSoon]'s first poll is waiting to run. */
+    private val soon = AtomicBoolean()
+
+    /**
+     * Polls a moment from now, and again a little later, as well as each second: a game is being left, and ES-DE is
+     * coming back to the front, or has, and may not have logged it yet.
+     */
+    private fun pollSoon() {
+        if (!soon.compareAndSet(false, true)) return
+        runCatching {
+            io.schedule(Runnable { soon.set(false); safePoll() }, 100, TimeUnit.MILLISECONDS)
+            io.schedule(Runnable { safePoll() }, 400, TimeUnit.MILLISECONDS)
+        }
     }
 
     /**
@@ -222,7 +357,8 @@ class HelperService : Service() {
         if (intent?.action == ACTION_OPEN_MENU) {
             ButtonService.closeShade()
             // Only when nothing is up: then the menu button's way opens the menu, if ES-DE's game is in front.
-            if (capture == null && !starting && !menu.isOpen && opening == null) onBack()
+            // The shade may still be over the game, so the screen isn't read for Quit Game.
+            if (capture == null && !starting && !menu.isOpen && !switcher.isOpen && opening == null) onBack(readsScreen = false)
             return START_STICKY
         }
         if (intent?.action == ACTION_DOC_OPENED) {
@@ -267,9 +403,12 @@ class HelperService : Service() {
         capture?.stop()
         closeViewer()
         menu.release()
+        switcher.close()
         menu.endCapture()
         screenshots.unregister()
         io.shutdownNow()
+        pictureReader.shutdownNow()
+        presses.shutdownNow()
         projection?.stop()
         super.onDestroy()
     }
@@ -285,9 +424,36 @@ class HelperService : Service() {
     private fun poll() {
         readLog()
         val fg = front.read(this)
-        if (fg != foreground) {
+        followSwitcherFront(fg)
+        val changed = fg != foreground
+        if (changed) {
             foreground = fg
+            recentStale = true
             Log.i(TAG, "foreground: $fg (current game: ${currentGame()})")
+        }
+        // At the end of a game the switcher launched, ES-DE has written the game to its gamelist, and the games are read
+        // again at once; until then, after such a game, not at all.
+        val ended = switcherGameEnded.also { switcherGameEnded = false }
+        if (recentStale && switcherOn(fg) && (!changed || ended) && pick.get()?.let { it.played && !it.ended } != true) {
+            // Otherwise a poll after ES-DE came to the front, by when it has written the game just played to its
+            // gamelist. While ES-DE's settings lack something every poll reads them again, as the user may be changing
+            // them in ES-DE.
+            val settings = runCatching {
+                contentResolver.openInputStream(treeChild(prefs.esdeTree!!, "settings/es_settings.xml"))!!.use { it.reader().readText() }
+            }.onFailure { Log.w(TAG, "switcher: reading ES-DE's settings failed", it) }.getOrNull()
+            val needs = settings?.let(::switcherNeeds)
+            screensaverMs = settings?.let { esSetting(it, "ScreensaverTimer")?.toLongOrNull() }
+            if (needs != missing) Log.i(TAG, "switcher: ES-DE's settings lack ${needs ?: "(unread)"}")
+            missing = needs
+            if (needs?.isEmpty() == true) {
+                runCatching { loadRecent() }.onFailure { Log.w(TAG, "switcher: reading the recent games failed", it) }
+                recentStale = false
+            }
+        }
+        // A switcher launch over a running RetroArch is looked at each quarter second until it's judged, and the log
+        // each tenth once ES-DE is back from the switcher's game, until it has the game's end.
+        pick.get()?.let {
+            if (watchesPick(it, SystemClock.uptimeMillis(), ::runningBefore)) runCatching { io.schedule(Runnable { safePoll() }, if (it.played) 100 else 250, TimeUnit.MILLISECONDS) }
         }
         main.post { onForeground(fg) }
     }
@@ -295,7 +461,22 @@ class HelperService : Service() {
     /** Main thread: when the game is left, close the menu and end a recording; when it's left for ES-DE, end it if set to. */
     private fun onForeground(fg: String?) {
         leave.left(fg, launch?.pkg)?.let(::quitLeft)
-        if (fg == launch?.pkg) return
+        if (fg == launch?.pkg) {
+            // The switcher is only ever over ES-DE: one up as a game comes to the front goes.
+            if (switching) closeMenu()
+            // A game left during a capture with RetroArch's shader off gets it back as it's in front again.
+            restoreShader(fg)
+            return
+        }
+        if (switching && fg == ESDE) {
+            // ES-DE hears no presses while the switcher is up, so its screensaver can start behind it: the switcher
+            // closes once it has gone as long untouched itself, unless it's steering a pick, and stays closed.
+            if (!steering && esdeScreensaver && SystemClock.uptimeMillis() - switcher.pressedAt >= (screensaverMs ?: 0)) {
+                Log.i(TAG, "switcher: closed for ES-DE's screensaver")
+                closeMenu()
+            }
+            return
+        }
         closeMenu()
         capture?.stop()
     }
@@ -312,41 +493,67 @@ class HelperService : Service() {
     }
 
     /**
-     * Main thread: closes the menu and any viewer or browser over it, cancels its opening or a Find Guides check or
-     * save, and keeps the existing file when it was asking about one.
+     * Main thread: closes the menu or the switcher and any viewer or browser over the menu, cancels its opening or a
+     * Find Guides check or save, and keeps the existing file when it was asking about one.
      */
     private fun closeMenu() {
+        switching = false
         opening = null
+        menuScreen = null
         finding?.set(true)
         unanswered?.invoke()
         closeViewer()
         menu.release()
+        switcher.close()
+        showing = null
+        stale = emptyMap()
+        awaited = null
     }
 
     /**
      * Main thread: the controller's Back. Stops a recording; with the menu (and any viewer or browser over it) open, or
      * still being looked up, closes all of it so the game resumes; otherwise opens the menu for the game in front, if
-     * ES-DE launched one. Does nothing while a capture starts.
+     * ES-DE launched one, or the switcher over ES-DE. Does nothing while a capture starts or the switcher steers.
+     * With [readsScreen] and [keepsPicture], the screen is read for Quit Game as the menu opens: once the menu is up, a
+     * game that pauses draws differently (RetroArch's frame-splitting shaders come back wrong for a moment as it resumes).
      */
-    private fun onBack() {
+    private fun onBack(readsScreen: Boolean = true) {
         capture?.let {
             it.stop()
             return
         }
-        if (starting) return
-        if (menu.isOpen || opening != null) {
+        if (starting || steering) return
+        if (menu.isOpen || switcher.isOpen || opening != null) {
             closeMenu()
             return
         }
-        val g = gameInFront() ?: return
+        val fg = front.read(this)
+        val g = currentGame(fg) ?: run {
+            if (switcherReady(fg)) openSwitcher()
+            return
+        }
         // ES-DE's name for the game, which Find Guides looks up.
         val name = launch?.name ?: return
         val token = Any().also { opening = it }
         val started = SystemClock.uptimeMillis()
+        val retroarch = hotkeys?.takeIf { it.pkg == fg }
+        // RetroArch with its shader on, which masks and darkens frames: the screen is read with it off.
+        val unshade = retroarch?.takeIf { it.togglesShader && !shaderOff }
+        val screen = when {
+            !readsScreen || !keepsPicture() -> null
+            // RetroArch's own state picture, with no shader, is the game's when it saves one as it exits.
+            retroarch?.savesOnExit == true -> null.also { Log.i(TAG, "menu: no screen read, RetroArch saves its state on exit") }
+            unshade != null -> FutureTask { shaderFreeScreen(unshade) }.also(presses::execute)
+            else -> FutureTask(::readScreen).also { thread(name = "menu screen", block = it::run) }
+        }
+        menuScreen = screen
         io.execute {
             val (manual, guides, info) = runCatching { documents(g) }
                 .onFailure { Log.w(TAG, "looking up manual and guides failed", it) }
                 .getOrDefault(Triple(null, emptyList(), null))
+            // The menu waits for the screen to be read, so it's never in the picture, and for RetroArch's shader to be on
+            // again, as the menu takes the keys.
+            runCatching { screen?.get(if (unshade != null) 5 else 2, TimeUnit.SECONDS) }
             val art = runCatching { screenshot(g) }.getOrNull()
             // The look read when ES-DE launched the game: its theme only changes in ES-DE, before a launch, and reading
             // it here would add to the menu's opening.
@@ -391,6 +598,427 @@ class HelperService : Service() {
         }
     }
 
+    /** Whether the switcher is turned on over [fg]: it's ES-DE, the switch is on, its folders are set and Shizuku can send it presses. */
+    private fun switcherOn(fg: String?) = fg == ESDE && prefs.switcher && prefs.esdeTree != null && prefs.romsTree != null && ShizukuShell.ready
+
+    /** Whether the switcher can open over [fg]: [switcherOn], and ES-DE's settings lacked nothing when last read. */
+    private fun switcherReady(fg: String?) = switcherOn(fg) && missing?.isEmpty() == true
+
+    /**
+     * io thread: reads ES-DE's Last Played list from its gamelists, searched in one go through Shizuku (parsing them
+     * all takes seconds), the look to show it in, and where RetroArch saved its state pictures, into [recent] and
+     * [states]; then the first games' pictures, which a game just played may have changed.
+     */
+    private fun loadRecent() {
+        val started = SystemClock.uptimeMillis()
+        // How long each part took, for the log.
+        val took = mutableListOf<String>()
+        var mark = started
+        fun took(part: String) {
+            val now = SystemClock.uptimeMillis()
+            took += "$part ${now - mark}"
+            mark = now
+        }
+        val gamelists = romRoots(prefs.esdeTree!!).first() + "/gamelists"
+        val tags = RECENT_TAGS.joinToString(" ") { "-e '<$it>'" }
+        val lines = ShizukuShell.output("cd ${ShizukuShell.quote(gamelists)} && grep -H -F $tags */gamelist.xml")?.decodeToString().orEmpty()
+        took("search")
+        val played = recentGames(lines.lineSequence(), max = Int.MAX_VALUE)
+        took("parse")
+        // ES-DE leaves out a game whose file is gone, though its gamelist keeps the entry; unchecked if the check fails.
+        val present = played.takeIf { it.isNotEmpty() }?.let {
+            ShizukuShell.output(
+                "cd ${ShizukuShell.quote(romRoots(prefs.romsTree!!).first())} && for f in " +
+                    it.joinToString(" ") { g -> ShizukuShell.quote("${g.system}/${g.path}") } +
+                    "; do [ -e \"${'$'}f\" ] && echo \"${'$'}f\"; done; true",
+            )?.decodeToString()?.lines()?.toSet()
+        }
+        took("files")
+        val kept = played.filter { present == null || "${it.system}/${it.path}" in present }
+        val games = kept.take(50)
+        // Warmed, so a downloaded theme chosen since the last launch is copied first.
+        val theme = runCatching { games.firstOrNull()?.system.orEmpty().let { themeLook.warm(it, prefs.menuImage); themeLook.current(it, prefs.menuImage) } }
+            .onFailure { Log.w(TAG, "reading the theme failed", it) }
+            .getOrDefault(ThemeLook.DEFAULT)
+        took("theme")
+        // `autoload` if RetroArch's Auto Load State is on, then `<modified> <path>` for every picture it saved beside a
+        // state, below the folder its config names; then its settings for the shape it shows games at, as `cfg <line>`,
+        // and those of each override and core-options file in its config folder, as `override <file>:<line>`.
+        // ponytail: with more than one RetroArch installed, their aspect settings are taken as one; split by package if that turns up.
+        val keys = (ASPECT_SETTINGS + CORE_ASPECT_OPTIONS).joinToString("|")
+        val retroarch = ShizukuShell.output(
+            """for c in /sdcard/Android/data/com.retroarch*/files/retroarch.cfg; do grep -q '^savestate_auto_load = "true"' "${'$'}c" && echo autoload; d=$(sed -n 's/^savestate_directory = "\(.*\)"$/\1/p' "${'$'}c"); [ -d "${'$'}d" ] && find "${'$'}d" -name '*.state*.png' -exec stat -c '%Y %n' {} +; """ +
+                """grep -E '^($keys) = ' "${'$'}c" | sed 's/^/cfg /'; o=$(sed -n 's/^rgui_config_directory = "\(.*\)"$/\1/p' "${'$'}c"); [ -d "${'$'}o" ] && (cd "${'$'}o" && grep -H -E '^($keys) = ' */*.cfg */*.opt retroarch-core-options.cfg 2>/dev/null | sed 's/^/override /'); done; true""",
+        )?.decodeToString().orEmpty().lines()
+        took("states")
+        retroarchResumes = "autoload" in retroarch
+        states = retroarch.mapNotNull { line -> line.substringBefore(' ').toLongOrNull()?.let { it to line.substringAfter(' ') } }
+        retroarchLook = retroarchConfig(retroarch)
+        discSession?.let { (g, emulator, since) ->
+            discSession = null
+            runCatching { keepSessionPicture(g, emulator, since) }.onFailure { Log.w(TAG, "switcher: reading $emulator's save states failed", it) }
+        }
+        // Read only once PPSSPP has saved a picture here, as finding its folders takes a while.
+        if (File(filesDir, "ppsspp").exists()) {
+            ppssppResumes = ppssppStates.isNotEmpty() && ShizukuShell.output(
+                "cat " + ppssppStates.joinToString(" ") { ShizukuShell.quote("$it/../SYSTEM/ppsspp.ini") } + " 2>/dev/null | sed -n 's/^AutoLoadSaveState = //p'; true",
+            )?.decodeToString()?.lines()?.any { it.isNotBlank() && it.trim() != "0" } == true
+        }
+        took("other")
+        // An open switcher keeps showing the pictures it has until each is read anew.
+        stale = if (showing != null) pictures.snapshot() else emptyMap()
+        pictureRound++
+        pictures.evictAll()
+        recent = games to theme
+        Log.i(TAG, "switcher: ${games.size} recent games (${played.size - kept.size} files gone), ${states.size} state pictures, read in ${SystemClock.uptimeMillis() - started} ms (${took.joinToString()})")
+        if (games.isNotEmpty()) main.post { showing?.let { wantPictures(it, shownGame) } ?: wantPictures(games, 0) }
+    }
+
+    /** Where the picture kept of a game when it's quit goes in the app's own files; null for a path that would leave them. */
+    private fun keptPicture(system: String, path: String) = keptPicturePath(system, path)?.let { File(filesDir, "kept/$it") }
+
+    /**
+     * Where a copy of a game's save-state picture from [emulator] (`ppsspp` or `armsx2`, which name their states by the
+     * disc) goes; null as for [keptPicture]. BitmapFactory reads ARMSX2's PNG whatever the name says.
+     */
+    private fun copiedPicture(emulator: String, system: String, path: String) = keptPicturePath(system, path)?.let { File(filesDir, "$emulator/$it") }
+
+    /** Set while [findDiscStates] runs. */
+    private val findingStates = AtomicBoolean()
+
+    /**
+     * Its own thread: finds where PPSSPP and ARMSX2 keep their save states, into [Prefs.discStates]: the
+     * `PSP/PPSSPP_STATE` folders of PPSSPP's memory stick, and ARMSX2's settings files (`PCSX2-Android.ini`, which name
+     * its folder). Either may be anywhere in shared storage, and walking it takes seconds (7 on the Nova, half of it in
+     * RetroArch's thumbnails, which are skipped), so it runs when one of them starts a game ES-DE launched, which lasts
+     * longer.
+     */
+    private fun findDiscStates() {
+        if (!findingStates.compareAndSet(false, true)) return
+        thread(name = "state folders") {
+            try {
+                val started = SystemClock.uptimeMillis()
+                val found = ShizukuShell.output(
+                    "find /storage/emulated/0 /storage/*-* -maxdepth 4 -name RetroArch -prune -o \\( -type d -name PPSSPP_STATE -o -type f -name PCSX2-Android.ini \\) -print 2>/dev/null; " +
+                        "ls -d /storage/emulated/0/Android/data/org.ppsspp.*/files/PSP/PPSSPP_STATE /storage/*-*/Android/data/org.ppsspp.*/files/PSP/PPSSPP_STATE " +
+                        "/storage/emulated/0/Android/data/com.armsx2/files/PCSX2-Android.ini /storage/*-*/Android/data/com.armsx2/files/PCSX2-Android.ini 2>/dev/null; true",
+                )?.decodeToString()?.lines()?.filter { it.isNotBlank() }?.toSet() ?: return@thread
+                prefs.discStates = found
+                Log.i(TAG, "switcher: save-state folders $found, found in ${SystemClock.uptimeMillis() - started} ms")
+            } finally {
+                findingStates.set(false)
+            }
+        }
+    }
+
+    private val ppssppStates get() = prefs.discStates.filterNot { it.endsWith(".ini") }
+
+    /** ARMSX2's save-state folders, as its settings' `Savestates = sstates` names them, relative to the settings' folder unless absolute. */
+    private fun armsx2States() = prefs.discStates.filter { it.endsWith(".ini") }.mapNotNull { ini ->
+        val dir = ShizukuShell.output("sed -n 's/^Savestates = //p' ${ShizukuShell.quote(ini)}")?.decodeToString()?.trim()?.ifEmpty { null } ?: return@mapNotNull null
+        if (dir.startsWith('/')) dir else ini.substringBeforeLast('/') + "/" + dir
+    }
+
+    /**
+     * io thread: copies the picture [emulator] (`ppsspp` or `armsx2`) saved last with a state during [g]'s session, from
+     * [since] until now, as [g]'s, keeping its time. Both name states by the disc (`ULUS10466_1.00_0.jpg`,
+     * `SLUS-20071 (23AF6876).00.p2s`), so the time is what ties one to the game. PPSSPP writes a JPEG beside the state;
+     * ARMSX2 packs a PNG in the state, a zip, as `Screenshot.png`.
+     */
+    private fun keepSessionPicture(g: GameRef, emulator: String, since: Long) {
+        val armsx2 = emulator == "armsx2"
+        val files = if (armsx2) armsx2States().map { ShizukuShell.quote(it) + "/*.p2s" } else ppssppStates.map { ShizukuShell.quote(it) + "/*.jpg" }
+        if (files.isEmpty()) return
+        val written = ShizukuShell.output("stat -c '%Y %n' ${files.joinToString(" ")} 2>/dev/null; true")
+            ?.decodeToString().orEmpty().lines().mapNotNull { line -> line.substringBefore(' ').toLongOrNull()?.let { it to line.substringAfter(' ') } }
+        val (at, path) = sessionPicture(written, since, System.currentTimeMillis() / 1000) ?: return
+        val file = copiedPicture(emulator, g.system, g.romRelativePath) ?: return
+        val bytes = ShizukuShell.output(if (armsx2) "unzip -p ${ShizukuShell.quote(path)} Screenshot.png" else "cat ${ShizukuShell.quote(path)}")?.takeIf { it.isNotEmpty() } ?: return
+        file.parentFile!!.mkdirs()
+        val part = File(file.path + ".part")
+        part.writeBytes(bytes)
+        if (!part.renameTo(file) || !file.setLastModified(at * 1000)) error("couldn't store ${file.name}")
+        Log.i(TAG, "switcher: $emulator's ${path.substringAfterLast('/')} kept for ${g.romRelativePath}")
+    }
+
+    /**
+     * Which picture [g] shows, and its file: the picture of the save state its emulator starts it from, if it's set to
+     * (RetroArch's auto state, or PPSSPP's copied picture); else the newer of its save-state picture (RetroArch's, or a
+     * copy of PPSSPP's or ARMSX2's) and the one kept when it was quit; else the scraped image, whose file [screenshot]
+     * finds.
+     */
+    private fun pictureOf(g: RecentGame): Pair<PictureSource, String?> {
+        val zone = ZoneId.systemDefault()
+        // RetroArch's Auto Load State loads the auto state; a numbered slot only when the player picks it.
+        val auto = statePicture(states.filter { ".state.auto." in it.second.substringAfterLast('/') }, g, zone)?.takeIf { retroarchResumes }
+        fun copied(emulator: String) = copiedPicture(emulator, g.system, g.path)?.let { it.lastModified() / 1000 to it.path }?.takeIf { it.first > 0 }
+        val ppsspp = copied("ppsspp")
+        // ponytail: ARMSX2 counts as never starting from a state (the Nova's has SaveStateOnShutdown off); read its settings if one turns up that does.
+        val armsx2 = copied("armsx2")
+        val (saved, resumes) = when {
+            auto != null -> auto to true
+            // ponytail: any Auto Load Savestate but Off counts as resuming from the newest picture; its Oldest and slot choices would need the slot read too.
+            ppsspp != null && ppssppResumes -> ppsspp to true
+            else -> listOfNotNull(statePicture(states, g, zone), ppsspp, armsx2).maxByOrNull { it.first } to false
+        }
+        val kept = keptPicture(g.system, g.path)
+        return when (pictureSource(saved?.first, kept?.lastModified()?.takeIf { it > 0 }?.div(1000), resumes)) {
+            PictureSource.SAVED -> PictureSource.SAVED to saved!!.second
+            PictureSource.LEFT -> PictureSource.LEFT to kept!!.path
+            PictureSource.SCRAPED -> PictureSource.SCRAPED to null
+        }
+    }
+
+    /**
+     * Picture thread: [g]'s picture for the switcher, as [pictureOf] chooses, else the game's scraped image; null when
+     * it has none. Black bars baked into it are trimmed off.
+     */
+    private fun switcherPicture(g: RecentGame): Bitmap? = runCatching {
+        val (source, path) = pictureOf(g)
+        val saved = path?.let {
+            BitmapFactory.decodeFile(path) ?: ShizukuShell.output("cat ${ShizukuShell.quote(path)}")?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+        }
+        val picture = saved ?: screenshot(GameRef(g.system, g.path)) ?: return@runCatching null
+        // A RetroArch state's picture is the core's frame as it is, which RetroArch shows at the shape it's set to.
+        val aspect = path?.takeIf { saved != null && source == PictureSource.SAVED && states.any { it.second == path } }?.let {
+            retroarchLook.aspect(
+                core = it.substringBeforeLast('/').substringAfterLast('/'),
+                game = it.substringAfterLast('/').substringBefore(".state"),
+                folder = g.path.substringBeforeLast('/', "").substringAfterLast('/').ifEmpty { g.system },
+                width = picture.width, height = picture.height,
+                screen = resources.displayMetrics.run { widthPixels.toDouble() / heightPixels },
+            )
+        }
+        val started = SystemClock.uptimeMillis()
+        val (left, top, right, bottom) = contentBounds(picture.width, picture.height) { x, y ->
+            picture.getPixel(x, y).let { Color.red(it) < 24 && Color.green(it) < 24 && Color.blue(it) < 24 }
+        }
+        val trimmed = if (left == 0 && top == 0 && right == picture.width && bottom == picture.height) picture
+        else Bitmap.createBitmap(picture, left, top, right - left, bottom - top).also {
+            Log.i(TAG, "switcher: bars trimmed off ${g.name}, ${picture.width}×${picture.height} to ${it.width}×${it.height}, in ${SystemClock.uptimeMillis() - started} ms")
+        }
+        // The whole frame stretched to the aspect, and any bars trimmed off it with it.
+        val (width, height) = aspect?.let { (trimmed.width * picture.height * it / picture.width).roundToInt() to trimmed.height }
+            ?: displaySize(trimmed.width, trimmed.height)
+        if (width == trimmed.width && height == trimmed.height) trimmed else trimmed.scale(width, height).also {
+            Log.i(TAG, "switcher: ${g.name}'s ${trimmed.width}×${trimmed.height} picture shown at ${it.width}×${it.height}" + (aspect?.let { a -> ", RetroArch's aspect %.3f".format(a) } ?: ""))
+        }
+    }.onFailure { Log.w(TAG, "switcher: no picture for ${g.name}", it) }.getOrNull()
+
+    /**
+     * Main thread: has the pictures of game [at] of [games] and of the two either side, or as many as the strip
+     * shows, read, nearest first, unless they're in or on their way; the switcher takes each as it arrives. A read
+     * whose game the switcher has moved away from by then is skipped.
+     */
+    private fun wantPictures(games: List<RecentGame>, at: Int) {
+        shownGame = at
+        val reach = maxOf(2, switcher.neighbours)
+        for (offset in (0..reach).flatMap { listOf(it, -it) }.distinct()) {
+            val i = Math.floorMod(at + offset, games.size)
+            val key = games[i].logSuffix
+            if (pictures.get(key) != null || !reading.add(key)) continue
+            val round = pictureRound
+            pictureReader.execute {
+                try {
+                    val away = Math.floorMod(i - shownGame, games.size)
+                    if (away > reach && away < games.size - reach) return@execute
+                    val read = switcherPicture(games[i])
+                    if (round != pictureRound) {
+                        // Read before the games were read again: dropped, and asked for again.
+                        main.post { showing?.let { wantPictures(it, shownGame) } }
+                        return@execute
+                    }
+                    if (read != null) pictures.put(key, read) else stale = stale - key
+                    if (awaited?.let { (k, after) -> k == key && round > after } == true) awaited = null
+                    main.post { switcher.pictureArrived(i) }
+                } finally {
+                    reading.remove(key)
+                }
+            }
+        }
+    }
+
+    /**
+     * Main thread: shows the recent games over ES-DE at once, as last read; picking one has ES-DE launch it ([steer]).
+     * Before any read (the service has just started) it reads them first. Back from a game, the list was read before it
+     * was played and is being read again, past [pictureRound] [rereadFrom].
+     */
+    private fun openSwitcher(rereadFrom: Int? = null) {
+        val started = SystemClock.uptimeMillis()
+        val (read, theme) = recent ?: run {
+            val token = Any().also { opening = it }
+            io.execute {
+                runCatching { loadRecent() }.onFailure { Log.w(TAG, "switcher: reading the recent games failed", it) }
+                recentStale = false
+                main.post {
+                    if (opening !== token) return@post
+                    opening = null
+                    if (recent != null) openSwitcher(rereadFrom)
+                }
+            }
+            return
+        }
+        val games = game?.let { playedFirst(read, it.system, it.romRelativePath, LocalDateTime.now(), justPlayed = rereadFrom != null) } ?: read
+        // The newest as many as set; steering gets them all, which tells Last Played from other lists as well as ever.
+        val shown = games.take(prefs.switcherGames)
+        // Steering knows Last Played by two neighbours, so a list of one can't be steered to.
+        if (shown.size < 2) return toast("ES-DE has fewer than two recently played games")
+        switching = true
+        showing = shown
+        // Back from a game, its saved or kept picture is shown until the one it has now is read after the reread.
+        awaited = rereadFrom?.let { round -> (shown[0].logSuffix to round).takeIf { pictureOf(shown[0]).first != PictureSource.SCRAPED } }
+        val names = prefs.systemNames()
+        val today = LocalDate.now()
+        switcher.show(
+            theme, prefs.switcherStrip, shown.map { it.name }, { i: Int -> detailLine(shown[i], names, today, pictureOf(shown[i]).first) }.takeIf { prefs.switcherDetails }, 0,
+            picture = { pictures.get(shown[it].logSuffix) ?: stale[shown[it].logSuffix] },
+            updating = { shown[it].logSuffix == awaited?.first },
+            onSelect = { wantPictures(shown, it) },
+            onPick = { steer(games, it, theme.look) },
+            onClose = ::closeMenu,
+        )
+        Log.i(TAG, "switcher: open in ${SystemClock.uptimeMillis() - started} ms")
+    }
+
+    /**
+     * Main thread: opens the switcher again over ES-DE, back from a game it launched, unless something else of the
+     * overlay's is up or the switcher can't open now; the games are being read again past [rereadFrom].
+     */
+    private fun reopenSwitcher(rereadFrom: Int) {
+        if (capture != null || starting || steering || menu.isOpen || switcher.isOpen || opening != null || !switcherReady(front.read(this))) return
+        Log.i(TAG, "switcher: opening again after its game")
+        openSwitcher(rereadFrom)
+    }
+
+    /**
+     * Main thread: keeps the switcher up, showing the picked game, while ES-DE is walked to it and launches it. The
+     * launch is then followed through ES-DE's log ([readLog]).
+     */
+    private fun steer(games: List<RecentGame>, target: Int, look: Look) {
+        if (steering) return
+        steering = true
+        val started = SystemClock.uptimeMillis()
+        // A launch in a RetroArch that's already running can fail, and is then pressed again.
+        runningAtPick = FutureTask { retroarchRunning().orEmpty() }.also { thread(name = "switcher processes", block = it::run) }
+        val mine = Pick(started).also(pick::set)
+        switcher.yieldFocus {
+            val yielded = SystemClock.uptimeMillis() - started
+            Thread {
+                val launched = runCatching { steerEsde(games.map { it.logSuffix }, target, look) }
+                    .onFailure { Log.w(TAG, "switcher: steering failed", it) }
+                    .getOrDefault(false)
+                Log.i(TAG, "switcher: ${games[target].name} ${if (launched) "launching" else "not reached"} ${SystemClock.uptimeMillis() - started} ms after the pick (keys given up in $yielded ms)")
+                if (!launched) pick.compareAndSet(mine, null)
+                main.post {
+                    steering = false
+                    closeMenu()
+                    if (!launched) toast("Couldn't reach ${games[target].name} in ES-DE")
+                }
+            }.start()
+        }
+    }
+
+    /**
+     * Its own thread: presses ES-DE's way to row [target] of its Last Played list ([recents], as ROM path endings)
+     * with keys sent through Shizuku, each press waiting for the selection ES-DE logs, then has ES-DE launch it.
+     * The keys are those ES-DE moves with in [look]'s layouts under its Quick System Select setting.
+     * True once ES-DE logs that press. Pressing blind doesn't work: ES-DE drops presses sent faster than it logs them.
+     */
+    private fun steerEsde(recents: List<String>, target: Int, look: Look): Boolean {
+        val tree = prefs.esdeTree!!
+        val quickSystemSelect = contentResolver.openInputStream(treeChild(tree, "settings/es_settings.xml"))
+            ?.use { esSetting(it.reader().readText(), "QuickSystemSelect") }
+        val keys = steerKeys(look.gamelistLayout, look.systemLayout, quickSystemSelect)
+        val pfd = contentResolver.openFileDescriptor(treeChild(tree, "logs/es_log.txt"), "r")!!
+        ParcelFileDescriptor.AutoCloseInputStream(pfd).channel.use { log ->
+            ShizukuShell.Session().use { shell ->
+                var offset = log.size()
+                // The view ES-DE shows, by the last selection it logged in the log's tail.
+                val tail = ByteBuffer.allocate(minOf(offset, 65_536L).toInt())
+                log.read(tail, offset - tail.capacity())
+                val start = tail.array().decodeToString(0, tail.position()).lineSequence().mapNotNull(::selection).lastOrNull()
+                var partial = ""
+                // The whole lines ES-DE has logged since the last read.
+                fun lines(): List<String> {
+                    val size = log.size()
+                    if (size <= offset) return emptyList()
+                    val buffer = ByteBuffer.allocate((size - offset).toInt())
+                    val read = log.read(buffer, offset).coerceAtLeast(0)
+                    offset += read
+                    val lines = (partial + buffer.array().decodeToString(0, read)).split('\n')
+                    partial = lines.last()
+                    return lines.dropLast(1)
+                }
+                // What [wanted] picks from the last line ES-DE logs within [ms] that it picks anything from.
+                fun <T : Any> await(ms: Long, wanted: (String) -> T?): T? {
+                    val until = SystemClock.uptimeMillis() + ms
+                    while (SystemClock.uptimeMillis() < until) {
+                        lines().mapNotNull(wanted).lastOrNull()?.let { return it }
+                        Thread.sleep(4)
+                    }
+                    return null
+                }
+                var presses = 0
+                var selected = start
+                // A press ES-DE doesn't log is sent again: the first can arrive before ES-DE has the keys back. A in
+                // the system view isn't: sent twice, the second could launch the game the opened list is on.
+                fun press(step: Step): Selection? {
+                    // What ES-DE logged before this press is passed over.
+                    lines()
+                    repeat(if (step == Step.OPEN) 1 else 3) {
+                        presses++
+                        shell.send("input keyevent ${keys.key(step)}")
+                        // ES-DE logs a key before what it selects for it, so only a selection after the key's own line
+                        // counts. One before it is a nudged D-pad's: taken for this press's, every later press would
+                        // be taken for the one before it.
+                        var keyed = false
+                        val logged = { line: String ->
+                            if ("logInput(Keyboard)" in line && "value=1" in line) keyed = true
+                            val found = selection(line)
+                            if (found != null && !keyed) Log.i(TAG, "switcher: nudged to $found")
+                            found?.takeIf { keyed }
+                        }
+                        await(if (step == Step.OPEN) 1_000 else 300, logged)?.let { found ->
+                            selected = found
+                            return found
+                        }
+                    }
+                    Log.i(TAG, "switcher: ES-DE logged nothing for $step at $selected ($presses sent)")
+                    return null
+                }
+                // Back by the previous-system key, or in the system view when there's no next-system key either.
+                val ring = prefs.systemRing
+                val walk = Steering(
+                    recents,
+                    target,
+                    canChangeSystem = keys.nextSystem != null,
+                    canGoBack = keys.previousSystem != null || keys.nextSystem == null,
+                    ring = ring,
+                )
+                val launched = steer(
+                    walk,
+                    start,
+                    ::press,
+                    // About two of ES-DE's frames for a nudged D-pad's selection, which steering then walks back from.
+                    settle = { await(40, ::selection)?.also { selected = it; Log.i(TAG, "switcher: nudged to $it") } },
+                    launch = {
+                        Log.i(TAG, "switcher: on $selected after $presses presses")
+                        // ES-DE notes the key at once, then shows its own launch screen for a few seconds before it
+                        // logs the launch itself.
+                        shell.send("input keyevent ${KeyEvent.KEYCODE_ENTER}")
+                        await(1_000) { line -> line.takeIf { "isMappedTo=a," in it || "Launching game" in it } } != null
+                    },
+                )
+                if (!launched) Log.i(TAG, "switcher: lost at $selected after $presses presses (started at $start, keys $keys)")
+                walk.learned?.takeIf { it != ring }?.let {
+                    prefs.systemRing = it
+                    Log.i(TAG, "switcher: learned ${it.ahead} with ${it.size ?: "no"} ring size")
+                }
+                return launched
+            }
+        }
+    }
+
     /** Main thread: the main menu with the cursor on row [start]. */
     private fun openMenu(g: GameRef, name: String, manual: Doc?, guides: List<Doc>, info: GameInfo?, start: Int = 0) {
         val guidesRow = if (guides.isNotEmpty()) "Guides" else prefs.esdeTree?.let { "Find Guides" }
@@ -423,8 +1051,8 @@ class HelperService : Service() {
                 }, back)
                 "Quit Game" -> if (prefs.confirmQuit) {
                     // The cursor starts on the safe row: A pressed out of habit keeps the game.
-                    menu.show(listOf("Keep Playing", "Quit \"$name\""), { if (it == 1) quitGame() else back() }, back)
-                } else quitGame()
+                    menu.show(listOf("Keep Playing", "Quit \"$name\""), { if (it == 1) quitGame(g) else back() }, back)
+                } else quitGame(g)
                 else -> guidesList(g, name, guides, back)
             }
         }, menu::release, start = start)
@@ -473,12 +1101,147 @@ class HelperService : Service() {
         }
     }
 
-    /** Main thread: force-stops the game's app, which then has no chance to save, and goes to ES-DE. */
-    private fun quitGame() {
-        val pkg = launch?.pkg ?: return
+    /**
+     * Main thread: ends the game and goes to ES-DE. RetroArch, with Exit on the controller, quits through its own Exit,
+     * saving as it's set to; any other app is force-stopped, with no chance to save. The screen read as the menu
+     * opened, if it was, is then kept as [g]'s picture.
+     */
+    private fun quitGame(g: GameRef) {
+        val quit = launch ?: return
+        val pkg = quit.pkg ?: return
         leave.forget()
         io.execute { launch = null }
-        ButtonService.forceStop(pkg)
+        val retroarch = hotkeys?.takeIf { it.pkg == pkg && it.exits && ShizukuShell.ready }
+        val screen = menuScreen
+        Log.i(TAG, "quit: " + (if (retroarch != null) "exiting $pkg through RetroArch" else "ending $pkg") +
+            if (screen != null) ", keeping the picture read as the menu opened" else "")
+        if (retroarch != null) {
+            exitRetroArch(retroarch, quit)
+        } else {
+            ButtonService.forceStop(pkg)
+            pollSoon()
+        }
+        if (screen == null) return
+        val file = keptPicture(g.system, g.romRelativePath) ?: return
+        thread(name = "quit picture") { screen.get()?.let { keepPicture(g, file, it) } }
+    }
+
+    /**
+     * Main thread: closes the menu, which has the keys, then presses RetroArch's Exit, its shader back on first if the
+     * overlay turned it off (RetroArch saves its settings as it quits). Force-stops RetroArch if it's still in front a
+     * while later, in the session of the launch [quit].
+     */
+    private fun exitRetroArch(retroarch: RetroArchHotkeys, quit: Launch) {
+        closeMenu()
+        presses.execute {
+            Thread.sleep(RetroArchHotkeys.KEYS_BACK_MS)
+            if (shaderOff && retroarch.toggleShader()) shaderOff = false
+            val started = SystemClock.uptimeMillis()
+            val pressed = retroarch.pressExit()
+            while (pressed && SystemClock.uptimeMillis() - started < RetroArchHotkeys.EXIT_MS && front.read(this) == retroarch.pkg) {
+                Thread.sleep(100)
+            }
+            val waited = SystemClock.uptimeMillis() - started
+            // Only the session quit is ended: once RetroArch has left the front, or ES-DE has logged another launch, a
+            // RetroArch in front is a new one.
+            if (front.read(this) != retroarch.pkg || launch?.let { it.stamp != quit.stamp } == true) {
+                Log.i(TAG, "quit: RetroArch exited $waited ms after Exit")
+                pollSoon()
+                return@execute
+            }
+            Log.w(TAG, "quit: RetroArch still in front $waited ms after Exit (pressed: $pressed), force-stopping it")
+            ButtonService.forceStop(retroarch.pkg)
+        }
+    }
+
+    /**
+     * Main thread: turns RetroArch's shader back on, if the overlay turned it off and RetroArch is in front ([fg]) with
+     * nothing of the overlay's taking the keys, then runs [then]. Otherwise runs [then] at once, leaving the shader for
+     * when RetroArch is in front again, or for Quit Game.
+     */
+    private fun restoreShader(fg: String? = front.read(this), then: () -> Unit = {}) {
+        val retroarch = hotkeys
+        if (!shaderOff || retroarch == null || fg != retroarch.pkg || capture != null || starting || menu.isOpen || switcher.isOpen || opening != null) {
+            return then()
+        }
+        shaderOff = false
+        presses.execute {
+            if (!retroarch.toggleShader()) shaderOff = true
+            then()
+        }
+    }
+
+    /**
+     * Off the main thread: the screen read with RetroArch's shader turned off, and on again after; null without a read
+     * when the shader couldn't be turned off.
+     */
+    private fun shaderFreeScreen(retroarch: RetroArchHotkeys): Pair<ByteBuffer, Int>? {
+        if (!retroarch.toggleShader()) return null
+        Thread.sleep(RetroArchHotkeys.CLEAN_MS)
+        val screen = readScreen()
+        // Left for the next chance if it couldn't be turned on.
+        shaderOff = !retroarch.toggleShader()
+        return screen
+    }
+
+    /** Whether a game ended through the overlay has its picture kept: the setting is on and Shizuku can read the screen. */
+    private fun keepsPicture() = prefs.keepQuitPicture && ShizukuShell.ready
+
+    /**
+     * Any thread: the screen as `screencap` reads it through Shizuku, raw (a PNG takes longer to make): a 12- or 16-byte
+     * header (width, height and format as little-endian ints), then RGBA rows, which start at the second value; null
+     * when it can't be read.
+     */
+    private fun readScreen(): Pair<ByteBuffer, Int>? = runCatching {
+        val started = SystemClock.uptimeMillis()
+        val raw = ShizukuShell.output("screencap")?.let { ByteBuffer.wrap(it).order(ByteOrder.LITTLE_ENDIAN) } ?: return null
+        val pixels = raw.getInt(0) * raw.getInt(4) * 4
+        // PixelFormat.RGBA_8888.
+        if (raw.getInt(8) != 1 || raw.capacity() - pixels !in 12..16) error("screencap gave format ${raw.getInt(8)}, ${raw.capacity()} bytes")
+        Log.i(TAG, "screen read in ${SystemClock.uptimeMillis() - started} ms")
+        raw to raw.capacity() - pixels
+    }.onFailure { Log.w(TAG, "reading the screen failed", it) }.getOrNull()
+
+    /** Its own thread: keeps [screen], as [readScreen] gave it, as [g]'s picture for the switcher in [file]. */
+    private fun keepPicture(g: GameRef, file: File, screen: Pair<ByteBuffer, Int>) {
+        val started = SystemClock.uptimeMillis()
+        val (raw, start) = screen
+        runCatching {
+            // The mean of red, green and blue over a spread of pixels, 0 to 255, for telling a dark picture in the log.
+            val samples = (start until raw.capacity() step 4 * 97)
+            val mean = samples.sumOf { i -> (0..2).sumOf { raw.get(i + it).toLong() and 255 } } / (3L * samples.count())
+            val picture = createBitmap(raw.getInt(0), raw.getInt(4))
+            picture.copyPixelsFromBuffer(raw.position(start))
+            file.parentFile!!.mkdirs()
+            val part = File(file.path + ".part")
+            part.outputStream().use { picture.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+            picture.recycle()
+            if (!part.renameTo(file)) error("couldn't rename ${part.name}")
+            pictures.remove("/${g.system}/${g.romRelativePath}")
+            Log.i(TAG, "picture of ${g.romRelativePath} kept in ${SystemClock.uptimeMillis() - started} ms (mean $mean)")
+        }.onFailure { Log.w(TAG, "keeping the picture of ${g.romRelativePath} failed", it) }
+    }
+
+    /**
+     * Main thread: the controller's Home, as it goes down, for the game in front that leaving with Home ends; whether
+     * the overlay takes the press. It takes it over RetroArch with Exit on the controller, which quits as Home lets go
+     * ([homeUp]), so RetroArch saves as it's set to; otherwise Home goes on to Android, which leaves the game to be
+     * ended. Unless the menu is over the game, a picture of it is kept for the switcher if [keepsPicture], except where
+     * RetroArch saves its own as it exits.
+     */
+    private fun onHomeDown(): Boolean {
+        pollSoon()
+        if (!prefs.quitOnHome || starting) return false
+        val g = gameInFront() ?: return false
+        val retroarch = hotkeys?.takeIf { it.pkg == launch?.pkg && it.exits && ShizukuShell.ready }
+        if (keepsPicture() && retroarch?.savesOnExit != true && !menu.isOpen && !switcher.isOpen && opening == null) {
+            keptPicture(g.system, g.romRelativePath)?.let { file ->
+                Log.i(TAG, "home: keeping a picture of ${g.romRelativePath}")
+                thread(name = "home picture") { readScreen()?.let { keepPicture(g, file, it) } }
+            }
+        }
+        if (retroarch != null) Log.i(TAG, "home: taken, to quit through RetroArch's Exit")
+        return retroarch != null
     }
 
     /**
@@ -614,7 +1377,7 @@ class HelperService : Service() {
     }
 
     /**
-     * io thread: the game's image for the menu's art box, of the Menu image type (PNG, else JPG, as ES-DE looks), or
+     * Off the main thread: the game's image for the menu's art box, of the Menu image type (PNG, else JPG, as ES-DE looks), or
      * null when it has none.
      * One larger than the box both ways, like a full-screen capture, is decoded at half size.
      */
@@ -653,8 +1416,7 @@ class HelperService : Service() {
         }
         menu.beginCapture()
         starting = true
-        // Let the closed menu leave the screen before the first frame.
-        main.postDelayed({
+        val begin = Runnable {
             starting = false
             try {
                 // A screenshot alone stops as soon as its frame is taken, too soon for a usable clip.
@@ -666,16 +1428,33 @@ class HelperService : Service() {
                 capture = Capture(windowContext, p, prefs.clipSeconds, gameUid, menu::nudge, onRecording) { png, mp4 ->
                     capture = null
                     menu.endCapture()
-                    io.execute { save(g, png?.takeIf { keepShot }, mp4?.takeIf { keepVideo }) }
+                    // RetroArch's shader goes back on before a menu asking about a file there can take the keys.
+                    restoreShader { io.execute { save(g, png?.takeIf { keepShot }, mp4?.takeIf { keepVideo }) } }
                 }.also { it.start() }
                 Log.i(TAG, "capturing $g, sound from uid $gameUid")
             } catch (e: Exception) {
                 Log.e(TAG, "capture failed to start", e)
                 menu.endCapture()
+                restoreShader()
                 toast("Capture failed: ${e.message}")
                 notify(this, RESULT_ID, "Capture failed: ${e.message}")
             }
-        }, 100)
+        }
+        val retroarch = hotkeys?.takeIf { it.pkg == launch?.pkg && it.togglesShader && !shaderOff && ShizukuShell.ready }
+        if (retroarch == null) {
+            // Let the closed menu leave the screen before the first frame.
+            main.postDelayed(begin, 100)
+            return
+        }
+        // RetroArch's shader masks and darkens frames: it's turned off once RetroArch has the keys back from the menu.
+        presses.execute {
+            Thread.sleep(RetroArchHotkeys.KEYS_BACK_MS)
+            if (retroarch.toggleShader()) {
+                shaderOff = true
+                Thread.sleep(RetroArchHotkeys.CLEAN_MS)
+            }
+            main.post(begin)
+        }
     }
 
     private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
@@ -808,13 +1587,41 @@ class HelperService : Service() {
     /** Folds the lines ES-DE logged since the last poll into its latest launch. */
     private fun readLog() {
         val tree = prefs.esdeTree ?: return
-        val lines = log.read(this, tree) { launch = null }
+        val lines = log.read(this, tree) {
+            launch = null
+            pick.set(null)
+            esdeScreensaver = false
+        }
+        lines.mapNotNull(::screensaverEvent).lastOrNull()?.let { esdeScreensaver = it }
+        followSwitcherLaunch(lines)
+        prefs.learnSystemNames(systemNames(lines.asSequence()))
+        // A theme or variant changed in ES-DE's menu: the switcher's look and the layouts it steers by are read again.
+        // So are ES-DE's settings when its menu saves them, as one the switcher needs may have been turned off.
+        // ponytail: ES-DE logs that only with its event scripts and Debug Mode on; with one of those turned off the
+        // switcher still opens until ES-DE next comes to the front. Read the settings as it opens if that matters.
+        if (lines.any { "Finished loading theme" in it || "fireEvent(): settings-changed" in it }) recentStale = true
         val before = launch
         var latest = before
         lines.forEach { latest = nextLaunch(latest, it) }
         if (latest != before && latest != null) {
             launch = latest
             game = resolve(latest)
+            if (latest.stamp != before?.stamp || latest.pkg != before.pkg) {
+                hotkeys = latest.pkg?.let { pkg -> runCatching { RetroArchHotkeys.read(pkg) }.onFailure { Log.w(TAG, "reading RetroArch's hotkeys failed", it) }.getOrNull() }
+                shaderOff = false
+            }
+            // Pictures PPSSPP or ARMSX2 saves from now until ES-DE is back are this game's.
+            val emulator = when {
+                latest.pkg?.startsWith("org.ppsspp.") == true -> "ppsspp"
+                latest.pkg == "com.armsx2" -> "armsx2"
+                else -> null
+            }
+            discSession = game?.let { g -> emulator?.let { Triple(g, it, System.currentTimeMillis() / 1000) } }
+            // Its folders are looked for again when none is known for it or one known is gone.
+            val known = prefs.discStates.filter { it.endsWith(".ini") == (emulator == "armsx2") }
+            if (discSession != null && (known.isEmpty() || ShizukuShell.output("ls -d " + known.joinToString(" ") { ShizukuShell.quote(it) }) == null)) {
+                findDiscStates()
+            }
             Log.i(TAG, "launch: ${latest.name} (${latest.system}) pkg=${latest.pkg} -> $game")
             // Copies a downloaded theme and reads the look now, so the menu doesn't when Back opens it.
             game?.let { g ->
@@ -822,6 +1629,60 @@ class HelperService : Service() {
             }
         }
     }
+
+    /**
+     * io thread: follows the switcher's launch through [lines], the lines ES-DE logged since the last poll, to the end
+     * of its game, by when ES-DE has written the game's play to its gamelist.
+     */
+    private fun followSwitcherLaunch(lines: List<String>) {
+        for (line in lines) {
+            val followed = pick.get() ?: return
+            val (next, ended) = followPick(followed, line, SystemClock.uptimeMillis())
+            pick.compareAndSet(followed, next)
+            if (ended) {
+                recentStale = true
+                switcherGameEnded = true
+            }
+        }
+    }
+
+    /**
+     * io thread: with [fg] in front, notes the switcher's game as played once it's up. With ES-DE in front after it,
+     * the game has been left, and the switcher opens again once ES-DE has logged the game's end, on the games as last
+     * read with the game just played first; they're then read again. Before the
+     * game is up, presses launch once more if it failed in a RetroArch that was already running ([retryPick]).
+     */
+    private fun followSwitcherFront(fg: String?) {
+        val followed = pick.get() ?: return
+        if (fg != null && fg == followed.launch?.pkg) {
+            if (!followed.played) pick.compareAndSet(followed, followed.copy(played = true))
+            return
+        }
+        if (fg != ESDE) return
+        if (followed.played) {
+            // Android names ES-DE as in front about a tenth of a second before its window has the keys, and ES-DE runs
+            // again only once it has had them: a switcher opened sooner takes them, and ES-DE stays paused under it,
+            // its game unended. The end it logs says it's running, so that is waited for ([watchesPick]).
+            if (!followed.ended) {
+                if (followed.backAt == 0L) pick.compareAndSet(followed, followed.copy(backAt = SystemClock.uptimeMillis()))
+            } else if (pick.compareAndSet(followed, null)) {
+                val round = pictureRound
+                main.post { reopenSwitcher(round) }
+            }
+            return
+        }
+        val retry = retryPick(followed, SystemClock.uptimeMillis(), ::runningBefore, ::retroarchRunning) ?: return
+        if (!pick.compareAndSet(followed, retry)) return
+        val pressed = ShizukuShell.output("input keyevent ${KeyEvent.KEYCODE_ENTER}", 5) != null
+        Log.i(TAG, "switcher: ${followed.launch?.name} didn't start, RetroArch quit instead; " + if (pressed) "launching it again" else "couldn't launch it again")
+        if (!pressed) pick.compareAndSet(retry, null)
+    }
+
+    /** io thread: RetroArch's packages running as the switcher's last pick was made; none if they couldn't be read. */
+    private fun runningBefore(): Set<String> = runningAtPick?.let { runCatching { it.get(5, TimeUnit.SECONDS) }.getOrNull() }.orEmpty()
+
+    /** Off the main thread: RetroArch's packages running now, through Shizuku; null when they can't be read. */
+    private fun retroarchRunning(): Set<String>? = ShizukuShell.output("ps -A -o NAME", 5)?.decodeToString()?.let(::retroarchProcesses)
 
     private fun resolve(l: Launch): GameRef? {
         val esde = prefs.esdeTree ?: return null
@@ -862,8 +1723,13 @@ class HelperService : Service() {
         @SuppressLint("StaticFieldLeak")
         private var instance: HelperService? = null
 
-        /** Main thread: whether the controller's Back is the overlay's: a capture is running, the menu is open, or ES-DE's game is in front. */
-        fun takesBack(): Boolean = instance?.run { running && (capture != null || menu.isOpen || gameInFront() != null) } == true
+        /**
+         * Main thread: whether the controller's Back is the overlay's: a capture is running, the menu is open, ES-DE's
+         * game is in front, or ES-DE is and the switcher can open over it.
+         */
+        fun takesBack(): Boolean = instance?.run {
+            running && (capture != null || menu.isOpen || switcher.isOpen || front.read(this).let { currentGame(it) != null || switcherReady(it) })
+        } == true
 
         /** Main thread: the controller's Back, taken because [takesBack] said so. */
         fun back() {
@@ -877,5 +1743,24 @@ class HelperService : Service() {
         fun closeMenuNow() {
             instance?.closeMenu()
         }
+
+        /** Main thread: the controller's Home has gone down; whether the overlay takes it from Android. */
+        fun homeDown(): Boolean = instance?.onHomeDown() == true
+
+        /** Main thread: the controller's Home, taken because [homeDown] said so, has let go: the game in front quits. */
+        fun homeUp() {
+            instance?.run { gameInFront()?.let(::quitGame) }
+        }
+
+        /** ES-DE's window has come to the front. */
+        fun esdeShown() {
+            instance?.pollSoon()
+        }
+
+        /**
+         * Main thread: whether the controller's buttons are kept from ES-DE: the switcher is steering it, and a press
+         * of A meanwhile would launch whatever its cursor is passing.
+         */
+        fun steering(): Boolean = instance?.steering == true
     }
 }

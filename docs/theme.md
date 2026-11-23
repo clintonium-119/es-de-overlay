@@ -5,14 +5,14 @@
 
 ## The look follows your ES-DE theme
 
-The menu, the guide viewer and the guide browser take their colours and font from your current ES-DE theme. They also follow the variant, colour scheme, font size and aspect ratio you set in ES-DE. Each part comes from a part of the theme's gamelist:
+The menu, the guide viewer, the guide browser and the game switcher take their colours and font from your current ES-DE theme. They also follow the variant, colour scheme, font size and aspect ratio you set in ES-DE. Each part comes from a part of the theme's gamelist:
 
 - the rows and the cursor from its text list;
 - guide text from its game description text;
 - the help pill from its help prompts;
 - the background from its background colour (or, for a wallpaper image, the image's average colour).
 
-The app borrows colours and fonts only. The layout is its own, and it doesn't draw the theme's images. Change the theme in ES-DE and the app follows from the next game you start.
+The app borrows colours and fonts only. The layout is its own, and it doesn't draw the theme's images. Change the theme in ES-DE and the menu, viewer and browser follow from the next game you start; the game switcher follows as soon as ES-DE's menu closes.
 
 Six themes, each with ES-DE's own gamelist on the left and the app's menu on the right:
 

@@ -111,7 +111,8 @@ fun themeSettings(xml: InputStream): ThemeSettings {
  * the list sits on, a panel smaller than the screen; [helpBackgroundColor] is the help prompts' own colour, else that of
  * a panel under them. Colours are ARGB; sizes are fractions of the screen height, corner radii of its width; font paths are relative to
  * the theme folder. [themeName] and [colorSchemeLabel] are what ES-DE's menus call the theme and the colour scheme
- * in use.
+ * in use. [gamelistLayout] and [systemLayout] are how the game list and the system view move, ES-DE's own when the
+ * theme gives the view no list, carousel or grid.
  */
 data class ThemeStyle(
     val background: Int? = null,
@@ -134,9 +135,19 @@ data class ThemeStyle(
     val helpIconColor: Int? = null,
     val helpBackgroundColor: Int? = null,
     val helpFontPath: String? = null,
+    val helpFontSize: Float? = null,
+    val helpLetterCase: String? = null,
+    val helpIconScale: Float? = null,
+    val helpEntrySpacing: Float? = null,
+    val helpIconTextSpacing: Float? = null,
+    /** Left and right as fractions of the screen width, top and bottom of its height. */
+    val helpPadding: List<Float>? = null,
+    val helpCornerRadius: Float? = null,
     val artCornerRadius: Float? = null,
     val themeName: String? = null,
     val colorSchemeLabel: String? = null,
+    val gamelistLayout: Layout = Layout.TEXT_LIST,
+    val systemLayout: Layout = Layout.HORIZONTAL_CAROUSEL,
 )
 
 /**
@@ -241,6 +252,16 @@ fun resolveTheme(
         helpIconColor = help["iconColor"]?.let(::themeColor),
         helpBackgroundColor = help["backgroundColor"]?.let(::themeColor) ?: helpPanel?.let(::painted),
         helpFontPath = help["fontPath"],
+        helpFontSize = help["fontSize"]?.toFloatOrNull(),
+        helpLetterCase = help["letterCase"],
+        helpIconScale = help["entryRelativeScale"]?.toFloatOrNull(),
+        helpEntrySpacing = help["entrySpacing"]?.toFloatOrNull(),
+        helpIconTextSpacing = help["iconTextSpacing"]?.toFloatOrNull(),
+        helpPadding = listOf("backgroundHorizontalPadding", "backgroundVerticalPadding")
+            .map { help[it]?.let(::pair) }
+            .takeIf { it.any { p -> p != null } }
+            ?.flatMap { it ?: listOf(0f, 0f) },
+        helpCornerRadius = help["backgroundCornerRadius"]?.toFloatOrNull(),
         artCornerRadius = art?.let { it["cornerRadius"] ?: it["imageCornerRadius"] }?.toFloatOrNull(),
         themeName = caps?.children("themeName")?.firstOrNull()?.textContent?.trim()?.ifEmpty { null },
         colorSchemeLabel = caps?.children("colorScheme")?.firstOrNull { it.getAttribute("name") == scheme }?.let { entry ->
@@ -249,6 +270,8 @@ fun resolveTheme(
             (labels.firstOrNull { it.getAttribute("language") in setOf("", "en_US") } ?: labels.firstOrNull())
                 ?.textContent?.trim()?.ifEmpty { null } ?: scheme
         },
+        gamelistLayout = layout(elements, Layout.TEXT_LIST),
+        systemLayout = layout(resolver.system, Layout.HORIZONTAL_CAROUSEL),
     )
 }
 
@@ -266,7 +289,7 @@ fun svgFill(svg: String): Int? {
 }
 
 // A shape's attribute or style property.
-private fun svgAttribute(shape: String, name: String) =
+internal fun svgAttribute(shape: String, name: String) =
     Regex("""(?:^|[\s;"'])$name\s*[:=]\s*["']?([^;"'\s>]+)""").find(shape)?.groupValues?.get(1)
 
 // The first shape drawn in a plain colour (SVG's black when it names no fill): drawings often start with an unfilled
@@ -370,7 +393,7 @@ private val VARIANT = FILE - Part.VARIANTS
 private val ASPECT_RATIO = VARIANT - Part.ASPECT_RATIOS
 private val SELECTION = listOf(Part.VARIABLES, Part.INCLUDES)
 
-/** ES-DE's ThemeData::loadFile for the gamelist view, keeping each element's properties by `type_name`. */
+/** ES-DE's ThemeData::loadFile for the gamelist and system views, keeping each element's properties by `type_name`. */
 private class Resolver(
     val read: (String) -> String?,
     val variant: String?,
@@ -380,6 +403,7 @@ private class Resolver(
     variables: Map<String, String>,
 ) {
     val gamelist = LinkedHashMap<String, MutableMap<String, String>>()
+    val system = LinkedHashMap<String, MutableMap<String, String>>()
     private val variables = variables.toMutableMap()
     private val files = ArrayDeque<String>()
     private var reads = 0
@@ -404,7 +428,11 @@ private class Resolver(
             Part.INCLUDES -> node.children("include").forEach { include ->
                 relative(substitute(include.textContent.trim()))?.let(::load)
             }
-            Part.VIEWS -> node.children("view").filter { "gamelist" in names(it.getAttribute("name")) }.forEach(::view)
+            Part.VIEWS -> node.children("view").forEach { view ->
+                val viewNames = names(view.getAttribute("name"))
+                if ("gamelist" in viewNames) view(view, gamelist)
+                if ("system" in viewNames) view(view, system)
+            }
             Part.VARIANTS -> node.selected("variant", variant, all = true).forEach { parse(it, VARIANT) }
             Part.ASPECT_RATIOS -> node.selected("aspectRatio", aspectRatio).forEach { parse(it, ASPECT_RATIO) }
         }
@@ -415,9 +443,9 @@ private class Resolver(
         if (selection == null) emptyList()
         else children(tag).filter { names(it.getAttribute("name")).any { name -> name == selection || all && name == "all" } }
 
-    private fun view(view: Element) = view.children().forEach { element ->
+    private fun view(view: Element, elements: MutableMap<String, MutableMap<String, String>>) = view.children().forEach { element ->
         names(element.getAttribute("name")).forEach { name ->
-            val properties = gamelist.getOrPut("${element.tagName}_$name") { mutableMapOf() }
+            val properties = elements.getOrPut("${element.tagName}_$name") { mutableMapOf() }
             element.children().forEach { property ->
                 val value = substitute(property.textContent.trim())
                 // A path is relative to the file it is written in, not the theme folder.
@@ -442,6 +470,21 @@ private class Resolver(
             else -> segments += segment
         }
         return segments.joinToString("/")
+    }
+}
+
+/** How a view's main element moves its selection; a carousel's wheel moves as its straight kind does. */
+enum class Layout { TEXT_LIST, VERTICAL_CAROUSEL, HORIZONTAL_CAROUSEL, GRID }
+
+// The layout of the view whose elements are [elements]: ES-DE keeps a view's elements in a map sorted by `type_name`
+// and takes the first carousel, grid or text list in it (so a carousel before a grid before a text list), [default]
+// when there's none. A carousel is horizontal unless its type says vertical, as an unknown type is.
+private fun layout(elements: Map<String, Map<String, String>>, default: Layout): Layout {
+    val primary = elements.keys.filter { it.substringBefore('_') in setOf("carousel", "grid", "textlist") }.minOrNull() ?: return default
+    return when (primary.substringBefore('_')) {
+        "grid" -> Layout.GRID
+        "textlist" -> Layout.TEXT_LIST
+        else -> if (elements.getValue(primary)["type"] in setOf("vertical", "verticalWheel")) Layout.VERTICAL_CAROUSEL else Layout.HORIZONTAL_CAROUSEL
     }
 }
 

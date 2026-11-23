@@ -4,6 +4,12 @@ What changed in each version of ES-DE Overlay. A release's notes on GitHub are i
 
 ## Unreleased
 
+## 1.4.0 - 2026-11-23
+
+- A game switcher for ES-DE: with **Switch games from ES-DE** on, under **Game Switcher** in settings, the menu button in ES-DE lists the games you played last, each with a picture of where you left it, and ES-DE starts the one you pick. It's off by default and needs Shizuku and four ES-DE settings, which its section of settings lists.
+- With Shizuku and RetroArch's *Quit* hotkey on a controller button, Quit Game closes RetroArch through that hotkey instead of force-closing it, so RetroArch saves its auto state when it's set to. Home does the same with **Quit games left with Home** on.
+- With Shizuku and RetroArch's *Shaders (Toggle)* hotkey on a controller button, screenshots and clips of a RetroArch game are taken with the shader off, and it's turned back on afterwards.
+
 ## 1.3.3 - 2026-11-17
 
 - With RetroArch's shaders on, the game no longer looks brighter for a moment before a reopened guide appears. RetroArch keeps drawing until the guide covers it.

@@ -21,3 +21,8 @@ card_png c07-back "Back to the game." "Your place is kept."
 card_png c08-maps "Maps keep their place" "and their zoom, too."
 card_png c09-other "Other highlights"
 card_png c10-end "ES-DE Overlay" "Free and open source for Android" "clintonium-119.github.io/es-de-overlay"
+# The Game Switcher's promo.
+card_png s01-title "Game Switcher" "Your recent games, right as you left them."
+card_png s03-pick "Choose your game" "ES-DE launches it"
+card_png s05-leave "Games exit back to the switcher"
+card_png s09-layouts "2 layouts available"

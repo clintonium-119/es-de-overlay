@@ -80,6 +80,8 @@ class LookTest {
                 bodyText = 0xFFF7FBF7.toInt(), bodyFontPath = "themes/minui/_inc/fonts/rounded.otf", bodyFontSize = 0.0417f,
                 // ES-DE's spacing for text the theme doesn't space.
                 bodyLineSpacing = 1.5f, artCornerRadius = 0.01f, source = LookSource.Theme("minui", "dark-bold"),
+                // No help font: the list's.
+                helpFontPath = "themes/minui/_inc/fonts/rounded.otf",
             ),
             look(minui, "minui", "dark-bold", null),
         )

@@ -79,6 +79,23 @@ object ShizukuShell {
         null
     }
 
+    /** [s] as one word of a shell command. */
+    fun quote(s: String) = "'" + s.replace("'", "'\\''") + "'"
+
+    /** A `sh` running through Shizuku as the shell user until it's closed; it runs each line it's sent. */
+    class Session : AutoCloseable {
+        private val process = process("sh")
+        private val commands = process.outputStream
+
+        /** Sends [command] to the shell without waiting for it to finish. */
+        fun send(command: String) {
+            commands.write("$command\n".toByteArray())
+            commands.flush()
+        }
+
+        override fun close() = process.destroy()
+    }
+
     // ponytail: newProcess is private since library 13 and reached by reflection; if a later Shizuku drops it, run
     // the commands from a Shizuku UserService instead.
     private fun process(vararg argv: String): ShizukuRemoteProcess {

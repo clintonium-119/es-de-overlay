@@ -22,7 +22,11 @@ import com.clintonium.es_de_overlay.core.esButton
 import com.clintonium.es_de_overlay.core.esInputButtons
 import com.clintonium.es_de_overlay.core.look
 import com.clintonium.es_de_overlay.core.overlayTheme
+import com.clintonium.es_de_overlay.core.HelpIcon
+import com.clintonium.es_de_overlay.core.helpIcon
+import com.clintonium.es_de_overlay.core.helpIconName
 import com.clintonium.es_de_overlay.core.resolveTheme
+import com.clintonium.es_de_overlay.core.scaled
 import com.clintonium.es_de_overlay.core.themeSettings
 import com.clintonium.es_de_overlay.core.unpackFiles
 import com.clintonium.es_de_overlay.core.with
@@ -43,7 +47,8 @@ class ThemeLook(private val context: Context, private val prefs: Prefs) {
      * look's files by its path below the ES-DE folder, from wherever the theme was read; null when it's missing.
      * A gamepad's A, B, X and Y work as ES-DE's [inputs] (its es_input.xml, by device name) map them, then as ES-DE's
      * "Swap the A/B and X/Y buttons" ([swapButtons]) swaps them; the help names them as ES-DE's does for its
-     * [controllerType].
+     * [controllerType]. [helpFont] is the help prompts' font; [helpIcons] ES-DE's own icons for its help prompts
+     * (`a`, `b`, `x`, `y`, `left/right`, `up/down`) as ES-DE shows them, missing when ES-DE's app can't be read.
      */
     class Current(
         val look: Look,
@@ -52,6 +57,8 @@ class ThemeLook(private val context: Context, private val prefs: Prefs) {
         val swapButtons: Boolean = false,
         val controllerType: String = "xbox",
         val inputs: Map<String, Map<String, Int>> = emptyMap(),
+        val helpFont: Typeface = font,
+        val helpIcons: Map<String, HelpIcon> = emptyMap(),
         val open: (String) -> InputStream?,
     ) {
         /** Key [code] from the gamepad called [device] as ES-DE reads it. */
@@ -93,11 +100,22 @@ class ThemeLook(private val context: Context, private val prefs: Prefs) {
             files(path) ?: tree?.let { runCatching { context.contentResolver.openInputStream(treeChild(it, path)) }.getOrNull() }
         }
         val look = (overrides?.let { base.with(overlayTheme(it.byteInputStream())) } ?: base)
-            .let { it.copy(fontSize = it.fontSize * scale / 100f, bodyFontSize = it.bodyFontSize * scale / 100f) }
+            .scaled(scale.toFloat())
         val font = typeface(open, look.fontPath)
         val inputs = input?.let { runCatching { esInputButtons(it.byteInputStream()) }.getOrNull() }.orEmpty()
         val bodyFont = if (look.bodyFontPath == look.fontPath) font else typeface(open, look.bodyFontPath)
-        val current = Current(look, font, bodyFont, parsed.swapButtons, parsed.controllerType, inputs, open)
+        val helpFont = when (look.helpFontPath) {
+            look.fontPath -> font
+            look.bodyFontPath -> bodyFont
+            else -> typeface(open, look.helpFontPath)
+        }
+        // ES-DE's own help pictures, from its app's assets.
+        val assets = esde()?.assets
+        val icons = listOf("a", "b", "x", "y", "left/right", "up/down").mapNotNull { prompt ->
+            val name = helpIconName(prompt, parsed.swapButtons, parsed.controllerType) ?: return@mapNotNull null
+            runCatching { assets?.open("graphics/help/$name.svg")?.use { helpIcon(it.reader().readText()) } }.getOrNull()?.let { prompt to it }
+        }.toMap()
+        val current = Current(look, font, bodyFont, parsed.swapButtons, parsed.controllerType, inputs, helpFont, icons, open)
         cached = key to current
         val loaded = if (look.fontPath != null && font === Typeface.SANS_SERIF) " (not loaded)" else ""
         Log.i(TAG, "look: ${look.source}, font ${look.fontPath}$loaded, ${SystemClock.uptimeMillis() - started} ms")
@@ -140,7 +158,7 @@ class ThemeLook(private val context: Context, private val prefs: Prefs) {
     // that theme's comes through Shizuku.
     private fun rasterColor(files: (String) -> InputStream?, theme: String, path: String): Int? {
         val bytes = runCatching { files(path)?.use { it.readBytes() } }.getOrNull()
-            ?: (if (ShizukuShell.ready) ShizukuShell.output("cat ${quote("$APP_THEMES/$theme/$path")}") else null)
+            ?: (if (ShizukuShell.ready) ShizukuShell.output("cat ${ShizukuShell.quote("$APP_THEMES/$theme/$path")}") else null)
             ?: return null
         val size = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, size)
@@ -205,7 +223,7 @@ class ThemeLook(private val context: Context, private val prefs: Prefs) {
     // their paths, sizes and times, into copies/<theme>; other themes' copies go.
     private fun copy(theme: String, copies: File) {
         val started = SystemClock.uptimeMillis()
-        val files = "cd ${quote("$APP_THEMES/$theme")} && find . \\( -name '*.xml' -o -name '*.ttf' -o -name '*.otf' -o -name '*.svg' \\)"
+        val files = "cd ${ShizukuShell.quote("$APP_THEMES/$theme")} && find . \\( -name '*.xml' -o -name '*.ttf' -o -name '*.otf' -o -name '*.svg' \\)"
         val signature = ShizukuShell.output("$files -exec stat -c '%Y %s %n' {} + | md5sum")?.decodeToString()?.trim() ?: return
         val copy = File(copies, theme)
         if (File(copy, SIGNATURE).takeIf { it.isFile }?.readText() == signature) {
@@ -249,6 +267,5 @@ class ThemeLook(private val context: Context, private val prefs: Prefs) {
         private fun isFolderName(theme: String) = theme.isNotEmpty() && '/' !in theme && theme != "." && theme != ".."
 
         // [s] as one shell word.
-        private fun quote(s: String) = "'" + s.replace("'", "'\\''") + "'"
     }
 }

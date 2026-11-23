@@ -8,13 +8,13 @@
 [![Licence](https://img.shields.io/github/license/clintonium-119/es-de-overlay)](LICENSE)
 ![Android 13+](https://img.shields.io/badge/Android-13%2B-3DDC84)
 
-ES-DE Overlay adds an in-game menu to [ES-DE](https://es-de.org) on Android. Press **Back** or **Menu** on your controller during a game you launched from ES-DE, and the menu opens over it in your ES-DE theme's colours and font. From it you can find guides and maps for the game, save them to read offline, read the game's manual, save a screenshot or clip straight into ES-DE's media, see the game's ES-DE info, and quit.
+ES-DE Overlay adds an in-game menu to [ES-DE](https://es-de.org) on Android. Press **Back** or **Menu** on your controller during a game you launched from ES-DE, and the menu opens over it in your ES-DE theme's colours and font. From it you can find guides and maps for the game, save them to read offline, read the game's manual, save a screenshot or clip straight into ES-DE's media, see the game's ES-DE info, and quit. Back in ES-DE, the same button can open a switcher for the games you played last.
 
 Back is the Android Back button beside Home on Retroid and AYN handhelds. Menu is for controllers that have one. You can choose another button in settings, or open the menu from its notification.
 
 ![Opening the menu in Super Mario World, then a saved walkthrough and a map, each where they were left](docs/images/demo.gif)
 
-**[Read the documentation →](https://clintonium-119.github.io/es-de-overlay/)** · **[Watch the two-minute demo →](https://youtu.be/F3vhguSjiW8)**
+**[Read the documentation →](https://clintonium-119.github.io/es-de-overlay/)** · **[Watch the two-minute demo →](https://youtu.be/rlKAGyHGKyA)** · **[Watch the Game Switcher video →](https://youtu.be/db0o5kHKeck)**
 
 | MinUI Menu (Overlay) | Art Book Next | Iconic |
 | --- | --- | --- |
@@ -31,6 +31,10 @@ The same menu in six ES-DE themes. The first is a [fork of minui-menu-es-de](htt
 | ![A VGMaps map in the viewer](docs/images/viewer-map.png) | ![A manual page in the viewer](docs/images/manual.png) | ![The Capture menu](docs/images/capture.png) |
 | Find maps, walkthroughs and guides from VGMaps, StrategyWiki, GameFAQs and more without leaving the game. Save one and it's kept on the device, so it opens offline, in your theme's colours and font. [More about Guides](https://clintonium-119.github.io/es-de-overlay/guides.html). | Read the game's scraped manual with ES-DE's own viewer controls: pages, zoom and pan. | Save screenshots and clips into ES-DE's media, named the way ES-DE expects, so they show up in the gamelist straight away. |
 
+### Game Switcher
+
+Turn it on, and the menu button in ES-DE lists the games you played last, each with a picture of where you left it: a save state's picture from RetroArch, PPSSPP or ARMSX2, or one the app kept when you quit. Pick a game and ES-DE starts it. It's off by default and needs [Shizuku](https://clintonium-119.github.io/es-de-overlay/shizuku.html) and four ES-DE settings. [More about the Game Switcher](https://clintonium-119.github.io/es-de-overlay/use.html#game-switcher).
+
 ## Get it
 
 You need:
@@ -42,7 +46,9 @@ You need:
 To install it, either:
 
 - download `es-de-overlay-<version>.apk` from the [latest release](https://github.com/clintonium-119/es-de-overlay/releases/latest) and open it on the device, or
-- add `https://github.com/clintonium-119/es-de-overlay` to [Obtainium](https://github.com/ImranR98/Obtainium), which keeps it up to date.
+- add it to [Obtainium](https://github.com/ImranR98/Obtainium), which keeps it up to date: tap the badge below on the device, or add `https://github.com/clintonium-119/es-de-overlay` in Obtainium yourself.
+
+<a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.clintonium.es_de_overlay%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Fclintonium-119%2Fes-de-overlay%22%2C%22author%22%3A%22clintonium-119%22%2C%22name%22%3A%22ES-DE%20Overlay%22%7D"><img src="docs/images/badge-obtainium.png" alt="Get it on Obtainium" height="48"></a>
 
 The app was developed and tested on a Retroid Pocket Nova.
 

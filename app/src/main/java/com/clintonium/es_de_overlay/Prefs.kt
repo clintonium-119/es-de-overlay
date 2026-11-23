@@ -7,6 +7,10 @@ import android.net.Uri
 import androidx.core.content.edit
 import com.clintonium.es_de_overlay.core.GameRef
 import com.clintonium.es_de_overlay.core.Overwrite
+import com.clintonium.es_de_overlay.core.SystemRing
+
+// ES-DE's short names are folder names without spaces.
+private const val RING_SIZE = "ring size"
 
 class Prefs(private val context: Context) {
     private val sp = context.getSharedPreferences("prefs", Context.MODE_PRIVATE)
@@ -15,6 +19,10 @@ class Prefs(private val context: Context) {
     private val positions = context.getSharedPreferences("positions", Context.MODE_PRIVATE)
     // Written only by the service's process, which the viewer tells what it opened.
     private val lastDocs = context.getSharedPreferences("lastDocs", Context.MODE_PRIVATE)
+    // Written only by the service's process, as ES-DE's log names systems.
+    private val fullNames = context.getSharedPreferences("systemNames", Context.MODE_PRIVATE)
+    // Written only by the service's process, as the switcher's walks find ES-DE's lists.
+    private val ring = context.getSharedPreferences("systemRing", Context.MODE_PRIVATE)
 
     var esdeTree: Uri?
         get() = sp.getString("esdeTree", null)?.let(Uri::parse)
@@ -77,6 +85,30 @@ class Prefs(private val context: Context) {
     var quitOnHome: Boolean
         get() = sp.getBoolean("quitOnHome", false)
         set(v) = sp.edit { putBoolean("quitOnHome", v) }
+    /** Whether the menu button over ES-DE opens the game switcher, once everything it needs is there. */
+    var switcher: Boolean
+        get() = sp.getBoolean("switcher", false)
+        set(v) = sp.edit { putBoolean("switcher", v) }
+    /** How many of ES-DE's Last Played games the switcher shows, newest first. */
+    var switcherGames: Int
+        get() = sp.getInt("switcherGames", 10)
+        set(v) = sp.edit { putInt("switcherGames", v) }
+    /** Whether the switcher shows the neighbouring games in a strip under the one shown (the default) or one game a screen. */
+    var switcherStrip: Boolean
+        get() = sp.getBoolean("switcherStrip", true)
+        set(v) = sp.edit { putBoolean("switcherStrip", v) }
+    /** Whether the switcher shows each game's system and when it was last played under its title. */
+    var switcherDetails: Boolean
+        get() = sp.getBoolean("switcherDetails", false)
+        set(v) = sp.edit { putBoolean("switcherDetails", v) }
+    /** Where PPSSPP's `PPSSPP_STATE` folders and ARMSX2's `PCSX2-Android.ini` were found in shared storage, kept as finding them takes seconds. */
+    var discStates: Set<String>
+        get() = sp.getStringSet("discStates", null).orEmpty()
+        set(v) = sp.edit { putStringSet("discStates", v) }
+    /** Whether ending a game through the overlay first keeps a picture of its screen for the switcher. */
+    var keepQuitPicture: Boolean
+        get() = sp.getBoolean("keepQuitPicture", true)
+        set(v) = sp.edit { putBoolean("keepQuitPicture", v) }
     /** Whether the menu opens straight into the guide, map or manual last opened for the game. */
     var reopenLastDoc: Boolean
         get() = sp.getBoolean("reopenLastDoc", true)
@@ -90,6 +122,27 @@ class Prefs(private val context: Context) {
         val name = "${game.system}/${game.romRelativePath}"
         if (key == null) remove(name) else putString(name, key)
     }
+
+    /** Each system's full name by its short name, as ES-DE's log has named them. */
+    fun systemNames(): Map<String, String> = fullNames.all.mapValues { it.value.toString() }
+
+    /** Keeps [names] with the names already learned; writes only when one is new or changed. */
+    fun learnSystemNames(names: Map<String, String>) {
+        val changed = names.filter { (short, full) -> fullNames.getString(short, null) != full }
+        if (changed.isNotEmpty()) fullNames.edit { changed.forEach { (short, full) -> putString(short, full) } }
+    }
+
+    /** How far ES-DE's lists are from Last Played, as the switcher's walks found them; the size under a key no system has. */
+    var systemRing: SystemRing
+        get() = SystemRing(
+            ring.all.filterKeys { it != RING_SIZE }.mapNotNull { (system, steps) -> (steps as? Int)?.let { system to it } }.toMap(),
+            ring.getInt(RING_SIZE, 0).takeIf { it > 0 },
+        )
+        set(v) = ring.edit {
+            clear()
+            v.ahead.forEach { (system, steps) -> putInt(system, steps) }
+            v.size?.let { putInt(RING_SIZE, it) }
+        }
 
     fun esdeIsHome() = context.packageManager.resolveActivity(
         Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),

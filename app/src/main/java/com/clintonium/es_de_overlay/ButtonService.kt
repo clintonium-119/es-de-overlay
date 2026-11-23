@@ -34,6 +34,8 @@ class ButtonService : AccessibilityService() {
     private val main = Handler(Looper.getMainLooper())
     /** Whether the overlay took the menu button press in progress, decided on its first down. */
     private var menuTaken = false
+    /** Whether the overlay took the controller's Home press in progress, decided on its first down. */
+    private var homeTaken = false
     private val io = Executors.newSingleThreadScheduledExecutor()
     private lateinit var prefs: Prefs
 
@@ -85,16 +87,28 @@ class ButtonService : AccessibilityService() {
         main.post { performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN) }
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent) {}
+    override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        // ES-DE's window at the front: the overlay looks at once, rather than at its next check a second on.
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && event.packageName?.toString() == ESDE) HelperService.esdeShown()
+    }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
         if (BuildConfig.DEBUG && event.action == KeyEvent.ACTION_DOWN) {
             Log.d(TAG, "key held ${SystemClock.uptimeMillis() - event.eventTime} ms: ${KeyEvent.keyCodeToString(event.keyCode)} source=0x${event.source.toString(16)}")
         }
-        // The controller's Home (the Nova sends MOVE_HOME) goes on to Android; the menu closes as it lets go.
-        if (event.keyCode == KeyEvent.KEYCODE_MOVE_HOME && event.action == KeyEvent.ACTION_UP && event.isFromSource(InputDevice.SOURCE_GAMEPAD)) {
-            main.post(HelperService::closeMenuNow)
+        // The controller's Home (the Nova sends MOVE_HOME) goes on to Android, and the menu closes as it lets go; or,
+        // decided on its first down, the overlay takes it and quits the game as it lets go.
+        if (event.keyCode == KeyEvent.KEYCODE_MOVE_HOME && event.isFromSource(InputDevice.SOURCE_GAMEPAD)) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) homeTaken = HelperService.homeDown()
+            val taken = homeTaken
+            if (event.action == KeyEvent.ACTION_UP) {
+                homeTaken = false
+                if (!taken) main.post(HelperService::closeMenuNow) else if (!event.isCanceled) main.post(HelperService::homeUp)
+            }
+            if (taken) return true
         }
+        // The switcher's own presses come from a keyboard; the D-pad isn't a key and can't be kept from ES-DE here.
+        if (HelperService.steering() && event.isFromSource(InputDevice.SOURCE_GAMEPAD)) return true
         // Gamepad keys only: the back swipe and other apps' Back have no gamepad source.
         if (!isMenuKey(event.keyCode, prefs.menuKey)) return false
         if (!event.isFromSource(InputDevice.SOURCE_GAMEPAD)) return false

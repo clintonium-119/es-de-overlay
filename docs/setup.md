@@ -23,9 +23,9 @@ Then:
 
    | Row in settings | Needed for | Kind |
    | --- | --- | --- |
-   | Display over other apps | The menu, viewer and browser windows | Required |
+   | Display over other apps | The menu, viewer, browser and game switcher windows | Required |
    | Usage access | Knowing which app is in front | Required |
-   | Controller button (accessibility service) | Opening the menu from the controller; also turning the screen off when idle, and Quit Game | Required |
+   | Controller button (accessibility service) | Opening the menu and the game switcher from the controller; also turning the screen off when idle, and Quit Game | Required |
    | Notifications | The service's notification with **Open Menu**, and capture results | Recommended |
    | Ignore battery optimization | Keeping the service alive in the background; Android can still end it when memory runs short | Recommended |
    | Game sound in clips | The game's sound in video clips, from its app only; the microphone is never recorded | Optional |
@@ -34,6 +34,7 @@ Then:
    **Controller button (accessibility service) → Enable** opens Android's accessibility settings, where you turn on *ES-DE Overlay*.
    - This is an accessibility service. Android shows it every controller button press. It passes them all through except the menu button (Back or Menu, unless you choose another under [Controls](#controls)), and takes that only during a game ES-DE launched, a capture or the open menu.
    - Quit Game uses it to show ES-DE afterwards. Without Shizuku, it also presses Force stop on the game's App Info page in Settings.
+   - It hears which app's window comes to the front, so the game switcher can open again as soon as ES-DE is back after a game.
    - Android 13 can refuse to turn on an accessibility service for an app installed from a browser or file manager, with a *Restricted setting* message. On the Nova it was tested on, it didn't: installed from a file manager, the service turned on after Android's usual question about full control. If you do see the message, open App Info for ES-DE Overlay, tap the menu at the top right, tap **Allow restricted settings**, then turn the service on. See [Google's help page](https://support.google.com/android/answer/12623953).
 3. Under **Service**, tap **Start Service**. It stays greyed out, naming what's missing, until the checklist is all ✓. Once it's running, the button says **Stop Service**. **Start after boot** is on, so the service starts again by itself after a restart.
 4. Try it: launch a game from ES-DE and press Back or Menu on the controller. The menu opens over the game, and [Use](use.md) goes through it. If your controller has neither button, choose another under [Controls](#controls), or pull down the notification shade, expand ES-DE Overlay's notification and tap **Open Menu**.
@@ -81,12 +82,51 @@ ES-DE keeps the screen on while it's in front, even behind its screensaver, so a
 - Under **Look**, the Theme row shows which ES-DE theme the app follows. **Text size** scales the theme's text in the menu and guides. The menu takes it from the next game you start. See [Theme](theme.md).
 - Also under **Look**, **Menu image** picks which of the game's ES-DE images the menu shows. **Same as captures** (the default) follows **Screenshot media type**. Screenshots and title screens fill the picture box, as in ES-DE's gamelist; covers and the other images are scaled to fit it.
 - Under **Quitting games**, **Confirm before quitting** (off by default) makes Quit Game ask first, with **Keep Playing** selected.
-- Also under **Quitting games**, set up [Shizuku](shizuku.md), then tap **Allow** on the **Shizuku** row. With Shizuku, Quit Game ends a game without showing its App Info page, and you can turn on **Quit games left with Home**.
+- Also under **Quitting games**, set up [Shizuku](shizuku.md), then tap **Allow** on the **Shizuku** row. With Shizuku, Quit Game ends a game without showing its App Info page, and you can turn on **Quit games left with Home**. Over a RetroArch game, both then close RetroArch through its own *Quit* hotkey when that's set up: see [RetroArch hotkeys](#retroarch-hotkeys).
 
 ### Guides
 
 - Under **Guides**, once the ES-DE folder is set, **Open the menu at the last guide** (on by default) has the menu button open straight into the guide, map or manual you last opened for the game. See [Guides](guides.md).
 - Also under **Guides**, **Saved guides → Manage Guides** lists the guides you've saved, by game, and deletes the ones you no longer need. See [Manage Guides](guides.md#manage-guides).
+
+### Game Switcher
+
+The [game switcher](use.md#game-switcher) lists the games you played last when you press the menu button in ES-DE, and has ES-DE start the one you pick. Under **Game Switcher**, turn on **Switch games from ES-DE** (off by default). It opens once every line below the switch is ticked, and ES-DE keeps its button until then. Tap a line marked ✗ to see how to fix it:
+
+| Line in settings | Where to turn it on |
+| --- | --- |
+| Shizuku, to send ES-DE its button presses | Set up [Shizuku](shizuku.md); tapping the line opens it |
+| Enable Custom Event Scripts, so ES-DE reports what it does | In ES-DE, under *Other Settings* |
+| Browsing Custom Events, so it reports the game it's on | In ES-DE, under *Other Settings* |
+| Debug Mode, so those reports reach its log | In ES-DE, under *Other Settings* |
+| Last Played, the list the switcher shows | In ES-DE, tick *Last Played* in *Automatic Game Collections* under *Game Collection Settings* |
+
+![The Game Switcher section of settings, its switch on and every line of its checklist ticked](images/settings-switcher.png)
+
+If the lines read **ES-DE's settings** with *They can't be read*, set the ES-DE folder first. The three *Other Settings* switches make ES-DE's log grow faster; see [Known limitations](limitations.md#game-switcher).
+
+The rest of the section:
+
+- **How the switcher shows the games**: **Strip of Recent Games** (the default) or **One Game a Screen**.
+- **Games the switcher shows, newest first**: 5 to 50 in steps of 5 (default 10).
+- **Show each game's system and when it was played** (off by default) adds that line under each game's name.
+- **Keep a picture of where you left a game** (on by default): Quit Game, and Home when it ends the game, take a picture of the game's screen first. The switcher shows it unless the emulator starts the game from a save state, whose picture it shows instead. It needs Shizuku, and works whether or not the switcher is on.
+
+A tip for RetroArch: turn on *Save State Thumbnails* in RetroArch, under *Settings > Saving*, and the switcher shows where each RetroArch game was left, from the picture RetroArch saves beside each state. [The pictures](use.md#the-pictures) says which picture shows when.
+
+### RetroArch hotkeys
+
+With [Shizuku](shizuku.md), the app can press two of RetroArch's own hotkeys for you, as your controller would:
+
+- *Quit*, so [Quit Game](use.md#over-a-retroarch-game), and Home with **Quit games left with Home** on, close RetroArch through its own exit instead of force-closing it.
+- *Shaders (Toggle)*, so a [capture](use.md#capture) or a kept picture shows the game without its shader.
+
+For that, in RetroArch under *Settings > Input > Hotkeys*:
+
+1. Bind *Quit* and *Shaders (Toggle)* to controller buttons. A hotkey bound only to a keyboard key isn't pressed.
+2. If you use a *Hotkey Enable* button (Select on the Nova), the app holds it while it taps the hotkey. Each press lets that button reach the game for a few frames, as a press by hand does, so a Hotkey Enable your games don't use avoids surprises. See [Known limitations](limitations.md#retroarch-hotkeys).
+
+There's nothing to turn on in ES-DE Overlay: it reads the bindings from RetroArch's settings each time ES-DE launches a RetroArch game. Without Shizuku, or with a hotkey unbound, the app does what it did before: Quit Game and Home force-close RetroArch, and captures show the shader.
 
 ## Updating and uninstalling
 
