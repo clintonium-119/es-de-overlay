@@ -164,7 +164,7 @@ One row per device, with the newest version tested on it.
 
 | Device | Android | ES-DE | App version | Tested | Notes |
 | --- | --- | --- | --- | --- | --- |
-| Retroid Pocket Nova | 13 | 3.5.0 | 1.3.3 | 2026-11-17 | The device the app is developed on, with RetroArch and Eden games. |
+| Retroid Pocket Nova | 13 | 3.5.0 | 1.4.0 | 2026-11-20 | The device the app is developed on. 1.4.0 was checked with RetroArch, PPSSPP and melonDS games. |
 
 Tried it on another device? [Send a device report](https://github.com/clintonium-119/es-de-overlay/issues/new?template=device-report.yml), even if everything worked. It asks for the device, its Android, ES-DE and app versions, and what worked. Reports are added here.
 
