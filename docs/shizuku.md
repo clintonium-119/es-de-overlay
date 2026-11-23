@@ -3,13 +3,18 @@
 
 # Shizuku
 
-Shizuku is optional. Android normally doesn't let one app end another, but [Shizuku](https://shizuku.rikka.app) is a helper that runs with adb's permissions and is allowed to. When it's running and you've allowed ES-DE Overlay to use it:
+Shizuku is optional, except for the [game switcher](use.md#game-switcher), which needs it. Android normally doesn't let one app end another or press buttons in it, but [Shizuku](https://shizuku.rikka.app) is a helper that runs with adb's permissions and is allowed to. When it's running and you've allowed ES-DE Overlay to use it:
 
 - **Quit Game** ends the game with nothing else on screen. Without Shizuku, it opens the game's App Info page in Settings for a moment and presses Force stop. Either way it then takes you to ES-DE.
 - **Quit games left with Home** (off by default, needs Shizuku) ends the game's app when you leave it with Home, as Quit Game would. It acts only when Home takes you to ES-DE, so ES-DE has to be your Home app.
-  - You lose progress since your last save, and the game starts fresh next time.
-  - The upside: launching a different RetroArch game afterwards works the first time (see [Known limitations](limitations.md#quitting-games)).
+  - You lose progress since your last save, and the game starts fresh next time. RetroArch is the exception once its *Quit* hotkey is set up: see the next item.
+  - The upside: with RetroArch closed, launching a different RetroArch game afterwards works the first time (see [Known limitations](limitations.md#quitting-games)).
   - It covers every game ES-DE launched, emulators and Android games alike, except ES-DE Overlay and Shizuku themselves.
+- **RetroArch's hotkeys** are pressed for you, as your controller: *Quit* for Quit Game and for Home with **Quit games left with Home** on, so RetroArch closes through its own exit and saves its auto state if it's set to; and *Shaders (Toggle)*, so captures and kept pictures show the game without its shader. Shizuku writes the button presses to the controller's input device, because RetroArch ignores hotkeys sent any other way. [Set up](setup.md#retroarch-hotkeys) says what to bind.
+- **The [game switcher](use.md#game-switcher)** needs Shizuku for three things:
+  - sending ES-DE the key presses that move it to the game you pick and launch it;
+  - reading the screen for the picture kept when you quit a game;
+  - reading emulators' settings and save-state folders, for the pictures of where each game was left.
 - **Themes from ES-DE's theme downloader** can be read, so the menu takes their look (see [Theme](theme.md)).
 
 ## Set it up
@@ -30,6 +35,7 @@ Shizuku is optional. Android normally doesn't let one app end another, but [Shiz
    - The **Shizuku** row says *Not installed*, *Not running* (**Open Shizuku** opens it), *Not allowed* or *Ready*.
    - Tap **Allow**, and allow ES-DE Overlay in Shizuku's dialog. The row changes to *Ready*.
    - Then turn on **Quit games left with Home** if you want it. You can't turn it on until Shizuku is *Ready*.
+   - The **Game Switcher** section's first line, **Shizuku, to send ES-DE its button presses**, is ticked once Shizuku is *Ready*.
 
 ## Advanced: start Shizuku-Next without Wi-Fi
 

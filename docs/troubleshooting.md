@@ -35,6 +35,27 @@ Under **Look**, the Theme row says which look the app is using: the theme and co
 1. **The accessibility service is off.** Quit Game ends the game and brings ES-DE back through it, so the **Controller button (accessibility service)** row has to say *Enabled*.
 2. **The game is on Retroid's Whitelist.** On Retroid firmware, apps on its Whitelist aren't force-stopped, so Quit Game does nothing for them.
 3. **A Settings page flashes by.** Without [Shizuku](shizuku.md), Quit Game ends the game from its App Info page, which shows for a moment. That's expected.
+4. **RetroArch takes a few seconds to close.** Quit Game pressed RetroArch's *Quit* hotkey and RetroArch didn't act on it, so the app force-closed it 5 s later. Check the hotkey under [RetroArch hotkeys](setup.md#retroarch-hotkeys).
+
+## The game switcher doesn't open
+
+The menu button in ES-DE does what ES-DE has it do, and no list of games shows.
+
+1. **A line of its checklist lost its tick.** Open ES-DE Overlay and look under **Game Switcher**: **Switch games from ES-DE** has to be on, and every line below it ticked. Shizuku stops at a restart unless it's set to start on boot, and an ES-DE setting may have been turned off. Tap a line marked ✗ to see where it's fixed. [Set up](setup.md#game-switcher) lists them.
+2. **The service isn't running**, or the accessibility service is off. The switcher needs both, as the menu does: see [The menu doesn't open](#the-menu-doesnt-open).
+3. **ES-DE's screensaver is up.** A press then only ends the screensaver. Press the menu button again.
+
+## The switcher says it couldn't reach the game
+
+`Couldn't reach <game> in ES-DE` means the app lost its place while moving ES-DE to the game, so it launched nothing. A D-pad press during the wait can cause it. Pick the game again. If it happens every time, your theme's layout or ES-DE's *Quick System Select* setting may be one the app wasn't checked with: [Known limitations](limitations.md#game-switcher) names the ones that were, and a [log](#getting-a-log) of a failed pick shows where it stopped.
+
+## A game's prompt or menu opens as a capture starts
+
+Over RetroArch, the app holds your *Hotkey Enable* button (Select on the Nova) to press *Shaders (Toggle)*, and RetroArch lets that button through to the game for a few frames. A game that uses it reacts, and what it opens can show in the capture. Bind *Hotkey Enable* to a button your games don't use. See [Known limitations](limitations.md#retroarch-hotkeys).
+
+## A switcher picture still shows the shader
+
+It was kept by an earlier version, which took kept pictures with RetroArch's shader on. Quit that game once more and the picture is replaced. If new pictures show the shader too, the *Shaders (Toggle)* hotkey isn't on a controller button, or Shizuku isn't ready: see [RetroArch hotkeys](setup.md#retroarch-hotkeys).
 
 ## Capture asks for permission again
 

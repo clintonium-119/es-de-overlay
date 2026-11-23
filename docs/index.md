@@ -19,7 +19,7 @@ wide: true
 
 <video autoplay muted loop playsinline controls poster="images/menu.png" src="assets/demo-loop.mp4" aria-label="Opening the menu in Super Mario World, then a saved walkthrough and a map, each where they were left"></video>
 
-[Watch the two-minute demo on YouTube](https://youtu.be/F3vhguSjiW8)
+[Watch the two-minute demo on YouTube](https://youtu.be/rlKAGyHGKyA)
 {: .watch}
 
 </div>
@@ -103,9 +103,27 @@ You can add your own guides too: PDF, text, picture, CBZ and HTML files in ES-DE
 
 The menu also has the game's manual, its ES-DE info and **Quit Game**. [Use](use.md) covers every feature.
 
+## Switch between your recent games
+
+<div class="feature" markdown="1">
+<div markdown="1">
+
+**Back to the game you were playing, from ES-DE.** Turn on the Game Switcher, and the menu button in ES-DE lists the games you played last, each with a picture of where you left it: a save state's picture from RetroArch, PPSSPP or ARMSX2, or one the app kept when you quit. Pick a game and ES-DE starts it. Quit that game and the switcher is there again, ready for the next. It's off by default, and needs [Shizuku](shizuku.md) and four ES-DE settings. [Game Switcher](use.md#game-switcher) has the details.
+
+</div>
+<div markdown="1">
+
+<video autoplay muted loop playsinline controls poster="images/switcher.png" src="assets/switcher-loop.mp4" aria-label="The Game Switcher opening over ES-DE, Super Mario World picked and starting where it was left, then the switcher back after Home"></video>
+
+[Watch the Game Switcher video on YouTube](https://youtu.be/db0o5kHKeck)
+{: .watch}
+
+</div>
+</div>
+
 ## Follows your theme
 
-The menu, the guide viewer and the browser take their colours and font from your ES-DE theme. There's no per-theme setup: the app reads each theme's own files. Change the theme in ES-DE and the app follows from the next game you start. [Theme](theme.md) shows each one beside ES-DE's gamelist.
+The menu, the guide viewer, the browser and the game switcher take their colours and font from your ES-DE theme. There's no per-theme setup: the app reads each theme's own files. Change the theme in ES-DE and the menu follows from the next game you start, the switcher as soon as ES-DE's menu closes. [Theme](theme.md) shows each one beside ES-DE's gamelist.
 
 <div class="gallery">
 <figure><img src="images/menu.png" alt="The menu under MinUI Menu (Overlay)"><figcaption>MinUI Menu (Overlay)</figcaption></figure>

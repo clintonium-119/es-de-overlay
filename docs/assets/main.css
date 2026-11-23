@@ -176,8 +176,8 @@ main.wide { max-width: 1120px; padding-top: 0; }
 .hero strong { color: var(--text); }
 .pitch { display: block; margin-bottom: 12px; color: var(--text); font-size: 21px; line-height: 1.4; font-weight: 600; }
 .hero p > img, .feature p > img { margin: 0; }
-.hero video { display: block; width: 100%; height: auto; border: 1px solid var(--frame); border-radius: 12px; }
-.hero .watch { margin: 10px 0 0; font-size: 14px; text-align: center; }
+.hero video, .feature video { display: block; width: 100%; height: auto; border: 1px solid var(--frame); border-radius: 12px; }
+.hero .watch, .feature .watch { margin: 10px 0 0; font-size: 14px; text-align: center; }
 .hero p:has(img), .feature p:has(img) { margin: 0; }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 28px 0 0; }
 .button {

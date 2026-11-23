@@ -450,8 +450,11 @@ class HelperService : Service() {
                 recentStale = false
             }
         }
-        // A switcher launch over a running RetroArch is looked at each quarter second until it's judged.
-        pick.get()?.let { if (watchesPick(it, SystemClock.uptimeMillis(), ::runningBefore)) runCatching { io.schedule(Runnable { safePoll() }, 250, TimeUnit.MILLISECONDS) } }
+        // A switcher launch over a running RetroArch is looked at each quarter second until it's judged, and the log
+        // each tenth once ES-DE is back from the switcher's game, until it has the game's end.
+        pick.get()?.let {
+            if (watchesPick(it, SystemClock.uptimeMillis(), ::runningBefore)) runCatching { io.schedule(Runnable { safePoll() }, if (it.played) 100 else 250, TimeUnit.MILLISECONDS) }
+        }
         main.post { onForeground(fg) }
     }
 
@@ -1593,7 +1596,10 @@ class HelperService : Service() {
         followSwitcherLaunch(lines)
         prefs.learnSystemNames(systemNames(lines.asSequence()))
         // A theme or variant changed in ES-DE's menu: the switcher's look and the layouts it steers by are read again.
-        if (lines.any { "Finished loading theme" in it }) recentStale = true
+        // So are ES-DE's settings when its menu saves them, as one the switcher needs may have been turned off.
+        // ponytail: ES-DE logs that only with its event scripts and Debug Mode on; with one of those turned off the
+        // switcher still opens until ES-DE next comes to the front. Read the settings as it opens if that matters.
+        if (lines.any { "Finished loading theme" in it || "fireEvent(): settings-changed" in it }) recentStale = true
         val before = launch
         var latest = before
         lines.forEach { latest = nextLaunch(latest, it) }
@@ -1642,8 +1648,8 @@ class HelperService : Service() {
 
     /**
      * io thread: with [fg] in front, notes the switcher's game as played once it's up. With ES-DE in front after it,
-     * the game has been left, and the switcher opens again at once, on the games as last read with the game just
-     * played first, whether or not ES-DE has logged the game's end yet; they're read again once it has. Before the
+     * the game has been left, and the switcher opens again once ES-DE has logged the game's end, on the games as last
+     * read with the game just played first; they're then read again. Before the
      * game is up, presses launch once more if it failed in a RetroArch that was already running ([retryPick]).
      */
     private fun followSwitcherFront(fg: String?) {
@@ -1654,14 +1660,14 @@ class HelperService : Service() {
         }
         if (fg != ESDE) return
         if (followed.played) {
-            if (followed.reopenedAt == 0L) {
-                if (pick.compareAndSet(followed, followed.copy(reopenedAt = SystemClock.uptimeMillis()))) {
-                    val round = pictureRound
-                    main.post { reopenSwitcher(round) }
-                }
-            } else if (followed.ended) {
-                // Reopened, and its end logged: nothing more to follow.
-                pick.compareAndSet(followed, null)
+            // Android names ES-DE as in front about a tenth of a second before its window has the keys, and ES-DE runs
+            // again only once it has had them: a switcher opened sooner takes them, and ES-DE stays paused under it,
+            // its game unended. The end it logs says it's running, so that is waited for ([watchesPick]).
+            if (!followed.ended) {
+                if (followed.backAt == 0L) pick.compareAndSet(followed, followed.copy(backAt = SystemClock.uptimeMillis()))
+            } else if (pick.compareAndSet(followed, null)) {
+                val round = pictureRound
+                main.post { reopenSwitcher(round) }
             }
             return
         }

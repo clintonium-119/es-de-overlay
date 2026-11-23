@@ -478,8 +478,8 @@ fun steer(walk: Steering, start: Selection?, press: (Step) -> Selection?, settle
 /**
  * A launch the switcher picked or pressed at [pressed] (uptime ms), followed through ES-DE's log: [retry] when it's
  * the launch pressed again, [launch] once ES-DE has logged it (at [launchedAt]), [played] once its game has been seen
- * in front, [ended] once ES-DE has logged that game's end, [reopenedAt] once the switcher has opened again over ES-DE
- * after it. ES-DE logs the end anywhere from a tenth to over half a second after it's back in front.
+ * in front, [backAt] once ES-DE has been seen in front again after it, [ended] once ES-DE has logged that game's end.
+ * ES-DE logs the end anywhere from a tenth to over half a second after it's back in front.
  */
 data class Pick(
     val pressed: Long,
@@ -487,8 +487,8 @@ data class Pick(
     val launch: Launch? = null,
     val launchedAt: Long = 0,
     val played: Boolean = false,
+    val backAt: Long = 0,
     val ended: Boolean = false,
-    val reopenedAt: Long = 0,
 )
 
 // Steering and then ES-DE's launch screen take a few seconds each; a launch logged later than this after the pick isn't its.
@@ -533,14 +533,14 @@ fun retryPick(pick: Pick, now: Long, runningBefore: () -> Set<String>, runningNo
 private const val END_MS = 3_000L
 
 /**
- * At [now]: whether [pick] is to be looked at each moment. Once the switcher has opened again after its game, until
- * ES-DE logs the game's end. Before, while [retryPick] may still judge it: it isn't the retry, its game hasn't come up,
+ * At [now]: whether [pick] is to be looked at each moment. Once ES-DE is back in front after its game, until ES-DE
+ * logs the game's end, for a while. Before, while [retryPick] may still judge it: it isn't the retry, its game hasn't come up,
  * and one of RetroArch's packages was running as it was picked ([runningBefore]); not yet launched but soon after the
  * pick, or launched in that RetroArch no longer ago than a failed launch is told in.
  */
 fun watchesPick(pick: Pick, now: Long, runningBefore: () -> Set<String>): Boolean {
-    // Back over ES-DE: its log of the game's end, which can come over half a second after, is waited for.
-    if (pick.played) return pick.reopenedAt > 0 && !pick.ended && now - pick.reopenedAt <= END_MS
+    // ES-DE back in front: its log of the game's end, which can come over half a second after, is waited for.
+    if (pick.played) return pick.backAt > 0 && !pick.ended && now - pick.backAt <= END_MS
     if (pick.retry) return false
     val before = runningBefore().ifEmpty { return false }
     val launch = pick.launch ?: return now - pick.pressed <= CLAIM_MS

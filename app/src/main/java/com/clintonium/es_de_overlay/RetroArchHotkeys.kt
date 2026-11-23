@@ -34,8 +34,11 @@ class RetroArchHotkeys private constructor(
     val exits = exit != null
     /** Whether the overlay turns the shader off and on: it was on as RetroArch started, and Shader toggle is on the controller. */
     val togglesShader = retroarchOn(settings, "video_shader_enable") && shaderToggle != null
-    /** Whether RetroArch saves a state, with its own picture, as it exits (Auto Save State). */
-    val savesOnExit = retroarchOn(settings, "savestate_auto_save")
+    /**
+     * Whether RetroArch saves a state, with its own picture, when the overlay ends it: Auto Save State is on and Exit
+     * is on the controller. Without Exit it's force-stopped, and saves nothing.
+     */
+    val savesOnExit = exits && retroarchOn(settings, "savestate_auto_save")
 
     /** Off the main thread: presses Exit (twice when RetroArch asks for that); whether the presses were made. */
     fun pressExit() = exit?.let { press(it, exitPresses) } == true

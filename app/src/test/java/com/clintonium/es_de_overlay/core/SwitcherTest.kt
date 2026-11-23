@@ -682,11 +682,11 @@ class SwitcherTest {
     }
 
     @Test
-    fun `back over ES-DE after its game, a pick is watched until the game's end is logged, for a while`() {
-        val reopened = follow(Pick(1_000), launched).first!!.copy(played = true, reopenedAt = 20_000)
-        assertTrue(watchesPick(reopened, 23_000) { emptySet() })
-        assertFalse(watchesPick(reopened, 23_001) { emptySet() })
-        assertFalse(watchesPick(reopened.copy(reopenedAt = 0), 20_000) { emptySet() })
-        assertFalse(watchesPick(follow(reopened, ended).first!!, 21_000) { emptySet() })
+    fun `with ES-DE back in front after its game, a pick is watched until the game's end is logged, for a while`() {
+        val back = follow(Pick(1_000), launched).first!!.copy(played = true, backAt = 20_000)
+        assertTrue(watchesPick(back, 23_000) { emptySet() })
+        assertFalse(watchesPick(back, 23_001) { emptySet() })
+        assertFalse(watchesPick(back.copy(backAt = 0), 20_000) { emptySet() })
+        assertFalse(watchesPick(follow(back, ended).first!!, 21_000) { emptySet() })
     }
 }

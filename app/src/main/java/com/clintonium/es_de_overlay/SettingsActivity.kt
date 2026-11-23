@@ -455,8 +455,9 @@ class SettingsActivity : ComponentActivity() {
                     Text("Quit games left with Home")
                     Text(
                         "Ends the game's app when you leave it with Home, as Quit Game does, so progress since the last " +
-                            "save is lost and the game starts fresh next time. ES-DE can then launch a different " +
-                            "RetroArch game the first time. Needs Shizuku.",
+                            "save is lost and the game starts fresh next time, unless it's a RetroArch game closed " +
+                            "with RetroArch's own Quit hotkey. ES-DE can then launch a different RetroArch game the " +
+                            "first time. Needs Shizuku.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

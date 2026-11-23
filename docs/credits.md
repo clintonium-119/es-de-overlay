@@ -47,6 +47,6 @@ The app opens these sites in its browser and saves pages for you to read offline
 ## Optional tools
 
 - **[Shizuku](https://github.com/RikkaApps/Shizuku)** by RikkaApps (Apache License 2.0), and **[Shizuku-Next](https://github.com/rushiranpise/Shizuku-Next)** by rushiranpise (Apache License 2.0), the fork used for the screenshots; see [Shizuku](shizuku.md).
-- **[Obtainium](https://github.com/ImranR98/Obtainium)** by ImranR98 (GPL-3.0) keeps the app up to date from GitHub Releases.
+- **[Obtainium](https://github.com/ImranR98/Obtainium)** by ImranR98 (GPL-3.0) keeps the app up to date from GitHub Releases. The README's *Get it on Obtainium* badge is from its repository.
 
 Game names, logos and screenshots belong to their owners.

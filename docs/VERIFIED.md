@@ -289,6 +289,17 @@ The code was reviewed for the ways an app with screen capture, a key-filtering a
 - **Found in the dry run.** Saving the VGMaps atlas renamed 21 of Shantae's 56 maps inside the `.cbz` ("L1: Dribble Fountain Labyrinth" became "L1 - …"), because entry names had gone through the SD-card file-name rules. Entry names now keep the atlas's own, with only slashes and control characters replaced; the recorded pass's atlas had the same 56 names as before.
 - **Not checked:** CodeQL and Scorecard runs (they need the repository public), the release build on the device, and the overlay refusing to end itself or ES-DE on the Nova (ES-DE can't launch itself; the same check covers all three).
 
+## Steering ES-DE with key presses (2026-11-18)
+
+The first check of whether ES-DE can be walked to a game from outside, on the Nova with ES-DE 3.5.0 in front on Last Played, its custom event scripts, browsing events and Debug Mode on. Presses were sent one at a time over adb, each followed by the line ES-DE added to `es_log.txt`.
+
+- **A press shows in the log in about 45 ms.** Eight D-pad presses (four down, four up) each logged a `game-select` line 35 to 68 ms after the press; four moves took 245 and 194 ms.
+- **A lap of the systems took 1.66 s.** 37 presses of D-pad right went through all 38 lists and back to Last Played in 1,661 ms, 34 to 48 ms a line, none missed.
+- **Presses sent in a burst are dropped.** Four downs sent in 18 ms and four ups in 45 ms logged two `game-select` lines for the eight presses, so each press has to wait for the line of the one before.
+- **`input keyevent` moves ES-DE as a keyboard.** Down and Up (20, 19) logged `Keyboard: Key Down, isMappedTo=down` with the `game-select` line. Enter (66) logged `Key Return, isMappedTo=a` and opened a folder; Backspace (67) logged `Key Backspace, isMappedTo=b` and backed out: Enter and Backspace are ES-DE's A and B.
+- **A system change logs only the new list's selected game**, with no line naming the list, so the switcher knows Last Played by its games turning up in order.
+- **The first picks** (a release build of the prototype): Easyland from seven systems before Last Played, 16 presses, about 0.5 s from the pick to ES-DE's cursor on the game; Shantae from a far system, 44 presses, about 1.2 s; Super Mario World from one list past Last Played, a full lap, 50 presses, about 2.0 s. The user called it fast. Later builds learn the ring and go the short way; the times are under the steering pass below.
+
 ## How ES-DE moves on each layout (2026-11-18)
 
 Read on the Nova from ES-DE 3.5.0's log with custom event scripts, their browsing events and Debug Mode on, one `adb shell input keyevent` at a time, each followed by the lines ES-DE added to `es_log.txt`. The user switched themes in ES-DE's menu: MinUI Menu (Overlay) for a text list, Analogue OS Menu's carousel and grid variants, and TechDweeb's carousel variant. Quick System Select was *Left/Right or Shoulders* throughout, apart from one check under *Left/Right*. Where a rule comes from ES-DE's source (tag `v3.5.0`), the file is named. Every key logs `Window::logInput(Keyboard): Key <name>, isMappedTo=<button>, value=1` and `value=0`; the table gives what came with it.
@@ -390,3 +401,40 @@ Checked on the Nova with one release build of the `game-switcher` branch, APK sh
 - **Picture shapes.** RetroArch's state pictures are the core's frames as they are; the switcher now shows each at the shape RetroArch shows the game, from retroarch.cfg, the core's, folder's and game's overrides, and the core's own aspect option. Easyland's 256 × 224 frame (Snes9x, 4:3) showed at 4:3 with no bars at the sides; Aladdin's 320 × 224 (Genesis Plus GX, auto) at 1.306; NES Dr. Mario's 602 × 224 (Nestopia's NTSC filter, auto) at 1.316; Game Boy Dr. Mario and Shantae (Gambatte) kept 10:9. Scraped images (Super Metroid, DOA2) and PPSSPP's picture (Tekken 6) showed as before.
 - **Cost.** Reading RetroArch's aspect settings with the state pictures took the reread's state step from 129–141 ms to 333–510 ms.
 - **Not checked on the device:** the aspect settings other than Core provided, PAL games, and the cores without state pictures on the Nova (their sums are unit-tested against each core's source).
+
+## The full pass, first build (2026-11-20)
+
+Run on the Nova with a release build of the `game-switcher` branch, APK sha256 `91bfdd78…643b`, ES-DE 3.5.0 on MinUI Menu (Overlay) with Quick System Select on *Left/Right or Shoulders*, the Game Switcher section at its defaults to start. The overlay and ES-DE were driven with `sendevent` and `input keyevent`; the app's settings were tapped over adb.
+
+- **Switch off.** The menu button over ES-DE logged `Button 4, isMappedTo=back` in ES-DE's log and opened ES-DE's own Gamelist Options; no switcher opened.
+- **Switch on.** Every line of the checklist was ticked, and the switcher opened in 11–17 ms each time.
+- **Three picks, each launching the picked game per ES-DE's `game-start` line:**
+  - Super Mario World in One Game a Screen, from Last Played: 8 presses, launching 331 ms after the pick.
+  - Aladdin in the strip, from the Wii list, 15 lists on from Last Played: 21 presses, 699 ms.
+  - Sonic Rush (melonDS Nightly) in the strip, from the system view five systems up from Last Played: 10 presses, 390 ms.
+- **Quit Game over RetroArch.** RetroArch exited 392 ms (Super Mario World) and 380 ms (Aladdin) after Exit, having written the auto state and its picture, and the switcher was open on the game about 0.1 s after that. ES-DE's window had the keys for about 0.12 s first, and ES-DE logged the game's end in the same second.
+- **The pictures.** With the detail line on, eight of the ten games read *Saved* (RetroArch's, Tekken 6 in PPSSPP, DOA2 in ARMSX2), Sonic Rush read *Left*, and Bionic Commando showed its scraped image with no label. Quit Game over Sonic Rush kept the picture read as the menu opened (19 ms to store it) and the switcher showed it with *Left*.
+- **Fault: ES-DE paused under the reopened switcher.** After Quit Game force-stopped melonDS, the switcher opened 0.13 s later, and Android's focus log shows the keys going to it without ES-DE's window ever having had them. ES-DE logged nothing more: *Updating* stayed up, and ES-DE logged the game's end only when the switcher was closed 58 s later, counting 87 s of play for about 29. This fits SDL's Android activity starting its loop again only once its window has focus (an inference; ES-DE's source wasn't read for it). Android reports ES-DE as the app in front before its window has the keys, and after a force-stop that gap was longer than the overlay's wait.
+- **Fault: a setting turned off inside ES-DE wasn't noticed.** With Browsing Custom Events turned off in ES-DE's menu, the switcher still opened: the overlay read ES-DE's settings again only when ES-DE next came to the front. After that, its log had `ES-DE's settings lack [BROWSING_EVENTS]`, the menu button stayed ES-DE's, and the settings line read *Not ready: Browsing Custom Events*. Turned back on, it was noticed within a second. ES-DE logs `settings-changed` when its menu saves, and the overlay now reads the settings again at that line.
+- **Not checked:** turning off Enable Custom Event Scripts or Debug Mode inside ES-DE, which the second change doesn't cover, as ES-DE then logs no `settings-changed` line.
+- ES-DE's settings were read back afterwards: Browsing Custom Events on again, theme, variant, colour scheme and Quick System Select as before.
+
+## The full pass, second build (2026-11-20)
+
+The same pass on the next build, APK sha256 `e9c3b027…e2c0`, which read ES-DE's settings again at its `settings-changed` line and held the reopened switcher until the accessibility service heard ES-DE's window.
+
+- **The scenario held.** The menu button stayed ES-DE's with the switch off; Super Mario World launched from Last Played (2 presses, 164 ms), Aladdin from the Wii list (18 presses, 585 ms) and Sonic Rush from the system view (8 presses, 323 ms); RetroArch exited 381 and 383 ms after Exit; the three kinds of picture showed as before.
+- **A setting turned off inside ES-DE.** ES-DE logged `settings-changed` at 20:01:28 as its menu closed with Browsing Custom Events off; the overlay logged `ES-DE's settings lack [BROWSING_EVENTS]` at 20:01:29.09, and the menu button at 20:01:32 opened ES-DE's Gamelist Options, without ES-DE having left the front. Turned back on, it was noticed at the next `settings-changed`.
+- **The window event comes too early to wait on.** After Quit Game force-stopped melonDS, ES-DE logged the game's end within a second, with 23 s of play, and *Updating* cleared. But the order was close: ES-DE's activity resumed at 19:58:51.767, the overlay reopened the switcher at .864, ES-DE's window took the keys at .869 and the switcher's took them at .893. The accessibility event the overlay waited for comes as ES-DE's activity resumes, about 0.1 s before its window has the keys, so the switcher got in behind ES-DE by 5 ms. The overlay now waits for ES-DE to log the game's end, reading its log each tenth of a second once ES-DE is back in front.
+
+
+## The full pass, third build (2026-11-20)
+
+The same pass on the build that waits for ES-DE's logged game end, APK sha256 `7f756240…8efe`, with a fourth pick added as a second force-stopped emulator. The user accepted the switcher on this build.
+
+- **The scenario held.** The menu button stayed ES-DE's with the switch off; the switcher opened in 9–14 ms; Super Mario World launched from Last Played in One Game a Screen (1 press, 133 ms), Aladdin from the Wii list in the strip (18 presses, 612 ms), Sonic Rush from the system view (8 presses, 317 ms) and Tekken 6 (PPSSPP) from Last Played (4 presses, 239 ms). Eight detail lines read *Saved*, Sonic Rush *Left*, and Bionic Commando none.
+- **Back after RetroArch.** RetroArch exited 386 and 385 ms after Exit; ES-DE had logged the game's end and the switcher was open 76 and 96 ms after that.
+- **Back after a force-stop.** After Quit Game over Sonic Rush, ES-DE's window took the keys at 20:40:10.631, ES-DE logged the game's end with 23 s of play, and the switcher opened at 20:40:11.200, 0.59 s after the overlay pressed Home. After Tekken 6: keys to ES-DE at 20:42:37.526, 28 s of play logged, the switcher open at .616, 0.10 s after Home. No *Updating* label was left either time.
+- **A setting turned off inside ES-DE.** ES-DE logged `settings-changed` at 20:40:52, the overlay `ES-DE's settings lack [BROWSING_EVENTS]` at 20:40:53.60, and the menu button at 20:40:56 opened ES-DE's Gamelist Options; the settings line read *Not ready: Browsing Custom Events*.
+- **Not checked:** a cleared install as the start (the Game Switcher section was set back to its defaults by hand), a picture kept with RetroArch's Quit hotkey off the controller, and carousel or grid themes on these three builds.
+- ES-DE's settings were read back afterwards and matched the start of the session.
