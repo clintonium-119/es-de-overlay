@@ -15,6 +15,7 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.drawable.Icon
 import android.content.pm.ServiceInfo
 import android.hardware.display.DisplayManager
@@ -46,6 +47,11 @@ import com.clintonium.es_de_overlay.core.LeaveWatch
 import com.clintonium.es_de_overlay.core.Look
 import com.clintonium.es_de_overlay.core.Overwrite
 import com.clintonium.es_de_overlay.core.Pick
+import com.clintonium.es_de_overlay.core.PressLog
+import com.clintonium.es_de_overlay.core.blendSubframes
+import com.clintonium.es_de_overlay.core.meanLevel
+import com.clintonium.es_de_overlay.core.rawPixelsStart
+import com.clintonium.es_de_overlay.core.subframesDiffer
 import com.clintonium.es_de_overlay.core.PictureSource
 import com.clintonium.es_de_overlay.core.ASPECT_SETTINGS
 import com.clintonium.es_de_overlay.core.CORE_ASPECT_OPTIONS
@@ -84,6 +90,8 @@ import com.clintonium.es_de_overlay.core.statePicture
 import com.clintonium.es_de_overlay.core.steer
 import com.clintonium.es_de_overlay.core.steerKeys
 import com.clintonium.es_de_overlay.core.screensaverEvent
+import com.clintonium.es_de_overlay.core.sameQuit
+import com.clintonium.es_de_overlay.core.shrunk
 import com.clintonium.es_de_overlay.core.switcherNeeds
 import com.clintonium.es_de_overlay.core.webSearchUrl
 import java.io.File
@@ -93,6 +101,8 @@ import java.nio.ByteOrder
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.util.Collections
+import java.util.WeakHashMap
 import java.util.concurrent.CancellationException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -109,6 +119,12 @@ const val ESDE = "org.es_de.frontend"
 private const val CHANNEL = "status"
 private const val ONGOING_ID = 1
 private const val RESULT_ID = 2
+/**
+ * The shell command that reads the screen three times at once: two reads to files while the third goes to the output,
+ * then the files after it. Started one after the other they land a few milliseconds apart, across a refresh or two.
+ */
+private const val SUBFRAME_READS = 3
+private const val SUBFRAME_READ = "f=/data/local/tmp/es-de-overlay-\$\$; screencap > \$f.1 & screencap > \$f.2 & screencap; wait; cat \$f.1 \$f.2; rm -f \$f.1 \$f.2"
 
 /** Posts (or replaces) notification [id]; tapping it runs [tap], else opens the settings screen. */
 fun notify(context: Context, id: Int, text: String, ongoing: Boolean = false, tap: PendingIntent? = null): Notification {
@@ -240,6 +256,8 @@ class HelperService : Service() {
     @Volatile private var recent: Pair<List<RecentGame>, ThemeLook.Current>? = null
     /** RetroArch's save-state pictures, by when each was written (epoch seconds), as read with [recent]. */
     @Volatile private var states = emptyList<Pair<Long, String>>()
+    /** When [states] was listed (epoch seconds). */
+    @Volatile private var statesListed = 0L
     /** Whether RetroArch starts a game from its auto save state (Auto Load State), as read with [recent]. */
     @Volatile private var retroarchResumes = false
     /** RetroArch's settings for the shape it shows games at, as read with [recent]. */
@@ -248,6 +266,8 @@ class HelperService : Service() {
     @Volatile private var ppssppResumes = false
     /** Switcher pictures read, by ROM path ending: those either side of the game shown, and a few passed. */
     private val pictures = LruCache<String, Bitmap>(15)
+    /** The strip's small pictures, each shrunk from the picture it's kept by, for as long as that one is. */
+    private val smalls = Collections.synchronizedMap(WeakHashMap<Bitmap, Bitmap>())
     /** Keys of [pictures] being read. */
     private val reading = ConcurrentHashMap.newKeySet<String>()
     private val pictureReader = Executors.newSingleThreadExecutor()
@@ -265,12 +285,19 @@ class HelperService : Service() {
     private var switching = false
     /** Main thread: the switcher is steering ES-DE to the picked game. */
     private var steering = false
-    /** Main thread: the screen read as the menu opened over the game, for Quit Game to keep; dropped as the menu closes. */
-    private var menuScreen: Future<Pair<ByteBuffer, Int>?>? = null
+    /**
+     * Main thread: the screen read for a quit to keep, begun as the menu opened over the game, or as Home or RetroArch's
+     * Exit went down; dropped as the menu closes.
+     */
+    private var quitScreen: Future<ScreenRead?>? = null
+    /** Set while the overlay is pressing RetroArch's Exit, so it doesn't take its own press for the player's. */
+    @Volatile private var exiting = false
     /** RetroArch's hotkeys when the last launch was in RetroArch, read on the io thread as the launch is logged. */
     @Volatile private var hotkeys: RetroArchHotkeys? = null
     /** Set while the overlay has RetroArch's shader turned off, taken to be on at each launch as RetroArch's config says. */
     @Volatile private var shaderOff = false
+    /** How Android had the screen turned (`Surface.ROTATION_0` to `ROTATION_270`) when a poll last found ES-DE in front. */
+    @Volatile private var esdeRotation: Int? = null
     /** Presses of RetroArch's hotkeys, one at a time. */
     private val presses = Executors.newSingleThreadExecutor()
     /** The launch the switcher last pressed, followed through ES-DE's log on the io thread until its game ends. */
@@ -424,6 +451,7 @@ class HelperService : Service() {
     private fun poll() {
         readLog()
         val fg = front.read(this)
+        if (fg == ESDE) esdeRotation = rotation()
         followSwitcherFront(fg)
         val changed = fg != foreground
         if (changed) {
@@ -499,7 +527,7 @@ class HelperService : Service() {
     private fun closeMenu() {
         switching = false
         opening = null
-        menuScreen = null
+        quitScreen = null
         finding?.set(true)
         unanswered?.invoke()
         closeViewer()
@@ -541,12 +569,12 @@ class HelperService : Service() {
         val unshade = retroarch?.takeIf { it.togglesShader && !shaderOff }
         val screen = when {
             !readsScreen || !keepsPicture() -> null
-            // RetroArch's own state picture, with no shader, is the game's when it saves one as it exits.
+            // RetroArch saving a state as it exits has the screen read just before its Exit instead, so the menu opens at once.
             retroarch?.savesOnExit == true -> null.also { Log.i(TAG, "menu: no screen read, RetroArch saves its state on exit") }
             unshade != null -> FutureTask { shaderFreeScreen(unshade) }.also(presses::execute)
             else -> FutureTask(::readScreen).also { thread(name = "menu screen", block = it::run) }
         }
-        menuScreen = screen
+        quitScreen = screen
         io.execute {
             val (manual, guides, info) = runCatching { documents(g) }
                 .onFailure { Log.w(TAG, "looking up manual and guides failed", it) }
@@ -646,6 +674,7 @@ class HelperService : Service() {
         // and those of each override and core-options file in its config folder, as `override <file>:<line>`.
         // ponytail: with more than one RetroArch installed, their aspect settings are taken as one; split by package if that turns up.
         val keys = (ASPECT_SETTINGS + CORE_ASPECT_OPTIONS).joinToString("|")
+        val listedAt = System.currentTimeMillis() / 1000
         val retroarch = ShizukuShell.output(
             """for c in /sdcard/Android/data/com.retroarch*/files/retroarch.cfg; do grep -q '^savestate_auto_load = "true"' "${'$'}c" && echo autoload; d=$(sed -n 's/^savestate_directory = "\(.*\)"$/\1/p' "${'$'}c"); [ -d "${'$'}d" ] && find "${'$'}d" -name '*.state*.png' -exec stat -c '%Y %n' {} +; """ +
                 """grep -E '^($keys) = ' "${'$'}c" | sed 's/^/cfg /'; o=$(sed -n 's/^rgui_config_directory = "\(.*\)"$/\1/p' "${'$'}c"); [ -d "${'$'}o" ] && (cd "${'$'}o" && grep -H -E '^($keys) = ' */*.cfg */*.opt retroarch-core-options.cfg 2>/dev/null | sed 's/^/override /'); done; true""",
@@ -653,6 +682,7 @@ class HelperService : Service() {
         took("states")
         retroarchResumes = "autoload" in retroarch
         states = retroarch.mapNotNull { line -> line.substringBefore(' ').toLongOrNull()?.let { it to line.substringAfter(' ') } }
+        statesListed = listedAt
         retroarchLook = retroarchConfig(retroarch)
         discSession?.let { (g, emulator, since) ->
             discSession = null
@@ -775,12 +805,31 @@ class HelperService : Service() {
      */
     private fun switcherPicture(g: RecentGame): Bitmap? = runCatching {
         val (source, path) = pictureOf(g)
+        fun trim(b: Bitmap): Bitmap {
+            val started = SystemClock.uptimeMillis()
+            val (left, top, right, bottom) = contentBounds(b.width, b.height) { x, y ->
+                b.getPixel(x, y).let { Color.red(it) < 24 && Color.green(it) < 24 && Color.blue(it) < 24 }
+            }
+            return if (left == 0 && top == 0 && right == b.width && bottom == b.height) b
+            else Bitmap.createBitmap(b, left, top, right - left, bottom - top).also {
+                Log.i(TAG, "switcher: bars trimmed off ${g.name}, ${b.width}×${b.height} to ${it.width}×${it.height}, in ${SystemClock.uptimeMillis() - started} ms")
+            }
+        }
+        // A RetroArch state's picture, with when it was written: the core's frame as it is, which RetroArch shows at the
+        // shape it's set to.
+        val state = states.firstOrNull { source == PictureSource.SAVED && it.second == path }
+        // The screen read as RetroArch was quit, for the quit that wrote the state, shows it as it was on screen: the
+        // state's own picture of an upright arcade game is the core's frame unturned.
+        state?.let { (at, _) -> keptPicture(g.system, g.path)?.takeIf { it.isFile && sameQuit(at, it.lastModified() / 1000, statesListed) } }
+            ?.let { BitmapFactory.decodeFile(it.path) }?.let(::trim)?.let {
+                Log.i(TAG, "switcher: ${g.name} shown as the screen was as it quit, ${it.width}×${it.height}")
+                return@runCatching it
+            }
         val saved = path?.let {
             BitmapFactory.decodeFile(path) ?: ShizukuShell.output("cat ${ShizukuShell.quote(path)}")?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
         }
         val picture = saved ?: screenshot(GameRef(g.system, g.path)) ?: return@runCatching null
-        // A RetroArch state's picture is the core's frame as it is, which RetroArch shows at the shape it's set to.
-        val aspect = path?.takeIf { saved != null && source == PictureSource.SAVED && states.any { it.second == path } }?.let {
+        val aspect = state?.second?.takeIf { saved != null }?.let {
             retroarchLook.aspect(
                 core = it.substringBeforeLast('/').substringAfterLast('/'),
                 game = it.substringAfterLast('/').substringBefore(".state"),
@@ -789,14 +838,7 @@ class HelperService : Service() {
                 screen = resources.displayMetrics.run { widthPixels.toDouble() / heightPixels },
             )
         }
-        val started = SystemClock.uptimeMillis()
-        val (left, top, right, bottom) = contentBounds(picture.width, picture.height) { x, y ->
-            picture.getPixel(x, y).let { Color.red(it) < 24 && Color.green(it) < 24 && Color.blue(it) < 24 }
-        }
-        val trimmed = if (left == 0 && top == 0 && right == picture.width && bottom == picture.height) picture
-        else Bitmap.createBitmap(picture, left, top, right - left, bottom - top).also {
-            Log.i(TAG, "switcher: bars trimmed off ${g.name}, ${picture.width}×${picture.height} to ${it.width}×${it.height}, in ${SystemClock.uptimeMillis() - started} ms")
-        }
+        val trimmed = trim(picture)
         // The whole frame stretched to the aspect, and any bars trimmed off it with it.
         val (width, height) = aspect?.let { (trimmed.width * picture.height * it / picture.width).roundToInt() to trimmed.height }
             ?: displaySize(trimmed.width, trimmed.height)
@@ -804,6 +846,20 @@ class HelperService : Service() {
             Log.i(TAG, "switcher: ${g.name}'s ${trimmed.width}×${trimmed.height} picture shown at ${it.width}×${it.height}" + (aspect?.let { a -> ", RetroArch's aspect %.3f".format(a) } ?: ""))
         }
     }.onFailure { Log.w(TAG, "switcher: no picture for ${g.name}", it) }.getOrNull()
+
+    /**
+     * Picture thread: [picture] shrunk to cover the strip's largest box, for the strip to draw; null when it's no
+     * bigger than the box. A pixel is added where that keeps it centred on whole pixels there.
+     */
+    private fun small(picture: Bitmap): Bitmap? {
+        val (boxW, boxH) = switcher.stripBox
+        val scale = maxOf(boxW.toFloat() / picture.width, boxH.toFloat() / picture.height)
+        if (scale >= 1f) return null
+        fun size(whole: Int, box: Int) = (whole * scale).roundToInt().coerceAtLeast(box).let { it + (it - box) % 2 }
+        val (w, h) = size(picture.width, boxW) to size(picture.height, boxH)
+        val pixels = IntArray(picture.width * picture.height).also { picture.getPixels(it, 0, picture.width, 0, 0, picture.width, picture.height) }
+        return Bitmap.createBitmap(shrunk(pixels, picture.width, picture.height, w, h), w, h, Bitmap.Config.ARGB_8888)
+    }
 
     /**
      * Main thread: has the pictures of game [at] of [games] and of the two either side, or as many as the strip
@@ -828,6 +884,8 @@ class HelperService : Service() {
                         main.post { showing?.let { wantPictures(it, shownGame) } }
                         return@execute
                     }
+                    if (read != null && prefs.switcherStrip) runCatching { small(read)?.let { smalls[read] = it } }
+                        .onFailure { Log.w(TAG, "switcher: no small picture for ${games[i].name}", it) }
                     if (read != null) pictures.put(key, read) else stale = stale - key
                     if (awaited?.let { (k, after) -> k == key && round > after } == true) awaited = null
                     main.post { switcher.pictureArrived(i) }
@@ -872,6 +930,7 @@ class HelperService : Service() {
         switcher.show(
             theme, prefs.switcherStrip, shown.map { it.name }, { i: Int -> detailLine(shown[i], names, today, pictureOf(shown[i]).first) }.takeIf { prefs.switcherDetails }, 0,
             picture = { pictures.get(shown[it].logSuffix) ?: stale[shown[it].logSuffix] },
+            small = smalls::get,
             updating = { shown[it].logSuffix == awaited?.first },
             onSelect = { wantPictures(shown, it) },
             onPick = { steer(games, it, theme.look) },
@@ -960,25 +1019,24 @@ class HelperService : Service() {
                 }
                 var presses = 0
                 var selected = start
-                // A press ES-DE doesn't log is sent again: the first can arrive before ES-DE has the keys back. A in
-                // the system view isn't: sent twice, the second could launch the game the opened list is on.
+                // A press ES-DE doesn't log is sent again: the first can arrive before ES-DE has the keys back, or
+                // only end its screensaver. A in the system view isn't: sent twice, the second could launch the game
+                // the opened list is on.
                 fun press(step: Step): Selection? {
                     // What ES-DE logged before this press is passed over.
                     lines()
+                    val sends = PressLog()
+                    val logged = { line: String ->
+                        if (sends.keys == 0) selection(line)?.let { Log.i(TAG, "switcher: nudged to $it") }
+                        sends.take(line)
+                    }
                     repeat(if (step == Step.OPEN) 1 else 3) {
                         presses++
+                        sends.sent++
                         shell.send("input keyevent ${keys.key(step)}")
-                        // ES-DE logs a key before what it selects for it, so only a selection after the key's own line
-                        // counts. One before it is a nudged D-pad's: taken for this press's, every later press would
-                        // be taken for the one before it.
-                        var keyed = false
-                        val logged = { line: String ->
-                            if ("logInput(Keyboard)" in line && "value=1" in line) keyed = true
-                            val found = selection(line)
-                            if (found != null && !keyed) Log.i(TAG, "switcher: nudged to $found")
-                            found?.takeIf { keyed }
-                        }
-                        await(if (step == Step.OPEN) 1_000 else 300, logged)?.let { found ->
+                        // Once ES-DE has moved, a send it never logged a key for is given up when the wait is out.
+                        (await(if (step == Step.OPEN) 1_000 else 300, logged) ?: sends.selected)?.let { found ->
+                            if (sends.keys != sends.sent) Log.i(TAG, "switcher: ${sends.keys} of ${sends.sent} sends logged for $step")
                             selected = found
                             return found
                         }
@@ -1104,7 +1162,7 @@ class HelperService : Service() {
     /**
      * Main thread: ends the game and goes to ES-DE. RetroArch, with Exit on the controller, quits through its own Exit,
      * saving as it's set to; any other app is force-stopped, with no chance to save. The screen read as the menu
-     * opened, if it was, is then kept as [g]'s picture.
+     * opened or the button went down, if it was, is then kept as [g]'s picture.
      */
     private fun quitGame(g: GameRef) {
         val quit = launch ?: return
@@ -1112,11 +1170,11 @@ class HelperService : Service() {
         leave.forget()
         io.execute { launch = null }
         val retroarch = hotkeys?.takeIf { it.pkg == pkg && it.exits && ShizukuShell.ready }
-        val screen = menuScreen
+        val screen = quitScreen
         Log.i(TAG, "quit: " + (if (retroarch != null) "exiting $pkg through RetroArch" else "ending $pkg") +
-            if (screen != null) ", keeping the picture read as the menu opened" else "")
+            if (screen != null) ", keeping the picture already read" else "")
         if (retroarch != null) {
-            exitRetroArch(retroarch, quit)
+            exitRetroArch(retroarch, quit, g, screen)
         } else {
             ButtonService.forceStop(pkg)
             pollSoon()
@@ -1128,30 +1186,75 @@ class HelperService : Service() {
 
     /**
      * Main thread: closes the menu, which has the keys, then presses RetroArch's Exit, its shader back on first if the
-     * overlay turned it off (RetroArch saves its settings as it quits). Force-stops RetroArch if it's still in front a
+     * overlay turned it off (RetroArch saves its settings as it quits). Where RetroArch saves a state as it exits, the
+     * screen is kept as [g]'s picture, which the switcher shows over the state's: the state's own picture of an upright
+     * arcade game is the core's frame unturned. [screen] is that read, begun as Home or Exit went down, and Exit waits
+     * for it; without one, after Quit Game, the screen is read here once RetroArch has the keys back from the menu and
+     * is drawing again. Not with sub-frames a read can't put together. Force-stops RetroArch if it's still in front a
      * while later, in the session of the launch [quit].
      */
-    private fun exitRetroArch(retroarch: RetroArchHotkeys, quit: Launch) {
+    private fun exitRetroArch(retroarch: RetroArchHotkeys, quit: Launch, g: GameRef, screen: Future<ScreenRead?>?) {
+        val hadKeys = menu.isOpen || switcher.isOpen || opening != null
         closeMenu()
-        presses.execute {
-            Thread.sleep(RetroArchHotkeys.KEYS_BACK_MS)
-            if (shaderOff && retroarch.toggleShader()) shaderOff = false
-            val started = SystemClock.uptimeMillis()
-            val pressed = retroarch.pressExit()
-            while (pressed && SystemClock.uptimeMillis() - started < RetroArchHotkeys.EXIT_MS && front.read(this) == retroarch.pkg) {
-                Thread.sleep(100)
-            }
-            val waited = SystemClock.uptimeMillis() - started
-            // Only the session quit is ended: once RetroArch has left the front, or ES-DE has logged another launch, a
-            // RetroArch in front is a new one.
-            if (front.read(this) != retroarch.pkg || launch?.let { it.stamp != quit.stamp } == true) {
-                Log.i(TAG, "quit: RetroArch exited $waited ms after Exit")
-                pollSoon()
-                return@execute
-            }
-            Log.w(TAG, "quit: RetroArch still in front $waited ms after Exit (pressed: $pressed), force-stopping it")
-            ButtonService.forceStop(retroarch.pkg)
+        exiting = true
+        val keep = keptPicture(g.system, g.romRelativePath)
+            ?.takeIf { screen == null && retroarch.savesOnExit && retroarch.readable && keepsPicture() }
+        // The hotkey-enable button may still be under the player's thumb, after RetroArch's own Quit hotkey: a press
+        // sent over it is no press once they let go. So Exit waits a moment for it to come up, and with it still held
+        // taps Exit's own button alone.
+        var tapAlone = false
+        fun pressExit(): Boolean {
+            val enable = retroarch.enableKey
+            val until = SystemClock.uptimeMillis() + RetroArchHotkeys.HELD_MS
+            while (enable != null && ButtonService.holding(enable) && SystemClock.uptimeMillis() < until) Thread.sleep(10)
+            tapAlone = enable != null && ButtonService.holding(enable)
+            if (tapAlone) Log.i(TAG, "quit: Exit as the tap alone, the hotkey button still held")
+            return retroarch.pressExit(tapAlone)
         }
+        presses.execute {
+            try {
+                val began = SystemClock.uptimeMillis()
+                // Under a menu RetroArch stops drawing, and holds one sub-frame until it has the keys back.
+                if (hadKeys) Thread.sleep(RetroArchHotkeys.KEYS_BACK_MS)
+                keep?.let { file -> readScreen(retroarch.pairs && !shaderOff)?.let { thread(name = "quit picture") { keepPicture(g, file, it) } } }
+                // A read begun as the button went down is done before Exit closes the game under it.
+                runCatching { screen?.get(2, TimeUnit.SECONDS) }
+                if (shaderOff && retroarch.toggleShader()) shaderOff = false
+                val started = SystemClock.uptimeMillis()
+                Log.i(TAG, "quit: pressing Exit ${started - began} ms on")
+                var pressed = pressExit()
+                // A tap that missed, the player letting go of the hotkey button just then, is made once more as a
+                // whole press: a force-stop saves nothing. A whole press isn't made twice: RetroArch slow to close
+                // would leave the second for ES-DE.
+                var again = tapAlone
+                while (pressed && SystemClock.uptimeMillis() - started < RetroArchHotkeys.EXIT_MS && front.read(this) == retroarch.pkg) {
+                    Thread.sleep(100)
+                    if (again && SystemClock.uptimeMillis() - started >= RetroArchHotkeys.AGAIN_MS && front.read(this) == retroarch.pkg) {
+                        again = false
+                        Log.w(TAG, "quit: RetroArch still in front, pressing Exit again")
+                        pressed = pressExit()
+                    }
+                }
+                val waited = SystemClock.uptimeMillis() - started
+                // Only the session quit is ended: once RetroArch has left the front, or ES-DE has logged another launch, a
+                // RetroArch in front is a new one.
+                if (front.read(this) != retroarch.pkg || launch?.let { it.stamp != quit.stamp } == true) {
+                    Log.i(TAG, "quit: RetroArch exited $waited ms after Exit")
+                    pollSoon()
+                    return@execute
+                }
+                Log.w(TAG, "quit: RetroArch still in front $waited ms after Exit (pressed: $pressed), force-stopping it")
+                ButtonService.forceStop(retroarch.pkg)
+            } finally {
+                exiting = false
+            }
+        }
+    }
+
+    /** Main thread: begins a read of the screen over [retroarch]'s game, on its own thread. */
+    private fun beginRead(retroarch: RetroArchHotkeys): Future<ScreenRead?> {
+        val pair = retroarch.pairs && !shaderOff
+        return FutureTask { readScreen(pair) }.also { thread(name = "quit screen", block = it::run) }
     }
 
     /**
@@ -1175,7 +1278,7 @@ class HelperService : Service() {
      * Off the main thread: the screen read with RetroArch's shader turned off, and on again after; null without a read
      * when the shader couldn't be turned off.
      */
-    private fun shaderFreeScreen(retroarch: RetroArchHotkeys): Pair<ByteBuffer, Int>? {
+    private fun shaderFreeScreen(retroarch: RetroArchHotkeys): ScreenRead? {
         if (!retroarch.toggleShader()) return null
         Thread.sleep(RetroArchHotkeys.CLEAN_MS)
         val screen = readScreen()
@@ -1188,30 +1291,67 @@ class HelperService : Service() {
     private fun keepsPicture() = prefs.keepQuitPicture && ShizukuShell.ready
 
     /**
-     * Any thread: the screen as `screencap` reads it through Shizuku, raw (a PNG takes longer to make): a 12- or 16-byte
-     * header (width, height and format as little-endian ints), then RGBA rows, which start at the second value; null
-     * when it can't be read.
+     * The screen as [readScreen] read it: `screencap`'s raw bytes, a 12- or 16-byte header (width, height and format as
+     * little-endian ints) then RGBA rows from [start]; and how far to [turn] it, clockwise in degrees, to show it in
+     * ES-DE's screen as it was on the device's own: a game played with the device on its side shows on its side.
      */
-    private fun readScreen(): Pair<ByteBuffer, Int>? = runCatching {
+    private data class ScreenRead(val raw: ByteBuffer, val start: Int, val turn: Int)
+
+    /** How Android has the screen turned now, `Surface.ROTATION_0` to `ROTATION_270`. */
+    private fun rotation() = getSystemService(DisplayManager::class.java)?.getDisplay(Display.DEFAULT_DISPLAY)?.rotation ?: 0
+
+    /**
+     * Off the main thread: the screen as `screencap` reads it through Shizuku, raw (a PNG takes longer to make), with
+     * how far it's turned from ES-DE's screen; null when it can't be read. With [subframes], RetroArch's shader draws
+     * each frame as two sub-frames, either alone the wrong picture: the screen is read three times at once, and the
+     * brightest and the darkest of the three, a sub-frame of each kind, are blended. Three reads of one sub-frame are
+     * read again; reads that never differ (the shader off, or the game not drawing) give the frame as it is.
+     */
+    private fun readScreen(subframes: Boolean = false): ScreenRead? = runCatching {
         val started = SystemClock.uptimeMillis()
-        val raw = ShizukuShell.output("screencap")?.let { ByteBuffer.wrap(it).order(ByteOrder.LITTLE_ENDIAN) } ?: return null
-        val pixels = raw.getInt(0) * raw.getInt(4) * 4
-        // PixelFormat.RGBA_8888.
-        if (raw.getInt(8) != 1 || raw.capacity() - pixels !in 12..16) error("screencap gave format ${raw.getInt(8)}, ${raw.capacity()} bytes")
-        Log.i(TAG, "screen read in ${SystemClock.uptimeMillis() - started} ms")
-        raw to raw.capacity() - pixels
+        // As the screen is read: once the game has quit, ES-DE may have the screen turned back.
+        val rotation = rotation()
+        var read: ByteArray? = null
+        var how = ""
+        if (subframes) {
+            for (attempt in 1..3) {
+                val all = ShizukuShell.output(SUBFRAME_READ) ?: break
+                val size = all.size / SUBFRAME_READS
+                val reads = List(SUBFRAME_READS) { all.copyOfRange(it * size, (it + 1) * size) }
+                // Reads of one size, or the screen turned between them.
+                val start = rawPixelsStart(reads[0])?.takeIf { all.size % SUBFRAME_READS == 0 && reads.all { r -> r.take(12) == reads[0].take(12) } } ?: break
+                val levels = reads.map { meanLevel(it, start) }
+                val (dark, bright) = levels.indices.minBy { levels[it] } to levels.indices.maxBy { levels[it] }
+                how += ", levels ${levels.joinToString("/")} ${SystemClock.uptimeMillis() - started} ms on"
+                read = reads[bright]
+                if (subframesDiffer(levels[dark], levels[bright])) {
+                    read = blendSubframes(reads[bright], reads[dark], start)
+                    how += ", two sub-frames blended"
+                    break
+                }
+            }
+        }
+        val bytes = read ?: ShizukuShell.output("screencap") ?: return null
+        val start = rawPixelsStart(bytes) ?: error("screencap gave ${bytes.size} bytes, not rows of RGBA")
+        val raw = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+        // ponytail: ES-DE's turn as it was before the game; ES-DE turns either way round in landscape, so it's off by 180°
+        // if the device comes back to ES-DE the other way up.
+        val turn = esdeRotation?.let { ((rotation - it) * 90).mod(360) } ?: 0
+        Log.i(TAG, "screen read in ${SystemClock.uptimeMillis() - started} ms, ${raw.getInt(0)}×${raw.getInt(4)} at rotation $rotation, ES-DE's $esdeRotation, turned $turn°$how")
+        ScreenRead(raw, start, turn)
     }.onFailure { Log.w(TAG, "reading the screen failed", it) }.getOrNull()
 
-    /** Its own thread: keeps [screen], as [readScreen] gave it, as [g]'s picture for the switcher in [file]. */
-    private fun keepPicture(g: GameRef, file: File, screen: Pair<ByteBuffer, Int>) {
+    /** Its own thread: keeps [screen], as [readScreen] gave it, turned as it was on the device, as [g]'s picture for the switcher in [file]. */
+    private fun keepPicture(g: GameRef, file: File, screen: ScreenRead) {
         val started = SystemClock.uptimeMillis()
-        val (raw, start) = screen
+        val (raw, start, turn) = screen
         runCatching {
-            // The mean of red, green and blue over a spread of pixels, 0 to 255, for telling a dark picture in the log.
-            val samples = (start until raw.capacity() step 4 * 97)
-            val mean = samples.sumOf { i -> (0..2).sumOf { raw.get(i + it).toLong() and 255 } } / (3L * samples.count())
-            val picture = createBitmap(raw.getInt(0), raw.getInt(4))
-            picture.copyPixelsFromBuffer(raw.position(start))
+            // For telling a dark picture in the log.
+            val mean = meanLevel(raw.array(), start)
+            val read = createBitmap(raw.getInt(0), raw.getInt(4))
+            read.copyPixelsFromBuffer(raw.position(start))
+            val picture = if (turn == 0) read
+            else Bitmap.createBitmap(read, 0, 0, read.width, read.height, Matrix().apply { setRotate(turn.toFloat()) }, false).also { read.recycle() }
             file.parentFile!!.mkdirs()
             val part = File(file.path + ".part")
             part.outputStream().use { picture.compress(Bitmap.CompressFormat.JPEG, 90, it) }
@@ -1225,17 +1365,20 @@ class HelperService : Service() {
     /**
      * Main thread: the controller's Home, as it goes down, for the game in front that leaving with Home ends; whether
      * the overlay takes the press. It takes it over RetroArch with Exit on the controller, which quits as Home lets go
-     * ([homeUp]), so RetroArch saves as it's set to; otherwise Home goes on to Android, which leaves the game to be
-     * ended. Unless the menu is over the game, a picture of it is kept for the switcher if [keepsPicture], except where
-     * RetroArch saves its own as it exits.
+     * ([quitInFront]), so RetroArch saves as it's set to; otherwise Home goes on to Android, which leaves the game to be
+     * ended. Unless the menu is over the game, a picture of it is kept for the switcher if [keepsPicture]; where
+     * RetroArch saves a state as it exits, once the game does quit.
      */
     private fun onHomeDown(): Boolean {
         pollSoon()
         if (!prefs.quitOnHome || starting) return false
         val g = gameInFront() ?: return false
         val retroarch = hotkeys?.takeIf { it.pkg == launch?.pkg && it.exits && ShizukuShell.ready }
-        if (keepsPicture() && retroarch?.savesOnExit != true && !menu.isOpen && !switcher.isOpen && opening == null) {
-            keptPicture(g.system, g.romRelativePath)?.let { file ->
+        if (keepsPicture() && !menu.isOpen && !switcher.isOpen && opening == null) {
+            if (retroarch?.savesOnExit == true) {
+                // Read while Home is down, and kept as it lets go and the game quits; Exit waits for the read.
+                if (retroarch.readable) quitScreen = beginRead(retroarch)
+            } else keptPicture(g.system, g.romRelativePath)?.let { file ->
                 Log.i(TAG, "home: keeping a picture of ${g.romRelativePath}")
                 thread(name = "home picture") { readScreen()?.let { keepPicture(g, file, it) } }
             }
@@ -1747,8 +1890,24 @@ class HelperService : Service() {
         /** Main thread: the controller's Home has gone down; whether the overlay takes it from Android. */
         fun homeDown(): Boolean = instance?.onHomeDown() == true
 
-        /** Main thread: the controller's Home, taken because [homeDown] said so, has let go: the game in front quits. */
-        fun homeUp() {
+        /**
+         * Main thread: whether the gamepad key [keyCode], going down with the gamepad keys [held] down, is the player
+         * pressing RetroArch's Exit, and the overlay takes it, to read the screen before pressing Exit itself: in a
+         * RetroArch game that saves as it exits, with nothing of the overlay's open. The read begins here.
+         */
+        fun takesExit(keyCode: Int, held: Set<Int>): Boolean = instance?.run {
+            val retroarch = hotkeys?.takeIf { it.pkg == launch?.pkg && it.savesOnExit && it.isExit(keyCode, held) } ?: return@run false
+            val taken = !exiting && keepsPicture() && retroarch.readable && !starting && capture == null &&
+                !menu.isOpen && !switcher.isOpen && opening == null && gameInFront() != null
+            if (taken) {
+                Log.i(TAG, "exit: taken, to read the screen before RetroArch's Exit")
+                quitScreen = beginRead(retroarch)
+            }
+            taken
+        } == true
+
+        /** Main thread: Home, or RetroArch's Exit, taken because [homeDown] or [takesExit] said so, has let go: the game in front quits. */
+        fun quitInFront() {
             instance?.run { gameInFront()?.let(::quitGame) }
         }
 

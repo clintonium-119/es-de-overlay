@@ -99,6 +99,7 @@ With [Shizuku](shizuku.md) and RetroArch's *Quit* hotkey on a controller button 
 - With RetroArch's *Auto Save State* on, it saves its auto state as it closes. With *Auto Load State* on too, the game starts there next time.
 - If RetroArch is still running 5 s later, it's force-closed as before.
 - **Home** does the same when **Quit games left with Home** is on: the app presses the hotkey as you let go of Home, so what you played isn't lost. With that setting off, Home leaves RetroArch running, as before.
+- **RetroArch's *Quit* hotkey itself**, pressed on the controller while RetroArch saves its auto state as it closes, is taken by the app for a moment: it reads the screen for the [game switcher](#the-pictures) as you press, then presses the hotkey for you as you let go. If you're still holding *Hotkey Enable* then, it taps only *Quit*'s own button.
 - Other emulators are force-closed as before, by Quit Game and by Home.
 
 ## Game Switcher
@@ -133,8 +134,10 @@ Each game shows where you left it, when the app has a picture of that:
 With the detail line on, it ends in *Saved* for a save state's picture and *Left* for a kept one.
 
 - **Save-state pictures** show for RetroArch, PPSSPP and ARMSX2. RetroArch writes them only with *Save State Thumbnails* on (see [Set up](setup.md#game-switcher)). Other emulators' games show the kept picture or the scraped image; [Known limitations](limitations.md#game-switcher) says why.
-- **A kept picture** is taken by **Keep a picture of where you left a game** (on by default): Quit Game, and Home when it ends the game, take a picture of the game's screen first. It's only a picture. The game doesn't start from there unless the emulator saved as well.
-- **RetroArch's pictures have no shader.** A save state's picture is the game's own frame, and a kept one is taken with the shader turned off, through the *Shaders (Toggle)* hotkey. With RetroArch's *Auto Save State* on and its *Quit* hotkey set up, the app keeps no picture of its own, because the auto state's picture is the game's.
+- **A kept picture** is taken by **Keep a picture of where you left a game** (on by default): Quit Game, and Home when it ends the game, take a picture of the game's screen first. It's only a picture. The game doesn't start from there unless the emulator saved as well. It shows the way it was on the screen, so a game you played with the device turned on its side shows on its side, and you know to turn the device before you go back to it.
+- **RetroArch's pictures.** A save state's picture is the game's own frame, without its shader. With RetroArch's *Auto Save State* on and its *Quit* hotkey set up, Quit Game, Home and the *Quit* hotkey keep a picture of the screen just before RetroArch saves its auto state, and the switcher shows that picture in place of the state's: it's the same moment, as it was on the screen, shader and all. RetroArch saves an upright arcade game's own picture on its side.
+  - With *Shader Sub-Frames* at 2, each frame is on the screen as two sub-frames that only look right together, so the app reads the screen three times at once and blends one of each.
+  - Without *Auto Save State*, the picture Quit Game keeps is taken with the shader turned off, through the *Shaders (Toggle)* hotkey.
 - **RetroArch's save-state pictures show at the shape RetroArch shows the game**, following its aspect ratio setting, its core, folder and game overrides, and the core's own aspect option.
 
 ### Coming back from a game

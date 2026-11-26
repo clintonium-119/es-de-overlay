@@ -7,6 +7,8 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
 
 /** A played game: [path] is relative to `<ROMs>/<system>/`, [lastPlayed] ES-DE's raw `YYYYMMDDTHHMMSS`. */
 data class RecentGame(val system: String, val path: String, val name: String, val lastPlayed: String) {
@@ -160,7 +162,9 @@ fun pictureSource(saved: Long?, kept: Long?, resumes: Boolean = false): PictureS
  * The part of a [width] × [height] picture inside plain-black bars baked into it, as a screen capture of a game drawn
  * narrower or shorter than the screen has, as `[left, top, right, bottom]` (right and bottom exclusive). [dark] says
  * whether the pixel at (x, y) is plain black; a line of pixels is a bar when every sampled one is. Bars count only when
- * even on both sides, within 1% of the size, so a dark scene isn't cut, and never take more than half the picture.
+ * even on both sides, within 1% of the size, so a dark scene isn't cut, and never take more than half the picture. The
+ * same is cut from both sides, the narrower bar's width, so the picture stays centred on whole pixels: half a pixel
+ * off and drawn unfiltered, a shader's mask shows as bands.
  */
 fun contentBounds(width: Int, height: Int, dark: (Int, Int) -> Boolean): IntArray {
     // How many lines from one edge are bars, sampling about 64 points along each.
@@ -173,9 +177,70 @@ fun contentBounds(width: Int, height: Int, dark: (Int, Int) -> Boolean): IntArra
     val right = bars(width, height, { width - 1 - it }) { x, y -> dark(x, y) }
     val top = bars(height, width, { it }) { y, x -> dark(x, y) }
     val bottom = bars(height, width, { height - 1 - it }) { y, x -> dark(x, y) }
-    val (l, r) = if (even(left, right, width)) left to right else 0 to 0
-    val (t, b) = if (even(top, bottom, height)) top to bottom else 0 to 0
-    return intArrayOf(l, t, width - r, height - b)
+    val x = if (even(left, right, width)) minOf(left, right) else 0
+    val y = if (even(top, bottom, height)) minOf(top, bottom) else 0
+    return intArrayOf(x, y, width - x, height - y)
+}
+
+/**
+ * [pixels], a [width] × [height] picture as ARGB ints, shrunk to [outWidth] × [outHeight]: each new pixel the mean, in
+ * linear light, of the ones it covers and those beside them, nearer ones counting for more (a tent two new pixels
+ * wide). A shader's mask or scanlines, a few pixels apart, average out; picked a pixel here and there, or averaged in
+ * blocks, they show as bands.
+ */
+fun shrunk(pixels: IntArray, width: Int, height: Int, outWidth: Int, outHeight: Int): IntArray {
+    // For each new pixel along one axis: the first old pixel under its tent, and each one's share.
+    fun taps(size: Int, out: Int): Pair<IntArray, Array<FloatArray>> {
+        val per = size.toDouble() / out
+        val first = IntArray(out)
+        val shares = Array(out) { o ->
+            val centre = (o + 0.5) * per
+            val from = floor(centre - per).toInt().coerceAtLeast(0)
+            val to = ceil(centre + per).toInt().coerceAtMost(size)
+            first[o] = from
+            FloatArray(to - from) { (1 - abs(from + it + 0.5 - centre) / per).coerceAtLeast(0.0).toFloat() }
+                .also { tent -> tent.sum().let { sum -> for (i in tent.indices) tent[i] /= sum } }
+        }
+        return first to shares
+    }
+    val (firstX, sharesX) = taps(width, outWidth)
+    val (firstY, sharesY) = taps(height, outHeight)
+    // Across each row first, in light, three values a pixel.
+    val rows = FloatArray(outWidth * height * 3)
+    for (y in 0 until height) {
+        for (o in 0 until outWidth) {
+            var r = 0f
+            var g = 0f
+            var b = 0f
+            val shares = sharesX[o]
+            var at = y * width + firstX[o]
+            for (share in shares) {
+                val p = pixels[at++]
+                r += share * LIGHT[(p shr 16) and 255]
+                g += share * LIGHT[(p shr 8) and 255]
+                b += share * LIGHT[p and 255]
+            }
+            val i = (y * outWidth + o) * 3
+            rows[i] = r
+            rows[i + 1] = g
+            rows[i + 2] = b
+        }
+    }
+    return IntArray(outWidth * outHeight) {
+        val o = it % outWidth
+        var r = 0f
+        var g = 0f
+        var b = 0f
+        val shares = sharesY[it / outWidth]
+        var at = (firstY[it / outWidth] * outWidth + o) * 3
+        for (share in shares) {
+            r += share * rows[at]
+            g += share * rows[at + 1]
+            b += share * rows[at + 2]
+            at += outWidth * 3
+        }
+        (255 shl 24) or (srgb(r.toDouble()) shl 16) or (srgb(g.toDouble()) shl 8) or srgb(b.toDouble())
+    }
 }
 
 /**
@@ -185,6 +250,13 @@ fun contentBounds(width: Int, height: Int, dark: (Int, Int) -> Boolean): IntArra
  */
 // ponytail: RetroArch saves no aspect with a state's picture; reading its aspect setting and the core's would fix the narrower ones too (SNES's 256 × 224 shown 4:3).
 fun displaySize(width: Int, height: Int): Pair<Int, Int> = if (width > 2 * height) width to width * 3 / 4 else width to height
+
+/**
+ * Whether a RetroArch state picture written at [stateAt] and the screen read kept at [keptAt] (epoch seconds) are of
+ * one quit: the screen is read just before Exit and RetroArch writes its state as it exits, a second or so apart. A
+ * screen kept after the state pictures were listed at [listedAt] counts too: the state it goes with isn't listed yet.
+ */
+fun sameQuit(stateAt: Long, keptAt: Long, listedAt: Long) = abs(stateAt - keptAt) <= 30 || keptAt > listedAt
 
 /** A setting in ES-DE's es_settings.xml the switcher needs, by its name there. */
 enum class SwitcherNeed(val setting: String) {
@@ -280,6 +352,34 @@ fun selection(line: String): Selection? = selectedRom(line)?.let { Selection.Gam
     ?: line.substringAfter("Scripting::fireEvent(): system-select \"", "").substringBefore('"').ifEmpty { null }?.let(Selection::System)
 
 /**
+ * One steering press as ES-DE logs it, sent [sent] times: a press ES-DE logs nothing for is sent again, and the first
+ * can still land late, moving ES-DE once more. ES-DE logs every key it gets, even one that only ends its screensaver,
+ * before what it selects for it; a selection with no key before it is a nudged D-pad's. The press is done only once
+ * ES-DE has logged a key for each send and a selection after the last: taking the first selection would leave a key
+ * in flight, and every later press would read the selection of the one before it.
+ */
+class PressLog {
+    var sent = 0
+    /** Keys ES-DE has logged for this press. */
+    var keys = 0
+        private set
+    /** The last selection ES-DE logged after one of this press's keys. */
+    var selected: Selection? = null
+        private set
+    private var fresh = false
+
+    /** Folds in a line of ES-DE's log: the press's selection once it's done, else null. */
+    fun take(line: String): Selection? {
+        if ("logInput(Keyboard)" in line && "value=1" in line) {
+            keys++
+            fresh = false
+        }
+        if (keys > 0) selection(line)?.let { selected = it; fresh = true }
+        return selected?.takeIf { fresh && keys >= sent }
+    }
+}
+
+/**
  * How many steps ES-DE's lists are from Last Played by the next-system key ([ahead], by the system a list's selection
  * names), and how many lists there are ([size]), as walks that reached Last Played found them. Without a size the
  * longest distance known stands for it.
@@ -289,6 +389,16 @@ data class SystemRing(val ahead: Map<String, Int> = emptyMap(), val size: Int? =
     fun backward(system: String?): Boolean {
         val distance = system?.let(ahead::get) ?: return false
         return distance * 2 > (size ?: (ahead.values.max() + 1))
+    }
+
+    /**
+     * Whether this ring puts Last Played where a walk ([backward] or not) has arrived after leaving lists of the systems
+     * [passed], in order: one of them is as many moves away as its known distance. A walk back needs the size for it.
+     */
+    fun reaches(passed: List<String?>, backward: Boolean): Boolean = passed.withIndex().any { (i, system) ->
+        val distance = system?.let(ahead::get) ?: return@any false
+        val away = passed.size - i
+        if (backward) distance == size?.minus(away) else distance == away
     }
 
     /**
@@ -340,7 +450,7 @@ enum class Step {
  * the expected row moves on as well. The system view names its system, so a list opened on Last Played's name is
  * known to be it, and is opened only with that name just logged for a press of the walk's own.
  * Lists are walked the way [ring] has Last Played nearer, back only with [canGoBack]; [learned] is the ring as this
- * walk found it, once it launches from Last Played.
+ * walk found it, once it launches from Last Played, known as such or where the ring puts it.
  */
 class Steering(
     private val recents: List<String>,
@@ -424,7 +534,9 @@ class Steering(
         val confirmed = last == Step.NEXT_GAME && row < 0 && seen >= 0 && at == seen + 1
         when {
             at == target -> {
-                if (known || row >= 0 || confirmed) learned = ring.learned(passed, backward == true)
+                // Landed straight on it, Last Played is known by where the ring puts it: Last Played's cursor is often
+                // already on the pick, and such a walk would otherwise never teach the ring its first list.
+                if (known || row >= 0 || confirmed || ring.reaches(passed, backward == true)) learned = ring.learned(passed, backward == true)
                 row = at
                 last = Step.LAUNCH
                 return Step.LAUNCH

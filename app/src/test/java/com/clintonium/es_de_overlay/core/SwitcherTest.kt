@@ -167,6 +167,16 @@ class SwitcherTest {
     }
 
     @Test
+    fun `a kept screen goes with the state written as it quit, or with one not listed yet`() {
+        assertTrue(sameQuit(stateAt = 1000, keptAt = 999, listedAt = 2000))
+        assertTrue(sameQuit(stateAt = 1000, keptAt = 1030, listedAt = 2000))
+        assertFalse(sameQuit(stateAt = 1000, keptAt = 1031, listedAt = 2000))
+        assertFalse(sameQuit(stateAt = 1000, keptAt = 500, listedAt = 2000))
+        // Kept after the list was read: the state of that quit isn't in it yet.
+        assertTrue(sameQuit(stateAt = 1000, keptAt = 2001, listedAt = 2000))
+    }
+
+    @Test
     fun `a save state the emulator resumes from beats a newer kept picture`() {
         assertEquals(PictureSource.SAVED, pictureSource(saved = 100, kept = 200, resumes = true))
         assertEquals(PictureSource.LEFT, pictureSource(saved = null, kept = 200, resumes = true))
@@ -191,12 +201,30 @@ class SwitcherTest {
             x < left || x >= 128 - right || y < top || y >= 96 - bottom
         }
         assertEquals(listOf(24, 0, 104, 96), contentBounds(128, 96, picture(24, 24)).toList())
+        // A bar a pixel wider on one side: the same cut from both, so the picture stays centred on whole pixels.
+        assertEquals(listOf(24, 0, 104, 96), contentBounds(128, 96, picture(24, 25)).toList())
+        assertEquals(listOf(24, 0, 104, 96), contentBounds(128, 96, picture(25, 24)).toList())
         assertEquals(listOf(0, 6, 128, 90), contentBounds(128, 96, picture(0, 0, 6, 6)).toList())
         // A dark scene with black down one side only is left whole.
         assertEquals(listOf(0, 0, 128, 96), contentBounds(128, 96, picture(30, 0)).toList())
         // All black: never cut by more than a quarter each side, and both the same.
         assertEquals(listOf(32, 24, 96, 72), contentBounds(128, 96) { _, _ -> true }.toList())
         assertEquals(listOf(0, 0, 128, 96), contentBounds(128, 96) { _, _ -> false }.toList())
+    }
+
+    @Test
+    fun `a shrunk picture is the mean of what it covers, a fine mask leaving no bands`() {
+        fun grey(v: Int) = (255 shl 24) or (v shl 16) or (v shl 8) or v
+        // A flat picture stays flat.
+        assertTrue(shrunk(IntArray(64 * 48) { grey(90) }, 64, 48, 9, 7).all { it == grey(90) })
+        // A mask of one lit column in three at full contrast, far harsher than a shader draws, shrunk about 7 times:
+        // every pixel within a few levels of one grey, a third of white's light, where picking pixels gives black
+        // and white. The edge pixels' tents are cut short.
+        val mask = IntArray(1280 * 6) { if (it % 1280 % 3 == 0) grey(255) else grey(0) }
+        val small = shrunk(mask, 1280, 6, 176, 1).map { it and 255 }.drop(1).dropLast(1)
+        assertTrue(small.toString(), small.all { kotlin.math.abs(it - srgb(1 / 3.0)) <= 4 })
+        // Colours keep to their channels, and a checkerboard halves to its mean in light, not in value.
+        assertEquals((255 shl 24) or (188 shl 16), shrunk(IntArray(8 * 8) { if ((it % 8 + it / 8) % 2 == 0) (255 shl 24) or (255 shl 16) else 255 shl 24 }, 8, 8, 2, 2)[0])
     }
 
     @Test
@@ -393,6 +421,40 @@ class SwitcherTest {
     }
 
     @Test
+    fun `a press sent again is done only once ES-DE has logged a key for each send`() {
+        val down = "Nov 26 08:15:08 Debug:  Window::logInput(Keyboard): Key Down, isMappedTo=down, value=1"
+        val up = "Nov 26 08:15:08 Debug:  Window::logInput(Keyboard): Key Down, isMappedTo=down, value=0"
+        fun select(rom: String) = "Nov 26 08:15:08 Debug:  Scripting::fireEvent(): game-select \"/storage/ROMs/$rom\" \"Name\" \"${rom.substringBefore('/')}\" \"System\""
+        fun game(rom: String) = Selection.Game("/storage/ROMs/$rom", rom.substringBefore('/'))
+        // Found on the Nova: the first Down logged nothing for 300 ms, was sent again, and then both landed.
+        val late = PressLog().apply { sent = 2 }
+        assertEquals(listOf(null, null, null, null, game("androidgames/TMNT.app")), listOf(down, select("fbneo/1941.zip"), up, down, select("androidgames/TMNT.app")).map(late::take))
+        // The first only ended ES-DE's screensaver.
+        val screensaver = PressLog().apply { sent = 1 }
+        assertNull(screensaver.take(down))
+        assertNull(screensaver.take("Nov 25 09:37:30 Debug:  Scripting::fireEvent(): screensaver-end \"cancel\" \"\" \"\" \"\""))
+        screensaver.sent = 2
+        assertEquals(listOf(null, game("snes/Zelda.zip")), listOf(down, select("snes/Zelda.zip")).map(screensaver::take))
+        // ES-DE never got the first: the selection waits for a key that won't come, and is there once the wait is out.
+        val dropped = PressLog().apply { sent = 2 }
+        assertEquals(listOf(null, null), listOf(down, select("snes/Zelda.zip")).map(dropped::take))
+        assertEquals(game("snes/Zelda.zip"), dropped.selected)
+        // A nudged D-pad's, before any key of the press, isn't the press's.
+        val nudged = PressLog().apply { sent = 1 }
+        assertNull(nudged.take(select("snes/Zelda.zip")))
+        assertNull(nudged.selected)
+    }
+
+    @Test
+    fun `a first press that lands twice still reaches the top of Last Played`() {
+        val esde = FakeEsde(listOf(recents, snes, gb), 0, intArrayOf(0, 0, 0))
+        var first = true
+        val press = { step: Step -> if (first) esde.press(step).also { first = false }; esde.press(step) }
+        assertTrue(steer(Steering(recents, 0), esde.game, press, { null }, { esde.launched = esde.game.path; true }))
+        assertEquals("/storage/ROMs/snes/Super Mario World.zip", esde.launched)
+    }
+
+    @Test
     fun `it fails without launching when Last Played isn't found or nothing is logged`() {
         val esde = FakeEsde(listOf(gb, snes), 0, intArrayOf(0, 0))
         assertFalse(esde.run(Steering(recents, 1)))
@@ -516,6 +578,21 @@ class SwitcherTest {
         assertTrue(Step.NEXT_SYSTEM !in again.pressed)
         // A walk back from a known place gives the size.
         assertEquals(lap.copy(size = 5), back.learned)
+    }
+
+    @Test
+    fun `a walk that lands straight on its target learns when the ring puts Last Played there`() {
+        // Found on the Nova: Last Played's cursor already on the pick, so nothing on the way confirms the list.
+        fun walk(known: SystemRing) = Steering(recents, 1, canGoBack = true, ring = known).also {
+            assertTrue(FakeEsde(ring(a, b, c, d), 0, intArrayOf(0, 0, 0, 0, 1)).run(it))
+        }
+        assertEquals(lap, walk(SystemRing(mapOf("psx" to 1))).learned)
+        // A ring that puts Last Played elsewhere, or knows none of the lists passed, learns nothing from it.
+        assertNull(walk(SystemRing(mapOf("psx" to 2))).learned)
+        assertNull(walk(SystemRing()).learned)
+        // Back from a known list, one press, only a known size places it.
+        assertEquals(lap.copy(size = 5), walk(lap.copy(size = 5)).learned)
+        assertNull(walk(lap).learned)
     }
 
     @Test

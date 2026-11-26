@@ -24,7 +24,8 @@ class RetroArchHotkeys private constructor(
     codes: Map<String, Int>,
 ) {
     private val shaderToggle = hotkeyCombo(settings, "shader_toggle")?.let { comboScanCodes(it, codes, KeyEvent::keyCodeToString) }
-    private val exit = hotkeyCombo(settings, "exit_emulator")?.let { comboScanCodes(it, codes, KeyEvent::keyCodeToString) }
+    private val exitKeys = hotkeyCombo(settings, "exit_emulator")
+    private val exit = exitKeys?.let { comboScanCodes(it, codes, KeyEvent::keyCodeToString) }
     private val exitPresses = if (retroarchOn(settings, "quit_press_twice")) 2 else 1
     // ponytail: twice RetroArch's hotkey block delay at 60 fps, and at least the 150 ms the Nova test held; the knob if a
     // slow core misses a hotkey.
@@ -32,29 +33,54 @@ class RetroArchHotkeys private constructor(
 
     /** Whether Exit is on the controller. */
     val exits = exit != null
+    /** Whether the shader was on as RetroArch started. */
+    val shaded = retroarchOn(settings, "video_shader_enable")
     /** Whether the overlay turns the shader off and on: it was on as RetroArch started, and Shader toggle is on the controller. */
-    val togglesShader = retroarchOn(settings, "video_shader_enable") && shaderToggle != null
+    val togglesShader = shaded && shaderToggle != null
+    /** How many sub-frames the shader draws each frame as (RetroArch's Shader Sub-Frames); 1 without a shader. */
+    private val subframes = if (shaded) settings["video_shader_subframes"]?.toIntOrNull() ?: 1 else 1
+    /** Whether a frame is two sub-frames, either alone the wrong picture: the screen is read a few times and two reads blended. */
+    val pairs = subframes == 2
+    // ponytail: three or more sub-frames (a 180 Hz screen and up) would need as many reads, each a sub-frame apart;
+    // no picture of the screen is kept there.
+    /** Whether a read of the screen can give the picture as it looks. */
+    val readable = subframes <= 2
+    /** The hotkey-enable button held for Exit, as an Android keycode; null when Exit needs none. */
+    val enableKey = exitKeys?.hold
     /**
      * Whether RetroArch saves a state, with its own picture, when the overlay ends it: Auto Save State is on and Exit
      * is on the controller. Without Exit it's force-stopped, and saves nothing.
      */
     val savesOnExit = exits && retroarchOn(settings, "savestate_auto_save")
 
-    /** Off the main thread: presses Exit (twice when RetroArch asks for that); whether the presses were made. */
-    fun pressExit() = exit?.let { press(it, exitPresses) } == true
+    /**
+     * Whether [keyCode] going down, with the gamepad keys [held] down, is the player pressing Exit on the controller,
+     * and once is enough: with *Confirm Quit* on, RetroArch's own question is left to it.
+     */
+    fun isExit(keyCode: Int, held: Set<Int>) = exitPresses == 1 && exitKeys?.pressedBy(keyCode, held) == true
+
+    /**
+     * Off the main thread: presses Exit (twice when RetroArch asks for that); whether the presses were made. With
+     * the hotkey-enable button still [held] by the player, RetroArch has it already and only Exit's own button is tapped.
+     */
+    fun pressExit(held: Boolean = false) = exit?.let { press(if (held) it.copy(hold = null) else it, exitPresses, fresh = !held) } == true
 
     /** Off the main thread: presses Shader toggle; whether the press was made. */
     fun toggleShader() = shaderToggle?.let { press(it, 1) } == true
 
-    private fun press(keys: Combo, times: Int): Boolean {
-        val command = pressCommand(node, keys, holdMs, times) ?: return false
+    private fun press(keys: Combo, times: Int, fresh: Boolean = false): Boolean {
+        val command = pressCommand(node, keys, holdMs, times, fresh) ?: return false
         return ShizukuShell.output(command, timeoutSeconds = 5) != null
     }
 
     companion object {
         // ponytail: waits set from the Nova; the knobs if another device's RetroArch is slower.
-        /** After the menu closes, until RetroArch takes the controller's keys again. */
+        /** After the menu closes, until RetroArch takes the controller's keys again, and draws again. */
         const val KEYS_BACK_MS = 300L
+        /** How long Exit waits for the player to let go of the hotkey-enable button before tapping under it. */
+        const val HELD_MS = 150L
+        /** After Exit tapped under a held hotkey-enable button, how long RetroArch may stay in front before Exit is pressed once more. */
+        const val AGAIN_MS = 1_500L
         /** After a shader toggle, until RetroArch's frames are drawn without it. */
         const val CLEAN_MS = 100L
         /** After Exit, for RetroArch to save and quit before it's force-stopped. */
@@ -76,7 +102,7 @@ class RetroArchHotkeys private constructor(
             }
             return RetroArchHotkeys(pkg, retroarchSettings(cfg), pad.node, scanCodes(layout)).also {
                 Log.i(TAG, "retroarch: exit ${it.exit}, shader toggle ${it.shaderToggle} on ${pad.node}, hold ${it.holdMs} ms, " +
-                    "toggles shader ${it.togglesShader}, saves on exit ${it.savesOnExit}")
+                    "toggles shader ${it.togglesShader}, saves on exit ${it.savesOnExit}, ${it.subframes} sub-frames")
             }
         }
     }
