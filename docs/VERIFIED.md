@@ -476,3 +476,27 @@ A fourth build, release APK sha256 `c6bb1fab2e046d71eea326c9155490d3c5c06f825717
   - On each return, the switcher's first picture of the game was the screen at quit, 7 to 13 ms after it opened.
   - The read added 751 to 856 ms before Exit, after the 300 ms wait.
 - **The notice reads as asked.** The user saw *Capturing Screenshot*, then *Quitting*, in the middle of the screen. The switcher's picture of 1941 after Quit Game has no notice in it.
+
+## Switcher steering and prompts for the patch release (2026-11-26)
+
+Read on the Nova from ES-DE's own log, which with Debug Mode on records every key it gets and every selection.
+
+- **A resent first key lost the switcher's count twice.** On 2026-11-24 at 22:12 and 2026-11-26 at 08:15, ES-DE had sat idle on Last Played with its cursor on Super Mario World. In each case:
+  - the app sent Down, Down and a third Down: a first press ES-DE was slow to log, sent again, and then both landed;
+  - each later press then read the selection of the press before it;
+  - the walk went round every system twice, 121 keyboard presses, and stopped with *Couldn't reach Super Mario World in ES-DE*;
+  - picked again a few seconds later, it launched in 8 presses.
+- **A key that only ends ES-DE's screensaver is still logged.** `logInput(…)` comes first, then `screensaver-end "cancel"`, and no selection.
+- **The switcher's prompts were bare grey text over the picture** under TechDweeb (default `#777777`) and Analogue OS Menu (dark scheme, `#9a9a9a`). Neither theme gives its game-list prompts a background, though both give ES-DE's menu one.
+
+A release build, APK sha256 `ad8953ee2a7754c8b5e06807cee67b2590f292305a4594683a67bc413a007c6a`, counted each press's keys and backed the prompts. It was tried with Super Mario World picked in the switcher:
+
+- **Picks reached their game.** From Last Played it took 1 press and 146 ms. From the Arcade list it took 38 presses and 1091 ms.
+- **A first key eaten by the screensaver was sent again and counted.** ES-DE logged the key, `screensaver-end "cancel"`, the resend, then Down, Down, Up, Up. The game launched 527 ms after the pick.
+- **The prompts read clearly.** Under TechDweeb and Analogue OS Menu, the detail line, the count, Browse and Play/Back each sat in a round pill of the theme's background. The user looked at the before-and-after shots and said: "the after shots are good." MinUI Menu (Overlay), which has its own prompt background, looked as before.
+- **From the Arcade list, steering went the long way round.** It walked forward through every system and logged no `learned` line, the same as on 2026-11-25. Last Played's cursor was already on the pick, so the walk launched without confirming the list, and the ring learned nothing.
+
+A second release build, APK sha256 `8314bf236bcbc3e2f71f2af09a7c14c2f12d7e5405772856780bc26e6023da6b`, learns from such a walk when the ring already places Last Played where it ended:
+
+- **The first pick from the Arcade list learned the ring.** It took 38 presses, then logged `learned` with 37 lists, Arcade 37 from Last Played.
+- **The next pick from the Arcade list went one list back.** It took 2 presses and 163 ms: Down, Left into Last Played onto Super Mario World, then A.

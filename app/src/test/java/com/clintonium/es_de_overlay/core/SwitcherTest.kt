@@ -403,6 +403,40 @@ class SwitcherTest {
     }
 
     @Test
+    fun `a press sent again is done only once ES-DE has logged a key for each send`() {
+        val down = "Nov 26 08:15:08 Debug:  Window::logInput(Keyboard): Key Down, isMappedTo=down, value=1"
+        val up = "Nov 26 08:15:08 Debug:  Window::logInput(Keyboard): Key Down, isMappedTo=down, value=0"
+        fun select(rom: String) = "Nov 26 08:15:08 Debug:  Scripting::fireEvent(): game-select \"/storage/ROMs/$rom\" \"Name\" \"${rom.substringBefore('/')}\" \"System\""
+        fun game(rom: String) = Selection.Game("/storage/ROMs/$rom", rom.substringBefore('/'))
+        // Found on the Nova: the first Down logged nothing for 300 ms, was sent again, and then both landed.
+        val late = PressLog().apply { sent = 2 }
+        assertEquals(listOf(null, null, null, null, game("androidgames/TMNT.app")), listOf(down, select("fbneo/1941.zip"), up, down, select("androidgames/TMNT.app")).map(late::take))
+        // The first only ended ES-DE's screensaver.
+        val screensaver = PressLog().apply { sent = 1 }
+        assertNull(screensaver.take(down))
+        assertNull(screensaver.take("Nov 25 09:37:30 Debug:  Scripting::fireEvent(): screensaver-end \"cancel\" \"\" \"\" \"\""))
+        screensaver.sent = 2
+        assertEquals(listOf(null, game("snes/Zelda.zip")), listOf(down, select("snes/Zelda.zip")).map(screensaver::take))
+        // ES-DE never got the first: the selection waits for a key that won't come, and is there once the wait is out.
+        val dropped = PressLog().apply { sent = 2 }
+        assertEquals(listOf(null, null), listOf(down, select("snes/Zelda.zip")).map(dropped::take))
+        assertEquals(game("snes/Zelda.zip"), dropped.selected)
+        // A nudged D-pad's, before any key of the press, isn't the press's.
+        val nudged = PressLog().apply { sent = 1 }
+        assertNull(nudged.take(select("snes/Zelda.zip")))
+        assertNull(nudged.selected)
+    }
+
+    @Test
+    fun `a first press that lands twice still reaches the top of Last Played`() {
+        val esde = FakeEsde(listOf(recents, snes, gb), 0, intArrayOf(0, 0, 0))
+        var first = true
+        val press = { step: Step -> if (first) esde.press(step).also { first = false }; esde.press(step) }
+        assertTrue(steer(Steering(recents, 0), esde.game, press, { null }, { esde.launched = esde.game.path; true }))
+        assertEquals("/storage/ROMs/snes/Super Mario World.zip", esde.launched)
+    }
+
+    @Test
     fun `it fails without launching when Last Played isn't found or nothing is logged`() {
         val esde = FakeEsde(listOf(gb, snes), 0, intArrayOf(0, 0))
         assertFalse(esde.run(Steering(recents, 1)))
@@ -526,6 +560,21 @@ class SwitcherTest {
         assertTrue(Step.NEXT_SYSTEM !in again.pressed)
         // A walk back from a known place gives the size.
         assertEquals(lap.copy(size = 5), back.learned)
+    }
+
+    @Test
+    fun `a walk that lands straight on its target learns when the ring puts Last Played there`() {
+        // Found on the Nova: Last Played's cursor already on the pick, so nothing on the way confirms the list.
+        fun walk(known: SystemRing) = Steering(recents, 1, canGoBack = true, ring = known).also {
+            assertTrue(FakeEsde(ring(a, b, c, d), 0, intArrayOf(0, 0, 0, 0, 1)).run(it))
+        }
+        assertEquals(lap, walk(SystemRing(mapOf("psx" to 1))).learned)
+        // A ring that puts Last Played elsewhere, or knows none of the lists passed, learns nothing from it.
+        assertNull(walk(SystemRing(mapOf("psx" to 2))).learned)
+        assertNull(walk(SystemRing()).learned)
+        // Back from a known list, one press, only a known size places it.
+        assertEquals(lap.copy(size = 5), walk(lap.copy(size = 5)).learned)
+        assertNull(walk(lap).learned)
     }
 
     @Test

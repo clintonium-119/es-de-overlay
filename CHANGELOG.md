@@ -6,6 +6,9 @@ What changed in each version of ES-DE Overlay. A release's notes on GitHub are i
 
 - The game switcher shows upright arcade games, such as 1941 and 1943, as they were on the screen, not on their side. When RetroArch saves its auto state as it closes, Quit Game, Home and RetroArch's own *Quit* hotkey on the controller now keep a picture of the screen first, and the switcher shows it in place of the state's picture. Quitting RetroArch takes about a second longer for it, with a notice over the game meanwhile, *Capturing Screenshot* and then *Quitting*.
 - A game played with the device turned on its side shows on its side in the switcher, so you know to turn the device before you go back to it.
+- The game switcher no longer fails now and then with *Couldn't reach … in ES-DE*. When ES-DE had been idle and was slow to take the first key press, the press was sent again and both landed, and the switcher lost count of where ES-DE was. It now waits until ES-DE has logged every press it sent.
+- From a list just past Last Played, such as Arcade, the switcher learns to go one list back instead of round every system. It used to learn nothing from a walk that ended with Last Played's cursor already on the game you picked, which is often where it is.
+- Under themes whose button prompts have no background of their own, such as TechDweeb and Analogue OS Menu, the switcher's Play, Back and Browse prompts and its game details sit on the theme's background colour, so they read over the game's picture.
 
 ## 1.4.0 - 2026-11-23
 

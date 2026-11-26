@@ -51,6 +51,7 @@ import com.clintonium.es_de_overlay.core.LeaveWatch
 import com.clintonium.es_de_overlay.core.Look
 import com.clintonium.es_de_overlay.core.Overwrite
 import com.clintonium.es_de_overlay.core.Pick
+import com.clintonium.es_de_overlay.core.PressLog
 import com.clintonium.es_de_overlay.core.PictureSource
 import com.clintonium.es_de_overlay.core.ASPECT_SETTINGS
 import com.clintonium.es_de_overlay.core.CORE_ASPECT_OPTIONS
@@ -986,25 +987,24 @@ class HelperService : Service() {
                 }
                 var presses = 0
                 var selected = start
-                // A press ES-DE doesn't log is sent again: the first can arrive before ES-DE has the keys back. A in
-                // the system view isn't: sent twice, the second could launch the game the opened list is on.
+                // A press ES-DE doesn't log is sent again: the first can arrive before ES-DE has the keys back, or
+                // only end its screensaver. A in the system view isn't: sent twice, the second could launch the game
+                // the opened list is on.
                 fun press(step: Step): Selection? {
                     // What ES-DE logged before this press is passed over.
                     lines()
+                    val sends = PressLog()
+                    val logged = { line: String ->
+                        if (sends.keys == 0) selection(line)?.let { Log.i(TAG, "switcher: nudged to $it") }
+                        sends.take(line)
+                    }
                     repeat(if (step == Step.OPEN) 1 else 3) {
                         presses++
+                        sends.sent++
                         shell.send("input keyevent ${keys.key(step)}")
-                        // ES-DE logs a key before what it selects for it, so only a selection after the key's own line
-                        // counts. One before it is a nudged D-pad's: taken for this press's, every later press would
-                        // be taken for the one before it.
-                        var keyed = false
-                        val logged = { line: String ->
-                            if ("logInput(Keyboard)" in line && "value=1" in line) keyed = true
-                            val found = selection(line)
-                            if (found != null && !keyed) Log.i(TAG, "switcher: nudged to $found")
-                            found?.takeIf { keyed }
-                        }
-                        await(if (step == Step.OPEN) 1_000 else 300, logged)?.let { found ->
+                        // Once ES-DE has moved, a send it never logged a key for is given up when the wait is out.
+                        (await(if (step == Step.OPEN) 1_000 else 300, logged) ?: sends.selected)?.let { found ->
+                            if (sends.keys != sends.sent) Log.i(TAG, "switcher: ${sends.keys} of ${sends.sent} sends logged for $step")
                             selected = found
                             return found
                         }

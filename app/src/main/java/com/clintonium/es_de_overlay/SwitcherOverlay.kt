@@ -135,9 +135,19 @@ class SwitcherOverlay(private val context: Context) {
             setPadding(inset, (2 * textPx * capCentring(font)).toInt(), inset, 0)
             height = rowPx
         }
-        val detail = helpText(context, theme, screenW, screenH)
-        val count = helpText(context, theme, screenW, screenH)
-        val update = helpText(context, theme, screenW, screenH).apply { text = "Updating" }
+        // A theme whose help has no background draws its prompts on its own screen, where they read. Over the picture
+        // they get that screen's colour in a round pill, as the title does, padded where the theme gives no padding.
+        fun <V : View> backed(pill: V) = pill.apply {
+            if (helpFill != null) return@apply
+            (background as GradientDrawable).apply { setColor(look.background); cornerRadius = screenH.toFloat() }
+            if (look.helpPadding.all { it == 0f }) {
+                val em = look.helpFontSize * screenH
+                setPadding((em * 0.7f).toInt(), (em * 0.35f).toInt(), (em * 0.7f).toInt(), (em * 0.35f).toInt())
+            }
+        }
+        val detail = backed(helpText(context, theme, screenW, screenH))
+        val count = backed(helpText(context, theme, screenW, screenH))
+        val update = backed(helpText(context, theme, screenW, screenH).apply { text = "Updating" })
         // The whole picture, in its own shape, on black where it isn't the screen's.
         val art = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
         // The mockup's strip at 1280 × 960: 4:3 pictures 132 px tall, 20 px apart, the selected one 156 px tall,
@@ -224,7 +234,7 @@ class SwitcherOverlay(private val context: Context) {
             // ES-DE's gamelist margins, as the menu's: 5% of the width at the sides, 7% of the height above, 6% below.
             val pills = FrameLayout(context).apply {
                 setPadding((screenW * 0.05f).toInt(), (screenH * 0.07f).toInt(), (screenW * 0.05f).toInt(), (screenH * 0.06f).toInt())
-                val buttons = helpPill(context, theme, screenW, screenH, listOf("a" to "Play", "b" to "Back"))
+                val buttons = backed(helpPill(context, theme, screenW, screenH, listOf("a" to "Play", "b" to "Back")))
                 // The strip says where the game is and that left and right move, so there the buttons take the corner.
                 val corner = if (strip) buttons else count
                 val gapX = (textPx * 0.35f).toInt()
@@ -256,7 +266,7 @@ class SwitcherOverlay(private val context: Context) {
                 if (strip) {
                     actions = listOf(buttons)
                 } else {
-                    val switch = helpPill(context, theme, screenW, screenH, listOf("left/right" to "Browse"))
+                    val switch = backed(helpPill(context, theme, screenW, screenH, listOf("left/right" to "Browse")))
                     bottom(switch, Gravity.START)
                     bottom(buttons, Gravity.END)
                     actions = listOf(switch, buttons)

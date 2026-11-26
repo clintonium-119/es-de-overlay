@@ -287,6 +287,34 @@ fun selection(line: String): Selection? = selectedRom(line)?.let { Selection.Gam
     ?: line.substringAfter("Scripting::fireEvent(): system-select \"", "").substringBefore('"').ifEmpty { null }?.let(Selection::System)
 
 /**
+ * One steering press as ES-DE logs it, sent [sent] times: a press ES-DE logs nothing for is sent again, and the first
+ * can still land late, moving ES-DE once more. ES-DE logs every key it gets, even one that only ends its screensaver,
+ * before what it selects for it; a selection with no key before it is a nudged D-pad's. The press is done only once
+ * ES-DE has logged a key for each send and a selection after the last: taking the first selection would leave a key
+ * in flight, and every later press would read the selection of the one before it.
+ */
+class PressLog {
+    var sent = 0
+    /** Keys ES-DE has logged for this press. */
+    var keys = 0
+        private set
+    /** The last selection ES-DE logged after one of this press's keys. */
+    var selected: Selection? = null
+        private set
+    private var fresh = false
+
+    /** Folds in a line of ES-DE's log: the press's selection once it's done, else null. */
+    fun take(line: String): Selection? {
+        if ("logInput(Keyboard)" in line && "value=1" in line) {
+            keys++
+            fresh = false
+        }
+        if (keys > 0) selection(line)?.let { selected = it; fresh = true }
+        return selected?.takeIf { fresh && keys >= sent }
+    }
+}
+
+/**
  * How many steps ES-DE's lists are from Last Played by the next-system key ([ahead], by the system a list's selection
  * names), and how many lists there are ([size]), as walks that reached Last Played found them. Without a size the
  * longest distance known stands for it.
@@ -296,6 +324,16 @@ data class SystemRing(val ahead: Map<String, Int> = emptyMap(), val size: Int? =
     fun backward(system: String?): Boolean {
         val distance = system?.let(ahead::get) ?: return false
         return distance * 2 > (size ?: (ahead.values.max() + 1))
+    }
+
+    /**
+     * Whether this ring puts Last Played where a walk ([backward] or not) has arrived after leaving lists of the systems
+     * [passed], in order: one of them is as many moves away as its known distance. A walk back needs the size for it.
+     */
+    fun reaches(passed: List<String?>, backward: Boolean): Boolean = passed.withIndex().any { (i, system) ->
+        val distance = system?.let(ahead::get) ?: return@any false
+        val away = passed.size - i
+        if (backward) distance == size?.minus(away) else distance == away
     }
 
     /**
@@ -347,7 +385,7 @@ enum class Step {
  * the expected row moves on as well. The system view names its system, so a list opened on Last Played's name is
  * known to be it, and is opened only with that name just logged for a press of the walk's own.
  * Lists are walked the way [ring] has Last Played nearer, back only with [canGoBack]; [learned] is the ring as this
- * walk found it, once it launches from Last Played.
+ * walk found it, once it launches from Last Played, known as such or where the ring puts it.
  */
 class Steering(
     private val recents: List<String>,
@@ -431,7 +469,9 @@ class Steering(
         val confirmed = last == Step.NEXT_GAME && row < 0 && seen >= 0 && at == seen + 1
         when {
             at == target -> {
-                if (known || row >= 0 || confirmed) learned = ring.learned(passed, backward == true)
+                // Landed straight on it, Last Played is known by where the ring puts it: Last Played's cursor is often
+                // already on the pick, and such a walk would otherwise never teach the ring its first list.
+                if (known || row >= 0 || confirmed || ring.reaches(passed, backward == true)) learned = ring.learned(passed, backward == true)
                 row = at
                 last = Step.LAUNCH
                 return Step.LAUNCH
