@@ -4,6 +4,8 @@ What changed in each version of ES-DE Overlay. A release's notes on GitHub are i
 
 ## Unreleased
 
+## 1.4.1 - 2026-11-26
+
 - The game switcher shows upright arcade games, such as 1941 and 1943, as they were on the screen, not on their side. When RetroArch saves its auto state as it closes, Quit Game, Home and RetroArch's own *Quit* hotkey on the controller now keep a picture of the screen as they're pressed, and the switcher shows it in place of the state's picture. It's the game as it looked, shader and all. Where the shader draws each frame as two sub-frames (RetroArch's *Shader Sub-Frames* at 2), the screen is read three times at once and a bright and a dark sub-frame are blended, so the picture isn't one washed-out or dark sub-frame.
 - Home closes a RetroArch game sooner: the app no longer waits before pressing *Quit* when no menu was open.
 - The strip's small pictures are shrunk smoothly from the whole picture, so a shader's scanlines or mask don't show as bands in them.
