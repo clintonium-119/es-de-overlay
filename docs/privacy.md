@@ -30,7 +30,7 @@ You grant each of these yourself, in Android's settings or permission dialogs, a
   - for the game switcher, sending ES-DE the key presses that move it to the game you pick;
   - reading emulators' files for the switcher's pictures: RetroArch's settings, overrides, core options and the pictures beside its save states; PPSSPP's `ppsspp.ini` and the pictures beside its save states; ARMSX2's `PCSX2-Android.ini` and the screenshot inside each of its save states. To find PPSSPP's and ARMSX2's folders, it lists folder names up to four levels deep in internal storage and on the SD card.
 - **A picture of the game's screen when you quit it**, with **Keep a picture of where you left a game** on (the default) and Shizuku ready.
-  - Quit Game, Home when it ends the game, and RetroArch's *Quit* hotkey when the app takes it, read the screen once. The picture is kept in the app's own private storage, one per game, and replaced the next time you quit that game. Copies of PPSSPP's and ARMSX2's save-state pictures are kept there too.
+  - Quit Game, Home when it ends the game, and RetroArch's *Quit* hotkey when the app takes it, read the screen, three times at once where RetroArch's shader draws sub-frames; two of the three are held for a moment in files under `/data/local/tmp`, which only the shell user can reach, and deleted. The picture is kept in the app's own private storage, one per game, and replaced the next time you quit that game. Copies of PPSSPP's and ARMSX2's save-state pictures are kept there too.
   - Only the game switcher shows them. Nothing sends them anywhere, and uninstalling the app or clearing its storage deletes them.
 
 ## When it goes online

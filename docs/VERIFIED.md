@@ -500,3 +500,74 @@ A second release build, APK sha256 `8314bf236bcbc3e2f71f2af09a7c14c2f12d7e540577
 
 - **The first pick from the Arcade list learned the ring.** It took 38 presses, then logged `learned` with 37 lists, Arcade 37 from Last Played.
 - **The next pick from the Arcade list went one list back.** It took 2 presses and 163 ms: Down, Left into Last Played onto Super Mario World, then A.
+
+## Reading the screen under shader sub-frames (2026-11-26)
+
+Probed on the Nova over adb with the shaders on (crt-beam-simulator then crt-gdv-mini-ultra, `video_shader_subframes = "2"`, Vulkan) and Super Mario World running on its Special World map. RetroArch's source was read at 1.22.2.
+
+- **One read of the screen is one sub-frame, and neither is the picture.** Of six `screencap` reads, five were the dark sub-frame (mean 81 of 255, the background red) and one the bright (mean 138, washed out). The picture as it looks, and as RetroArch's own state picture has it, is beige.
+- **Two reads 8 ms apart are usually one of each.** `screencap` to a file in the background, `sleep 0.008`, `screencap` again, ten times: eight pairs were a bright and a dark read, and two were the same frame twice, with no pixel different.
+- **Their mean in linear light is the picture.** A pair blended that way matched the state picture's colours, with the shader's mask in it. Shrunk to the strip's size by point sampling, the mask shows as a grid; averaged down, it's clean.
+- **A RetroArch that loses focus stops drawing.** On Android it sets itself paused and idle and swaps in a stub frame on `APP_CMD_LOST_FOCUS` (`input/drivers/android_input.c`), whatever *Pause Content When Not Active* says, so the screen holds one sub-frame. Its Vulkan driver draws a frame as a single sub-frame only while paused by hotkey, in its menu, fast-forwarding or in slow motion (`gfx/drivers/vulkan.c`).
+- **Keyboard keys from the shell don't reach its hotkeys.** P, RetroArch's default pause key (`input_pause_toggle = "p"`), sent with `input keyevent 44` and with `input keycombination -t 120 44 44`, didn't pause the game. RetroArch registers at most three keyboards and takes later ones for controllers (`MAX_NUM_KEYBOARDS`); the Nova has five keyboard devices, and none of its input nodes sends Escape. So *Quit* can be pressed only as the controller's combo.
+- **RetroArch never takes a save state's picture from the screen.** `video_gpu_screenshot` is `"true"` on the Nova and the state picture is still the core's own frame (`tasks/task_screenshot.c`: "Avoid GPU screenshots with savestates").
+- **Not checked:** a scene with fast motion, three or more sub-frames, RetroArch's own black frame insertion, and the glcore driver.
+
+A first release build with the read, APK sha256 `940feffdfe6803f4463cca2b6489fe8304e89f61cbb36372785b8d2c6dcd63ed`, read a pair 8 ms apart, up to three times, with no shader toggle and no notice. The user ran five quits with the shaders on:
+
+- **Quits were quicker, and every one saved.**
+  - 1941 by Select + Start: ES-DE in front 0.89 s after Start went down (1.68 s on the build before).
+  - 1941 by Home: 0.66 s after Home was let go (1.56 s).
+  - 1941 by Quit Game: 1.05 s (1.55 s).
+  - Super Mario World by Home: 0.58 s.
+  - No quit was force-stopped, each game's `.state.auto` was written as it quit, and `video_shader_enable` stayed `"true"`.
+- **Exit under a held Select works.** With Select kept down for about a second after Start, the log shows Exit sent as the tap alone, and RetroArch quit 0.43 s after Start was let go, its state written.
+- **The pair was seldom one of each.** Only 3 of 13 pairs were a bright and a dark read. After 1941's Select + Start and Home quits all three tries were the bright sub-frame (levels 59 and 60, then 64 and 64; its dark one is 6), so a single bright sub-frame was kept. Reads took 282 to 454 ms.
+- **Reads begun 100 ms after the menu closes come too soon.** Quit Game's first two pairs were alike and the third, begun about 400 ms after the close, was one of each: RetroArch isn't drawing again until it has the keys back.
+- **The strip's small pictures are clean** with mipmaps on: no grid in Super Mario World's.
+- **RetroArch's own messages are in the picture.** Super Mario World, quit two seconds after its launch, was kept with RetroArch's *Auto-loading savestate* message at the bottom.
+
+Measured over adb the same day with 1941 running, by the level of a strip across each read:
+
+- **A pair is hit and miss whatever the gap.** One of each in 6 of 10 pairs with no sleep, 6 with 1 ms, 8 with 4 ms, 7 with 8 ms and 4 with 12 ms.
+- **Three or four reads started at once hold both sub-frames** in 14 of 15 tries each, in 84 to 100 ms; one read takes about 70 ms and a pair about 90. Shizuku's server runs in the same cpuset and at the same priority as adb's shell.
+
+A second release build, APK sha256 `79f379ee19e3aa7efff810da0b7beee97d652f6c7aabe00948741b13017a5d07`, read the screen three times at once and blended the brightest read with the darkest, and read after the 300 ms wait on Quit Game. The user ran six quits with the shaders on, then two more of 1941 in portrait:
+
+- **Every read held both sub-frames at the first try** in the six quits, in 143 to 171 ms, with levels such as 56/7/7 and 23/23/90. One of the two later portrait reads was the dark sub-frame three times (10/10/10), then the bright three times (104/104/104), then both (10/104/105), 427 ms in all.
+- **Quits were quicker again.**
+  - 1941 by Select + Start: ES-DE in front 0.70 s after Start went down.
+  - 1941 by Home: 0.49 s after Home was let go.
+  - 1941 held in portrait, by Home: 0.55 s, read as 960×1280 at rotation 0 and turned 270°.
+  - 1941 by Quit Game: 0.96 s, the read coming 300 ms after the menu closed and Exit 463 ms after.
+  - Super Mario World by Home: 0.38 s.
+  - Super Mario World by Select + Start with Select kept down: Exit sent as the tap alone, ES-DE in front 0.43 s after Start was let go.
+- **Every quit saved.** No quit was force-stopped or had Exit pressed twice, each game's `.state.auto` was written as it quit, `video_shader_enable` stayed `"true"`, and no read file was left in `/data/local/tmp`.
+- **The user saw no notice and no flicker**, and judged the pictures right: "It was mostly ideal."
+- **The strip's small pictures showed bands.** The user: "the thumbnails show what looks to be some banding from the shaders." The strip drew them unfiltered, as it does the whole picture, so the shader's mask was sampled a pixel in seven and the mipmaps went unused. A read shrunk both ways on the desktop shows a grid with point sampling and none with mipmaps and filtering. The build after this one filters the strip's pictures.
+
+A third release build, APK sha256 `31b8d5542b7e91807b43fd7c2babf3d1bcce1d9745c2cb7d395f1b98f9c30310`, drew the strip's pictures filtered. The user ran the five landscape quits again:
+
+- **Quits stayed quick, and each read was blended.** Three reads held both sub-frames at the first try (138 to 158 ms) and two at the second (about 300 ms).
+  - 1941 by Select + Start: 0.74 s after Start went down.
+  - 1941 by Home: 0.59 s after Home was let go.
+  - 1941 by Quit Game: 1.03 s. Its first read, 300 ms after the menu closed, was one sub-frame three times (52/52/52): RetroArch wasn't drawing again yet. The user had accepted the second build's 0.96 s rather than read as the menu opens: "I would not want to slow down general overlay menu access to speed this up."
+  - Super Mario World by Home: 0.47 s; by Select + Start with Select kept down, 0.45 s after Start was let go, Exit sent as the tap alone.
+  - No quit was force-stopped or had Exit pressed twice.
+- **Filtering with mipmaps doesn't clear the strip.** The user still saw vertical bands in Super Mario World's small picture, and a screenshot shows them, fainter than unfiltered. The same screenshot shrunk on the desktop with a tent filter in linear light shows none. The build after this one shrinks each strip picture that way beforehand.
+- **A picture trimmed to an odd width shows bands.** The user saw vertical bands down the left fifth of 1941's whole picture. Its read was trimmed from 1280 to 721 pixels wide, so centred it sat half a pixel off the screen's pixels and was drawn unfiltered. Super Mario World's, 1280 wide, looked "perfect". The build after this one cuts the same from both sides.
+- **The START NOW prompt closes if the screen turns as it opens.** Opened over adb after the user's portrait quits, the prompt was closed within a quarter of a second four times running, the log showing the screen go to portrait and back. The user started the service from the app's settings instead.
+- **The USB link dropped** at 17:03:12, after the last quit: this build's saved states and shader setting weren't read back.
+
+A fourth release build, APK sha256 `8348e9dd5688377b89764c8400fa97946e6c5000d7eaef6bb32c0ff648020121`, shrinks each strip picture beforehand with a tent filter in linear light and cuts black bars evenly. The user ran five quits with the shaders on:
+
+- **The strip and the whole pictures are clean.** The user: "They look perfect - both the full image and the thumbnails." Screenshots of the switcher on Super Mario World and on 1941 show no bands in the strip or down 1941's left side. 1941's read is now trimmed to 720 pixels wide.
+- **Quits, each read blended:**
+  - 1941 by Select + Start: ES-DE in front 0.67 s after Start went down; read in 163 ms at the first try.
+  - 1941 by Home: 0.49 s after Home was let go; read in 163 ms at the first try.
+  - 1941 by Quit Game: 0.95 s; read in 156 ms at the first try, 300 ms after the menu closed, and the menu had opened in 72 ms.
+  - Super Mario World by Select + Start with Select kept down: Exit sent as the tap alone, ES-DE in front 0.40 s after Start was let go; read in 145 ms.
+  - 1941 held in portrait, by Home: 0.55 s; read as 960×1280 at rotation 0 and turned 270°, in 274 ms at the second try (99/99/99, then 7/98/7). The switcher shows it on its side, its top to the left.
+- **Every quit saved.** No quit was force-stopped or had Exit pressed twice. 1941's `.state.auto` read back at 17:13:20 after the Select + Start quit, 17:15:57 after Quit Game and 17:18:02 after the portrait Home quit, and Super Mario World's at 17:13:47; the landscape Home quit's was overwritten by the Quit Game 21 s later before it was read. `video_shader_enable` stayed `"true"`, and no read file was left in `/data/local/tmp`.
+- **The user saw no notice and no flicker.**
+

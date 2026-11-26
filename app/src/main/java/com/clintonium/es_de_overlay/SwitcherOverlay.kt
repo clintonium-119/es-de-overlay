@@ -81,6 +81,9 @@ class SwitcherOverlay(private val context: Context) {
     /** Game [i]'s picture has been read: the switcher takes it if the game is on screen. */
     fun pictureArrived(i: Int) = onPicture(i)
 
+    /** The width and height, in pixels, of the strip's largest box, the selected game's. */
+    val stripBox get() = (screenH * SELECTED_H * 4 / 3).toInt() to (screenH * SELECTED_H).toInt()
+
     /** How many games either side of the one shown the strip shows; 0 with one game a screen. */
     var neighbours = 0
         private set
@@ -99,6 +102,7 @@ class SwitcherOverlay(private val context: Context) {
         details: ((Int) -> String)?,
         start: Int,
         picture: (Int) -> Bitmap?,
+        small: (Bitmap) -> Bitmap?,
         updating: (Int) -> Boolean,
         onSelect: (Int) -> Unit,
         onPick: (Int) -> Unit,
@@ -153,7 +157,7 @@ class SwitcherOverlay(private val context: Context) {
         // The mockup's strip at 1280 × 960: 4:3 pictures 132 px tall, 20 px apart, the selected one 156 px tall,
         // as many either side as fit between the side margins, in a band 214 px tall.
         val thumbH = screenH * 0.1375f
-        val selectedH = screenH * 0.1625f
+        val selectedH = screenH * SELECTED_H
         val gap = (screenH * 0.0208f).toInt()
         val fit = if (strip) ((screenW * 0.9f - selectedH * 4 / 3) / 2 / (thumbH * 4 / 3 + gap)).toInt() else 0
         // As many either side as the list has, so none shows twice.
@@ -193,13 +197,16 @@ class SwitcherOverlay(private val context: Context) {
         var shown = -1
         // Unfiltered, so pixel art keeps hard edges, as ES-DE's default nearest interpolation scales it.
         fun drawable(i: Int) = picture(i)?.let { BitmapDrawable(context.resources, it).apply { isFilterBitmap = false } }
+        // A strip picture is the one shrunk for it beforehand, where the whole picture is bigger than its box: shrunk
+        // here several times over, a pixel picked here and there, a shader's mask or scanlines come out as bands.
+        fun thumb(i: Int) = picture(i)?.let { whole -> small(whole)?.let { BitmapDrawable(context.resources, it) } } ?: drawable(i)
         fun drawArt() {
             art.setImageDrawable(drawable(shown))
             details?.let { detail.text = it(shown) }
             update.visibility = if (updating(shown)) View.VISIBLE else View.GONE
             offsets.forEachIndexed { n, offset ->
                 val i = Math.floorMod(shown + offset, titles.size)
-                val image = drawable(i)
+                val image = thumb(i)
                 thumbArts[n].setImageDrawable(image)
                 thumbTitles[n].text = if (image == null) titles[i] else null
             }
@@ -316,5 +323,7 @@ class SwitcherOverlay(private val context: Context) {
             KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_BUTTON_B,
             KeyEvent.KEYCODE_BACK,
         )
+        /** The selected game's strip picture, as a part of the screen's height: 156 px of the mockup's 960. */
+        const val SELECTED_H = 0.1625f
     }
 }

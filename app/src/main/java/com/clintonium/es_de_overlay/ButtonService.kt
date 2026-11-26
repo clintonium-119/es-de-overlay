@@ -16,6 +16,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.clintonium.es_de_overlay.core.isMenuKey
 import com.clintonium.es_de_overlay.core.screensaverEvent
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -37,8 +38,8 @@ class ButtonService : AccessibilityService() {
     private var menuTaken = false
     /** Whether the overlay took the controller's Home press in progress, decided on its first down. */
     private var homeTaken = false
-    /** The gamepad keys down now, for telling RetroArch's hotkey combos. */
-    private val held = mutableSetOf<Int>()
+    /** The gamepad keys down now, for telling RetroArch's hotkey combos; changed on the main thread, read on any. */
+    private val held = ConcurrentHashMap.newKeySet<Int>()
     /** The key of a press of RetroArch's Exit the overlay took, until it lets go. */
     private var exitTaken: Int? = null
     private val io = Executors.newSingleThreadScheduledExecutor()
@@ -205,7 +206,10 @@ class ButtonService : AccessibilityService() {
 
         // Set only while Android has the service connected, and cleared when it's destroyed.
         @SuppressLint("StaticFieldLeak")
-        private var instance: ButtonService? = null
+        @Volatile private var instance: ButtonService? = null
+
+        /** Any thread: whether the gamepad key [keyCode] is down, as far as Android has said. */
+        fun holding(keyCode: Int) = instance?.held?.contains(keyCode) == true
 
         /** Any thread: force-stops [pkg], closes the menu and returns to ES-DE. Does nothing while the service is off. */
         fun forceStop(pkg: String) {

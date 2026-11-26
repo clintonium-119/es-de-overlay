@@ -56,7 +56,8 @@ The app presses RetroArch's *Quit* and *Shaders (Toggle)* hotkeys as your contro
 - **A game launched by hand over a RetroArch left running isn't retried**; only the switcher's own launches are.
 - **An upright arcade game quit from RetroArch's own menu shows on its side.** RetroArch saves its picture unturned, and only Quit Game, Home and the *Quit* hotkey keep a picture of the screen to show instead. The same goes for:
   - the *Quit* hotkey with RetroArch's *Confirm Quit* on, which the app leaves to RetroArch;
-  - a shader on with no *Shaders (Toggle)* hotkey on the controller, where the app keeps no picture rather than one with the shader in it.
+  - a shader that draws each frame as three or more sub-frames (*Shader Sub-Frames* above 2), where the app keeps no picture rather than one sub-frame.
+- **A kept picture is the screen as it was, RetroArch's own messages included.** Quit in a game's first seconds and its *Auto-loading savestate* message is in the picture.
 - **A game played with the device turned shows turned against ES-DE as it was before the game.** Come back to ES-DE with the device the other way up and that picture is upside down.
 
 ## Capture

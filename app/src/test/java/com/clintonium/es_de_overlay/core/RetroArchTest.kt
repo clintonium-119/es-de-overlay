@@ -139,6 +139,60 @@ class RetroArchTest {
     }
 
     @Test
+    fun `a fresh press lets the hold go before it holds it`() {
+        val n = "/dev/input/event7"
+        val press = pressCommand(n, Combo(314, 315), holdMs = 150, fresh = true)!!.split("; ")
+        assertEquals(listOf("sendevent $n 1 314 0", "sendevent $n 0 0 0", "sendevent $n 1 314 1", "sendevent $n 0 0 0", "sleep 0.150"), press.take(5))
+        assertEquals(pressCommand(n, Combo(314, 315), holdMs = 150)!!.split("; "), press.drop(2))
+        // Exit with the hotkey button already under the player's thumb: the tap alone, fresh or not.
+        assertEquals(pressCommand(n, Combo(null, 315), holdMs = 150), pressCommand(n, Combo(314, 315).copy(hold = null), holdMs = 150, fresh = true))
+    }
+
+    @Test
+    fun `two sub-frames blend to their mean in linear light`() {
+        for (v in 0..255) assertEquals(v, blended(v, v))
+        assertEquals(188, blended(0, 255))
+        assertEquals(188, blended(255, 0))
+        // A 2 × 1 read with a 16-byte header: the bright sub-frame's pixels with the dark one's.
+        fun raw(vararg pixels: Int) = byteArrayOf(2, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0) + pixels.map { it.toByte() }
+        val bright = raw(255, 255, 255, 255, 200, 100, 0, 255)
+        val dark = raw(0, 255, 0, 255, 200, 0, 0, 255)
+        assertEquals(16, rawPixelsStart(bright))
+        assertEquals(
+            listOf(188, 255, 188, 255, 200, blended(100, 0), 0, 255),
+            blendSubframes(bright, dark, 16).drop(16).map { it.toInt() and 255 },
+        )
+        assertEquals(bright.take(16), blendSubframes(bright, dark, 16).take(16))
+    }
+
+    @Test
+    fun `a raw read is its header and its rows, in RGBA`() {
+        val header = byteArrayOf(2, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+        assertEquals(12, rawPixelsStart(header + ByteArray(8)))
+        assertEquals(16, rawPixelsStart(header + ByteArray(12)))
+        // Rows missing or left over, another format, or no header at all.
+        assertNull(rawPixelsStart(header + ByteArray(4)))
+        assertNull(rawPixelsStart(header + ByteArray(13)))
+        assertNull(rawPixelsStart(byteArrayOf(2, 0, 0, 0, 1, 0, 0, 0, 4, 0, 0, 0) + ByteArray(8)))
+        assertNull(rawPixelsStart(ByteArray(3)))
+        assertEquals(20, meanLevel(header + byteArrayOf(10, 20, 30, 0, 99, 99, 99, 0), 12))
+    }
+
+    @Test
+    fun `the same frame read twice is told from two sub-frames`() {
+        // The Nova's reads of Super Mario World: a dark and a bright sub-frame, and one frame caught twice.
+        assertTrue(subframesDiffer(81, 133))
+        assertTrue(subframesDiffer(133, 81))
+        assertFalse(subframesDiffer(136, 136))
+        assertFalse(subframesDiffer(138, 136))
+        // Two frames of 1941 a moment apart, both the bright sub-frame; its dark one is far darker.
+        assertFalse(subframesDiffer(59, 64))
+        assertTrue(subframesDiffer(64, 6))
+        // A dark screen's levels are too close to tell.
+        assertFalse(subframesDiffer(1, 3))
+    }
+
+    @Test
     fun `a node path that isn't an input node gives no command`() {
         for (node in listOf("/dev/input/event7; reboot", "/dev/input/mouse0", "/dev/input/event", "<virtual>", "")) {
             assertNull(node, pressCommand(node, Combo(314, 305), holdMs = 150))

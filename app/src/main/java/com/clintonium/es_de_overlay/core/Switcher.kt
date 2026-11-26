@@ -7,6 +7,8 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
 
 /** A played game: [path] is relative to `<ROMs>/<system>/`, [lastPlayed] ES-DE's raw `YYYYMMDDTHHMMSS`. */
 data class RecentGame(val system: String, val path: String, val name: String, val lastPlayed: String) {
@@ -160,7 +162,9 @@ fun pictureSource(saved: Long?, kept: Long?, resumes: Boolean = false): PictureS
  * The part of a [width] × [height] picture inside plain-black bars baked into it, as a screen capture of a game drawn
  * narrower or shorter than the screen has, as `[left, top, right, bottom]` (right and bottom exclusive). [dark] says
  * whether the pixel at (x, y) is plain black; a line of pixels is a bar when every sampled one is. Bars count only when
- * even on both sides, within 1% of the size, so a dark scene isn't cut, and never take more than half the picture.
+ * even on both sides, within 1% of the size, so a dark scene isn't cut, and never take more than half the picture. The
+ * same is cut from both sides, the narrower bar's width, so the picture stays centred on whole pixels: half a pixel
+ * off and drawn unfiltered, a shader's mask shows as bands.
  */
 fun contentBounds(width: Int, height: Int, dark: (Int, Int) -> Boolean): IntArray {
     // How many lines from one edge are bars, sampling about 64 points along each.
@@ -173,9 +177,70 @@ fun contentBounds(width: Int, height: Int, dark: (Int, Int) -> Boolean): IntArra
     val right = bars(width, height, { width - 1 - it }) { x, y -> dark(x, y) }
     val top = bars(height, width, { it }) { y, x -> dark(x, y) }
     val bottom = bars(height, width, { height - 1 - it }) { y, x -> dark(x, y) }
-    val (l, r) = if (even(left, right, width)) left to right else 0 to 0
-    val (t, b) = if (even(top, bottom, height)) top to bottom else 0 to 0
-    return intArrayOf(l, t, width - r, height - b)
+    val x = if (even(left, right, width)) minOf(left, right) else 0
+    val y = if (even(top, bottom, height)) minOf(top, bottom) else 0
+    return intArrayOf(x, y, width - x, height - y)
+}
+
+/**
+ * [pixels], a [width] × [height] picture as ARGB ints, shrunk to [outWidth] × [outHeight]: each new pixel the mean, in
+ * linear light, of the ones it covers and those beside them, nearer ones counting for more (a tent two new pixels
+ * wide). A shader's mask or scanlines, a few pixels apart, average out; picked a pixel here and there, or averaged in
+ * blocks, they show as bands.
+ */
+fun shrunk(pixels: IntArray, width: Int, height: Int, outWidth: Int, outHeight: Int): IntArray {
+    // For each new pixel along one axis: the first old pixel under its tent, and each one's share.
+    fun taps(size: Int, out: Int): Pair<IntArray, Array<FloatArray>> {
+        val per = size.toDouble() / out
+        val first = IntArray(out)
+        val shares = Array(out) { o ->
+            val centre = (o + 0.5) * per
+            val from = floor(centre - per).toInt().coerceAtLeast(0)
+            val to = ceil(centre + per).toInt().coerceAtMost(size)
+            first[o] = from
+            FloatArray(to - from) { (1 - abs(from + it + 0.5 - centre) / per).coerceAtLeast(0.0).toFloat() }
+                .also { tent -> tent.sum().let { sum -> for (i in tent.indices) tent[i] /= sum } }
+        }
+        return first to shares
+    }
+    val (firstX, sharesX) = taps(width, outWidth)
+    val (firstY, sharesY) = taps(height, outHeight)
+    // Across each row first, in light, three values a pixel.
+    val rows = FloatArray(outWidth * height * 3)
+    for (y in 0 until height) {
+        for (o in 0 until outWidth) {
+            var r = 0f
+            var g = 0f
+            var b = 0f
+            val shares = sharesX[o]
+            var at = y * width + firstX[o]
+            for (share in shares) {
+                val p = pixels[at++]
+                r += share * LIGHT[(p shr 16) and 255]
+                g += share * LIGHT[(p shr 8) and 255]
+                b += share * LIGHT[p and 255]
+            }
+            val i = (y * outWidth + o) * 3
+            rows[i] = r
+            rows[i + 1] = g
+            rows[i + 2] = b
+        }
+    }
+    return IntArray(outWidth * outHeight) {
+        val o = it % outWidth
+        var r = 0f
+        var g = 0f
+        var b = 0f
+        val shares = sharesY[it / outWidth]
+        var at = (firstY[it / outWidth] * outWidth + o) * 3
+        for (share in shares) {
+            r += share * rows[at]
+            g += share * rows[at + 1]
+            b += share * rows[at + 2]
+            at += outWidth * 3
+        }
+        (255 shl 24) or (srgb(r.toDouble()) shl 16) or (srgb(g.toDouble()) shl 8) or srgb(b.toDouble())
+    }
 }
 
 /**

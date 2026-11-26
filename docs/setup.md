@@ -119,7 +119,7 @@ A tip for RetroArch: turn on *Save State Thumbnails* in RetroArch, under *Settin
 With [Shizuku](shizuku.md), the app can press two of RetroArch's own hotkeys for you, as your controller would:
 
 - *Quit*, so [Quit Game](use.md#over-a-retroarch-game), and Home with **Quit games left with Home** on, close RetroArch through its own exit instead of force-closing it.
-- *Shaders (Toggle)*, so a [capture](use.md#capture) or a kept picture shows the game without its shader.
+- *Shaders (Toggle)*, so a [capture](use.md#capture) shows the game without its shader, as does the picture Quit Game keeps of a game RetroArch doesn't save as it closes.
 
 For that, in RetroArch under *Settings > Input > Hotkeys*:
 

@@ -1,5 +1,9 @@
 package com.clintonium.es_de_overlay.core
 
+import kotlin.math.abs
+import kotlin.math.pow
+import kotlin.math.roundToInt
+
 // RetroArch's hotkeys, pressed as the player's controller: RetroArch takes its hotkey-enable button only from the
 // physical controller, so the presses are written to the controller's input node. The combos come from the running
 // RetroArch's retroarch.cfg, a file in shared storage, so nothing read from it reaches the shell but numbers.
@@ -325,18 +329,87 @@ private const val BETWEEN_MS = 300
 /**
  * The `sh` command that presses [keys] (scan codes) on [node] [times] times: [keys]' hold down, a wait of [holdMs]
  * (longer than RetroArch's hotkey block delay), the tap down and up, the hold up, each followed by a sync event. Null
- * when [node] isn't an input node or a code is negative.
+ * when [node] isn't an input node or a code is negative. With [fresh] the hold is let go before it goes down: the
+ * kernel passes a button on only as it changes, so a hold it still has down would reach RetroArch as no press.
  */
-fun pressCommand(node: String, keys: Combo, holdMs: Int, times: Int = 1): String? {
+fun pressCommand(node: String, keys: Combo, holdMs: Int, times: Int = 1, fresh: Boolean = false): String? {
     if (!NODE.matches(node) || keys.tap < 0 || (keys.hold ?: 0) < 0) return null
     fun event(code: Int, value: Int) = listOf("sendevent $node 1 $code $value", "sendevent $node 0 0 0")
     fun sleep(ms: Int) = "sleep ${ms / 1000}.${(ms % 1000).toString().padStart(3, '0')}"
     val press = buildList {
-        keys.hold?.let { addAll(event(it, 1)); add(sleep(holdMs.coerceIn(0, 5_000))) }
+        keys.hold?.let {
+            if (fresh) addAll(event(it, 0))
+            addAll(event(it, 1))
+            add(sleep(holdMs.coerceIn(0, 5_000)))
+        }
         addAll(event(keys.tap, 1))
         add(sleep(TAP_MS))
         addAll(event(keys.tap, 0))
         keys.hold?.let { addAll(event(it, 0)) }
     }
     return (1..times.coerceIn(1, 2)).joinToString("; ${sleep(BETWEEN_MS)}; ") { press.joinToString("; ") }
+}
+
+// A shader that draws each frame as sub-frames (RetroArch's Shader Sub-Frames, for motion clarity on a 120 Hz screen)
+// puts a different picture on the screen each refresh, and the eye sees their mean. One read of the screen is one
+// sub-frame, so the screen is read a few times at once and a read of each sub-frame blended.
+
+/**
+ * Where the pixels start in [raw], `screencap`'s raw output: after a 12- or 16-byte header of width, height and format
+ * (little-endian ints), which must be RGBA_8888, with nothing after the rows. Null for anything else.
+ */
+fun rawPixelsStart(raw: ByteArray): Int? {
+    if (raw.size < 12) return null
+    fun int(at: Int) = (0..3).sumOf { (raw[at + it].toInt() and 255) shl (8 * it) }
+    val start = raw.size - int(0).toLong() * int(4) * 4
+    // PixelFormat.RGBA_8888.
+    return start.toInt().takeIf { int(8) == 1 && start in 12..16 }
+}
+
+/** The mean of red, green and blue over a spread of [raw]'s pixels from [start], 0 to 255: how bright the read is. */
+fun meanLevel(raw: ByteArray, start: Int): Int {
+    var sum = 0L
+    var pixels = 0
+    for (i in start until raw.size - 2 step 4 * 97) {
+        sum += (raw[i].toInt() and 255) + (raw[i + 1].toInt() and 255) + (raw[i + 2].toInt() and 255)
+        pixels++
+    }
+    return if (pixels == 0) 0 else (sum / (3L * pixels)).toInt()
+}
+
+/**
+ * Whether two reads with the mean levels [a] and [b] are a brighter and a darker sub-frame, not the same frame twice
+ * or two frames alike.
+ */
+// ponytail: told by brightness alone, a quarter apart: two frames of a game differ by less unless it flashes. A
+// shader whose sub-frames are as bright as each other (a rolling scan lighting half the screen in each) passes for one
+// frame and is kept as a single read; compare them region by region if one turns up.
+fun subframesDiffer(a: Int, b: Int) = abs(a - b) >= 3 && abs(a - b) * 4 > maxOf(a, b)
+
+/** The sRGB value that looks as [a] and [b] do shown turn about: their mean in linear light. */
+fun blended(a: Int, b: Int) = BLEND[(a shl 8) or b].toInt() and 255
+
+/** How much light each sRGB value, 0 to 255, stands for, 0 to 1. */
+internal val LIGHT = FloatArray(256) { (it / 255.0).let { c -> if (c <= 0.04045) c / 12.92 else ((c + 0.055) / 1.055).pow(2.4) }.toFloat() }
+
+/** The sRGB value, 0 to 255, for [light], 0 to 1. */
+internal fun srgb(light: Double) = ((if (light <= 0.0031308) light * 12.92 else 1.055 * light.pow(1 / 2.4) - 0.055) * 255).roundToInt().coerceIn(0, 255)
+
+private val BLEND: ByteArray by lazy {
+    ByteArray(65536) { srgb((LIGHT[it shr 8].toDouble() + LIGHT[it and 255]) / 2).toByte() }
+}
+
+/**
+ * Two raw reads of one size, [a] and [b], with pixels from [start], as one picture: each colour value [blended]. The
+ * header and the alpha are [a]'s.
+ */
+fun blendSubframes(a: ByteArray, b: ByteArray, start: Int): ByteArray {
+    val out = a.copyOf()
+    val table = BLEND
+    var i = start
+    while (i + 2 < out.size && i + 2 < b.size) {
+        for (c in i..i + 2) out[c] = table[((a[c].toInt() and 255) shl 8) or (b[c].toInt() and 255)]
+        i += 4
+    }
+    return out
 }

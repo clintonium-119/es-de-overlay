@@ -201,12 +201,30 @@ class SwitcherTest {
             x < left || x >= 128 - right || y < top || y >= 96 - bottom
         }
         assertEquals(listOf(24, 0, 104, 96), contentBounds(128, 96, picture(24, 24)).toList())
+        // A bar a pixel wider on one side: the same cut from both, so the picture stays centred on whole pixels.
+        assertEquals(listOf(24, 0, 104, 96), contentBounds(128, 96, picture(24, 25)).toList())
+        assertEquals(listOf(24, 0, 104, 96), contentBounds(128, 96, picture(25, 24)).toList())
         assertEquals(listOf(0, 6, 128, 90), contentBounds(128, 96, picture(0, 0, 6, 6)).toList())
         // A dark scene with black down one side only is left whole.
         assertEquals(listOf(0, 0, 128, 96), contentBounds(128, 96, picture(30, 0)).toList())
         // All black: never cut by more than a quarter each side, and both the same.
         assertEquals(listOf(32, 24, 96, 72), contentBounds(128, 96) { _, _ -> true }.toList())
         assertEquals(listOf(0, 0, 128, 96), contentBounds(128, 96) { _, _ -> false }.toList())
+    }
+
+    @Test
+    fun `a shrunk picture is the mean of what it covers, a fine mask leaving no bands`() {
+        fun grey(v: Int) = (255 shl 24) or (v shl 16) or (v shl 8) or v
+        // A flat picture stays flat.
+        assertTrue(shrunk(IntArray(64 * 48) { grey(90) }, 64, 48, 9, 7).all { it == grey(90) })
+        // A mask of one lit column in three at full contrast, far harsher than a shader draws, shrunk about 7 times:
+        // every pixel within a few levels of one grey, a third of white's light, where picking pixels gives black
+        // and white. The edge pixels' tents are cut short.
+        val mask = IntArray(1280 * 6) { if (it % 1280 % 3 == 0) grey(255) else grey(0) }
+        val small = shrunk(mask, 1280, 6, 176, 1).map { it and 255 }.drop(1).dropLast(1)
+        assertTrue(small.toString(), small.all { kotlin.math.abs(it - srgb(1 / 3.0)) <= 4 })
+        // Colours keep to their channels, and a checkerboard halves to its mean in light, not in value.
+        assertEquals((255 shl 24) or (188 shl 16), shrunk(IntArray(8 * 8) { if ((it % 8 + it / 8) % 2 == 0) (255 shl 24) or (255 shl 16) else 255 shl 24 }, 8, 8, 2, 2)[0])
     }
 
     @Test
