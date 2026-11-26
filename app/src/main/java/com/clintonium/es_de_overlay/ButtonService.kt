@@ -20,8 +20,9 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 /**
- * Catches the controller's menu button (Back or Menu, or the one chosen in settings) for the menu. Key filtering is
- * on, so Android hands this every key first and waits for the answer; anything else is passed on at once.
+ * Catches the controller's menu button (Back or Menu, or the one chosen in settings) for the menu, and Home and
+ * RetroArch's Exit when the overlay quits the game for them. Key filtering is on, so Android hands this every key first
+ * and waits for the answer; anything else is passed on at once.
  *
  * Also ends a game's app on request ([forceStop]), then shows ES-DE. Android only lets system apps force-stop
  * another app, so this goes through Shizuku's shell when it's running and allowed, which shows nothing, and otherwise
@@ -36,6 +37,10 @@ class ButtonService : AccessibilityService() {
     private var menuTaken = false
     /** Whether the overlay took the controller's Home press in progress, decided on its first down. */
     private var homeTaken = false
+    /** The gamepad keys down now, for telling RetroArch's hotkey combos. */
+    private val held = mutableSetOf<Int>()
+    /** The key of a press of RetroArch's Exit the overlay took, until it lets go. */
+    private var exitTaken: Int? = null
     private val io = Executors.newSingleThreadScheduledExecutor()
     private lateinit var prefs: Prefs
 
@@ -103,9 +108,23 @@ class ButtonService : AccessibilityService() {
             val taken = homeTaken
             if (event.action == KeyEvent.ACTION_UP) {
                 homeTaken = false
-                if (!taken) main.post(HelperService::closeMenuNow) else if (!event.isCanceled) main.post(HelperService::homeUp)
+                if (!taken) main.post(HelperService::closeMenuNow) else if (!event.isCanceled) main.post(HelperService::quitInFront)
             }
             if (taken) return true
+        }
+        // RetroArch's Exit on the controller: the overlay may take its last key, to read the screen first, and quits the
+        // game as it lets go. The hotkey-enable button held with it has already gone on to RetroArch.
+        if (event.isFromSource(InputDevice.SOURCE_GAMEPAD)) {
+            val down = event.action == KeyEvent.ACTION_DOWN
+            if (down && event.repeatCount == 0 && HelperService.takesExit(event.keyCode, held)) exitTaken = event.keyCode
+            if (down) held += event.keyCode else held -= event.keyCode
+            if (event.keyCode == exitTaken) {
+                if (!down) {
+                    exitTaken = null
+                    if (!event.isCanceled) main.post(HelperService::quitInFront)
+                }
+                return true
+            }
         }
         // The switcher's own presses come from a keyboard; the D-pad isn't a key and can't be kept from ES-DE here.
         if (HelperService.steering() && event.isFromSource(InputDevice.SOURCE_GAMEPAD)) return true

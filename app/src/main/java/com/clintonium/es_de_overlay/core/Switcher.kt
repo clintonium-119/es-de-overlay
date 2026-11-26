@@ -186,6 +186,13 @@ fun contentBounds(width: Int, height: Int, dark: (Int, Int) -> Boolean): IntArra
 // ponytail: RetroArch saves no aspect with a state's picture; reading its aspect setting and the core's would fix the narrower ones too (SNES's 256 × 224 shown 4:3).
 fun displaySize(width: Int, height: Int): Pair<Int, Int> = if (width > 2 * height) width to width * 3 / 4 else width to height
 
+/**
+ * Whether a RetroArch state picture written at [stateAt] and the screen read kept at [keptAt] (epoch seconds) are of
+ * one quit: the screen is read just before Exit and RetroArch writes its state as it exits, a second or so apart. A
+ * screen kept after the state pictures were listed at [listedAt] counts too: the state it goes with isn't listed yet.
+ */
+fun sameQuit(stateAt: Long, keptAt: Long, listedAt: Long) = abs(stateAt - keptAt) <= 30 || keptAt > listedAt
+
 /** A setting in ES-DE's es_settings.xml the switcher needs, by its name there. */
 enum class SwitcherNeed(val setting: String) {
     EVENT_SCRIPTS("CustomEventScripts"),

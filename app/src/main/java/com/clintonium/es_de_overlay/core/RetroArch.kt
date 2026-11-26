@@ -11,7 +11,10 @@ fun retroarchSettings(cfg: String): Map<String, String> =
     cfg.lineSequence().mapNotNull { SETTING.find(it)?.destructured?.let { (k, v) -> k to v } }.toMap()
 
 /** A hotkey press: [hold] held, if there is one, while [tap] is tapped; Android keycodes, or scan codes on the node. */
-data class Combo(val hold: Int?, val tap: Int)
+data class Combo(val hold: Int?, val tap: Int) {
+    /** Whether [keyCode] going down, with the keys [held] down, presses this combo of Android keycodes. */
+    fun pressedBy(keyCode: Int, held: Set<Int>) = keyCode == tap && (hold == null || hold in held)
+}
 
 /**
  * The controller combo for RetroArch's hotkey [name] (`shader_toggle`, `exit_emulator`): the hotkey-enable button held,
@@ -183,7 +186,7 @@ fun coreAspect(core: String, options: Map<String, String>, game: String, width: 
             par * 2 * (160 - crop) / height
         }
         // ponytail: each game's own aspect comes from FinalBurn Neo's driver table; nearly all are 4:3 or, upright, 3:4.
-        // RetroArch 1.22.2 saves an upright game's frame unturned, so it shows on its side either way.
+        // RetroArch 1.22.2 saves an upright game's frame unturned, so the switcher shows the screen read as it quit instead.
         "FinalBurn Neo" -> if (height > width) 3 / 4.0 else 4 / 3.0
         "DOSBox-pure" -> when (option("dosbox_pure_aspect_correction", "false")) {
             // Square pixels, doubled or halved where the frame is far from the mode's shape, taken here as 4:3.

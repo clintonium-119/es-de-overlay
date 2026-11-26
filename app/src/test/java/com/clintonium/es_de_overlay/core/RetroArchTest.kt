@@ -33,6 +33,17 @@ class RetroArchTest {
     }
 
     @Test
+    fun `Start presses Exit only with Select held, or alone when no enable button is bound`() {
+        val exit = hotkeyCombo(nova, "exit_emulator")!!
+        assertTrue(exit.pressedBy(108, setOf(109)))
+        assertTrue(exit.pressedBy(108, setOf(109, 96)))
+        assertFalse(exit.pressedBy(108, emptySet()))
+        assertFalse(exit.pressedBy(109, setOf(108)))
+        assertFalse(exit.pressedBy(97, setOf(109)))
+        assertTrue(Combo(null, 108).pressedBy(108, emptySet()))
+    }
+
+    @Test
     fun `quit_press_twice and save state on exit are on only for true`() {
         assertFalse(retroarchOn(nova, "quit_press_twice"))
         assertTrue(retroarchOn(nova + ("quit_press_twice" to "true"), "quit_press_twice"))

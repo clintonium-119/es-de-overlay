@@ -4,6 +4,9 @@ What changed in each version of ES-DE Overlay. A release's notes on GitHub are i
 
 ## Unreleased
 
+- The game switcher shows upright arcade games, such as 1941 and 1943, as they were on the screen, not on their side. When RetroArch saves its auto state as it closes, Quit Game, Home and RetroArch's own *Quit* hotkey on the controller now keep a picture of the screen first, and the switcher shows it in place of the state's picture. Quitting RetroArch takes about a second longer for it, with a notice over the game meanwhile, *Capturing Screenshot* and then *Quitting*.
+- A game played with the device turned on its side shows on its side in the switcher, so you know to turn the device before you go back to it.
+
 ## 1.4.0 - 2026-11-23
 
 - A game switcher for ES-DE: with **Switch games from ES-DE** on, under **Game Switcher** in settings, the menu button in ES-DE lists the games you played last, each with a picture of where you left it, and ES-DE starts the one you pick. It's off by default and needs Shizuku and four ES-DE settings, which its section of settings lists.

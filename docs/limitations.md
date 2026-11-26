@@ -54,6 +54,10 @@ The app presses RetroArch's *Quit* and *Shaders (Toggle)* hotkeys as your contro
 - **Save-state pictures show only for RetroArch, PPSSPP and ARMSX2.** Dolphin, PrimeHack, melonDS and hakuX keep theirs in private storage that Shizuku can't read, so their games show the kept picture or the scraped image. Azahar saves no picture.
 - **RetroArch's pictures follow most of its aspect settings, not all.** Not followed: integer scaling's X-axis modes, *Rotation*, *Force aspect* off, a second RetroArch install with different settings, Genesis Plus GX's NTSC filter, each PlayStation game's own width, and FinalBurn Neo's few games that aren't 4:3. A core the app doesn't know keeps its frame's own shape.
 - **A game launched by hand over a RetroArch left running isn't retried**; only the switcher's own launches are.
+- **An upright arcade game quit from RetroArch's own menu shows on its side.** RetroArch saves its picture unturned, and only Quit Game, Home and the *Quit* hotkey keep a picture of the screen to show instead. The same goes for:
+  - the *Quit* hotkey with RetroArch's *Confirm Quit* on, which the app leaves to RetroArch;
+  - a shader on with no *Shaders (Toggle)* hotkey on the controller, where the app keeps no picture rather than one with the shader in it.
+- **A game played with the device turned shows turned against ES-DE as it was before the game.** Come back to ES-DE with the device the other way up and that picture is upside down.
 
 ## Capture
 

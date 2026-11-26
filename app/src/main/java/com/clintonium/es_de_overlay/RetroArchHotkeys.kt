@@ -24,7 +24,8 @@ class RetroArchHotkeys private constructor(
     codes: Map<String, Int>,
 ) {
     private val shaderToggle = hotkeyCombo(settings, "shader_toggle")?.let { comboScanCodes(it, codes, KeyEvent::keyCodeToString) }
-    private val exit = hotkeyCombo(settings, "exit_emulator")?.let { comboScanCodes(it, codes, KeyEvent::keyCodeToString) }
+    private val exitKeys = hotkeyCombo(settings, "exit_emulator")
+    private val exit = exitKeys?.let { comboScanCodes(it, codes, KeyEvent::keyCodeToString) }
     private val exitPresses = if (retroarchOn(settings, "quit_press_twice")) 2 else 1
     // ponytail: twice RetroArch's hotkey block delay at 60 fps, and at least the 150 ms the Nova test held; the knob if a
     // slow core misses a hotkey.
@@ -32,13 +33,21 @@ class RetroArchHotkeys private constructor(
 
     /** Whether Exit is on the controller. */
     val exits = exit != null
+    /** Whether the shader was on as RetroArch started. */
+    val shaded = retroarchOn(settings, "video_shader_enable")
     /** Whether the overlay turns the shader off and on: it was on as RetroArch started, and Shader toggle is on the controller. */
-    val togglesShader = retroarchOn(settings, "video_shader_enable") && shaderToggle != null
+    val togglesShader = shaded && shaderToggle != null
     /**
      * Whether RetroArch saves a state, with its own picture, when the overlay ends it: Auto Save State is on and Exit
      * is on the controller. Without Exit it's force-stopped, and saves nothing.
      */
     val savesOnExit = exits && retroarchOn(settings, "savestate_auto_save")
+
+    /**
+     * Whether [keyCode] going down, with the gamepad keys [held] down, is the player pressing Exit on the controller,
+     * and once is enough: with *Confirm Quit* on, RetroArch's own question is left to it.
+     */
+    fun isExit(keyCode: Int, held: Set<Int>) = exitPresses == 1 && exitKeys?.pressedBy(keyCode, held) == true
 
     /** Off the main thread: presses Exit (twice when RetroArch asks for that); whether the presses were made. */
     fun pressExit() = exit?.let { press(it, exitPresses) } == true

@@ -110,7 +110,7 @@ The rest of the section:
 - **How the switcher shows the games**: **Strip of Recent Games** (the default) or **One Game a Screen**.
 - **Games the switcher shows, newest first**: 5 to 50 in steps of 5 (default 10).
 - **Show each game's system and when it was played** (off by default) adds that line under each game's name.
-- **Keep a picture of where you left a game** (on by default): Quit Game, and Home when it ends the game, take a picture of the game's screen first. The switcher shows it unless the emulator starts the game from a save state, whose picture it shows instead. It needs Shizuku, and works whether or not the switcher is on.
+- **Keep a picture of where you left a game** (on by default): Quit Game, and Home when it ends the game, take a picture of the game's screen first. The switcher shows it unless the emulator starts the game from a save state, whose picture it shows instead, except for a picture kept as RetroArch saved that state. It needs Shizuku, and works whether or not the switcher is on.
 
 A tip for RetroArch: turn on *Save State Thumbnails* in RetroArch, under *Settings > Saving*, and the switcher shows where each RetroArch game was left, from the picture RetroArch saves beside each state. [The pictures](use.md#the-pictures) says which picture shows when.
 

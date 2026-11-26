@@ -167,6 +167,16 @@ class SwitcherTest {
     }
 
     @Test
+    fun `a kept screen goes with the state written as it quit, or with one not listed yet`() {
+        assertTrue(sameQuit(stateAt = 1000, keptAt = 999, listedAt = 2000))
+        assertTrue(sameQuit(stateAt = 1000, keptAt = 1030, listedAt = 2000))
+        assertFalse(sameQuit(stateAt = 1000, keptAt = 1031, listedAt = 2000))
+        assertFalse(sameQuit(stateAt = 1000, keptAt = 500, listedAt = 2000))
+        // Kept after the list was read: the state of that quit isn't in it yet.
+        assertTrue(sameQuit(stateAt = 1000, keptAt = 2001, listedAt = 2000))
+    }
+
+    @Test
     fun `a save state the emulator resumes from beats a newer kept picture`() {
         assertEquals(PictureSource.SAVED, pictureSource(saved = 100, kept = 200, resumes = true))
         assertEquals(PictureSource.LEFT, pictureSource(saved = null, kept = 200, resumes = true))

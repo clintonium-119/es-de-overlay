@@ -18,6 +18,7 @@ You grant each of these yourself, in Android's settings or permission dialogs, a
 - **Which app is in front** (Usage access), to tell a game ES-DE launched from anything else.
 - **One controller button**, through an accessibility service: Back or Menu, or the one you choose under **Controls**.
   - Android shows the service every button press. It intercepts the menu button only during a game ES-DE launched, a capture or the open menu, and passes every other button on to the app in front.
+  - With **Keep a picture of where you left a game** on, it also intercepts RetroArch's *Quit* hotkey, during a RetroArch game ES-DE launched that saves its auto state as it closes, to keep a picture before pressing the hotkey itself.
   - The same service turns the screen off when ES-DE's screensaver has run for the time you set.
   - It hears which app's window comes to the front, only to see at once that ES-DE is back after a game, so the game switcher can open again.
   - For Quit Game, it brings ES-DE back afterwards, and without Shizuku it presses Force stop on the game's App Info page.
@@ -29,7 +30,7 @@ You grant each of these yourself, in Android's settings or permission dialogs, a
   - for the game switcher, sending ES-DE the key presses that move it to the game you pick;
   - reading emulators' files for the switcher's pictures: RetroArch's settings, overrides, core options and the pictures beside its save states; PPSSPP's `ppsspp.ini` and the pictures beside its save states; ARMSX2's `PCSX2-Android.ini` and the screenshot inside each of its save states. To find PPSSPP's and ARMSX2's folders, it lists folder names up to four levels deep in internal storage and on the SD card.
 - **A picture of the game's screen when you quit it**, with **Keep a picture of where you left a game** on (the default) and Shizuku ready.
-  - Quit Game, and Home when it ends the game, read the screen once. The picture is kept in the app's own private storage, one per game, and replaced the next time you quit that game. Copies of PPSSPP's and ARMSX2's save-state pictures are kept there too.
+  - Quit Game, Home when it ends the game, and RetroArch's *Quit* hotkey when the app takes it, read the screen once. The picture is kept in the app's own private storage, one per game, and replaced the next time you quit that game. Copies of PPSSPP's and ARMSX2's save-state pictures are kept there too.
   - Only the game switcher shows them. Nothing sends them anywhere, and uninstalling the app or clearing its storage deletes them.
 
 ## When it goes online
